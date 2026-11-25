@@ -3,6 +3,8 @@ package de.freimarken.paper;
 import de.freimarken.kern.Rangablage;
 import de.freimarken.kern.Rangstand;
 import de.freimarken.kern.Rangwerte;
+import de.freimarken.kern.Teamablage;
+import de.freimarken.kern.Teamstand;
 import de.freimarken.kern.Wirtschaftsstand;
 import java.util.LinkedHashSet;
 import java.util.Optional;
@@ -64,6 +66,17 @@ import org.bukkit.event.player.PlayerQuitEvent;
 final class Rangwache implements Listener {
 
     private final Rangablage ablage;
+
+    /**
+     * Die Teamrollen - die zweite Quelle der Rechte (Schritt 16a Teil A).
+     *
+     * <p>Sie liegt HIER und nicht in einer eigenen Wache, obwohl das naheliegender
+     * aussieht: Das Anhaengsel wird ersetzt und nicht ergaenzt, also gibt es genau einen
+     * Zug, der die Rechte setzt. Eine zweite Wache daneben loeschte mit ihrem Zug die
+     * Rechte der ersten - siehe {@link Rechtebuendel}.
+     */
+    private final Teamablage team;
+
     private final Wirtschaftsstand wirtschaft;
     private final Rechtegriff griff;
 
@@ -89,14 +102,25 @@ final class Rangwache implements Listener {
      */
     private final Set<String> gemeldet = new LinkedHashSet<>();
 
-    Rangwache(Rangablage ablage, Wirtschaftsstand wirtschaft, Rechtegriff griff,
-              Aufstiegslauf lauf, Sprache sprache, Logger protokoll) {
-        if (ablage == null || wirtschaft == null || griff == null || lauf == null
-                || sprache == null || protokoll == null) {
-            throw new IllegalArgumentException("Die Rangwache braucht Ablage, Werte,"
-                    + " Rechtegriff, Aufstiegslauf, Sprache und Protokoll");
+    /**
+     * Welche unbekannten ROLLEN schon gemeldet sind - eine eigene Liste.
+     *
+     * <p>Nicht dieselbe wie {@link #gemeldet}: Ein Rang und eine Rolle koennen denselben
+     * Namen tragen (nichts verbietet eine Rolle "buerger"), und dann verschluckte die
+     * eine Meldung die andere. Zwei Listen kosten nichts und koennen das nicht.
+     */
+    private final Set<String> gemeldeteRollen = new LinkedHashSet<>();
+
+    Rangwache(Rangablage ablage, Teamablage team, Wirtschaftsstand wirtschaft,
+              Rechtegriff griff, Aufstiegslauf lauf, Sprache sprache, Logger protokoll) {
+        if (ablage == null || team == null || wirtschaft == null || griff == null
+                || lauf == null || sprache == null || protokoll == null) {
+            throw new IllegalArgumentException("Die Rangwache braucht Rangablage,"
+                    + " Teamablage, Werte, Rechtegriff, Aufstiegslauf, Sprache und"
+                    + " Protokoll");
         }
         this.ablage = ablage;
+        this.team = team;
         this.wirtschaft = wirtschaft;
         this.griff = griff;
         this.lauf = lauf;
@@ -156,33 +180,89 @@ final class Rangwache implements Listener {
     }
 
     /**
-     * Gibt dem Spieler das Buendel seines Ranges - neu und vollstaendig.
+     * Gibt dem Spieler sein Buendel aus RANG UND TEAMROLLE - neu und vollstaendig.
      *
      * <p>Gerufen beim Beitritt und nach jedem Aufstieg. Was er vorher von diesem Griff
      * hatte, wird dabei zurueckgenommen; Rechte aus der Rechteverwaltung bleiben.
+     *
+     * <p><b>Beide Quellen in EINEM Zug</b> [24.11.2026, Schritt 16a Teil A], und zwar
+     * notwendig: Das Anhaengsel wird ERSETZT und nicht ergaenzt, also loescht ein zweiter
+     * Verbraucher mit seinem Zug den ersten. Gerechnet wird die Menge darum in
+     * {@link Rechtebuendel} und nicht hier - dort steht auch, warum der fruehere
+     * Rueckweg bei abgeschalteter Rangleiter weg musste: Er nahm die Teamrechte mit.
+     *
+     * <p>ZWEI Lesezugriffe je Beitritt statt einem. Dieselbe Linie wie vorher, mit
+     * derselben Begruendung: Bei zwanzig Spielern an einer Datenbank im selben Netz ist
+     * das keine Zahl, fuer die sich ein zweiter Faden lohnte - und eine Rolle, die erst
+     * einen Takt spaeter gilt, waere ein Moderator, der in seiner ersten Sekunde nicht
+     * eingreifen kann. Genau in dieser Sekunde ist der Grund, aus dem er gerufen wurde,
+     * noch da.
      */
     void vergibNeu(Player spieler) {
         if (spieler == null) {
             return;
         }
         Rangwerte werte = wirtschaft.werte().raenge();
-        if (!werte.greift()) {
-            // raenge.an ist aus oder die Leiter ist leer. Dann gilt, was in der config.yml
-            // steht, fuer jeden dieselbe Zahl - und der Griff darf nichts halten, sonst
-            // wirkte der Schalter nur auf den AUFSTIEG und nicht auf das Gehaltene.
-            griff.setze(spieler, Set.of());
-            return;
-        }
-        Rangstand stand = ablage.lies(spieler.getUniqueId());
-        if (!stand.bekanntIn(werte)) {
+        Rangstand stand = werte.greift()
+                ? ablage.lies(spieler.getUniqueId())
+                // Ohne Leiter wird der Rang gar nicht gelesen: Die Auskunft waere
+                // folgenlos, und es ist ein Datenbankzugriff je Beitritt.
+                : null;
+        if (stand != null && !stand.bekanntIn(werte)) {
             melde(stand, spieler);
         }
-        Rangwerte.Stufe stufe = stand.stufeIn(werte);
-        // Kann nicht null sein, solange greift() gilt - die Leiter ist dann nicht leer.
-        // Trotzdem gefragt: Eine spaetere Aenderung an greift() soll hier keinen Absturz
-        // beim Beitritt ergeben.
-        griff.setze(spieler, stufe == null ? Set.of()
-                : Rangzahl.knoten(werte.buendel(stufe.schluessel())));
+        Teamstand rollen = rollenVon(spieler);
+        meldeRollen(rollen, spieler);
+        griff.setze(spieler, Rechtebuendel.fuer(werte, stand,
+                wirtschaft.werte().team(), rollen));
+    }
+
+    /**
+     * Die Rollen dieses Spielers - und ein leerer Stand, wenn die Ablage stoert.
+     *
+     * <p><b>Gefangen und nicht durchgereicht</b>, und das ist eine Abwaegung mit zwei
+     * schlechten Seiten: Faellt die Datenbank aus, hat ein Moderator keine Rechte, und er
+     * merkt es erst, wenn er eingreifen will. Durchgereicht waere es schlimmer - die
+     * Zeile danach vergibt auch die RANGRECHTE, und die gingen dann fuer jeden
+     * Beitretenden mit verloren. Von zwei Fehlern nimmt man den kleineren.
+     *
+     * <p>Gemeldet wird bei JEDEM Beitritt und nicht einmalig: Ein Datenbankausfall ist
+     * ein Zustand, der sich aendert, und eine einmalige Zeile von vor zwei Stunden sagt
+     * nicht, ob er noch anhaelt.
+     */
+    private Teamstand rollenVon(Player spieler) {
+        try {
+            return team.lies(spieler.getUniqueId());
+        } catch (IllegalStateException gestoert) {
+            protokoll.warning("Die Teamrollen von " + spieler.getName() + " sind nicht"
+                    + " lesbar: " + gestoert.getMessage() + ". Er bekommt die Rechte"
+                    + " seines Ranges, aber KEINE Rollenrechte - wer Moderator ist, kann"
+                    + " bis zur naechsten Anmeldung nicht eingreifen.");
+            return Teamstand.leer(spieler.getUniqueId());
+        }
+    }
+
+    /**
+     * Sagt EINMAL je Rolle, dass in der Ablage eine steht, die die Datei nicht kennt.
+     *
+     * <p>Der Betroffene verliert dabei still ihre Rechte - im Spiel sieht es aus, als
+     * waere die Rolle nie vergeben worden. Darum diese Zeile. Dieselbe Bauart wie
+     * {@link #melde} fuer einen weggefallenen Rang, aber mit einer eigenen Merkliste:
+     * Ein Rang und eine Rolle koennen denselben Namen tragen.
+     */
+    private void meldeRollen(Teamstand rollen, Player spieler) {
+        for (String rolle : rollen.unbekannteRollen(wirtschaft.werte().team())) {
+            if (!gemeldeteRollen.add(rolle)) {
+                continue;
+            }
+            protokoll.warning("In der Ablage steht die Teamrolle \"" + rolle + "\" ("
+                    + spieler.getName() + " und moeglicherweise weitere), aber die"
+                    + " config.yml kennt sie nicht mehr. Die Rechte dieser Rolle wirken"
+                    + " nicht - im Spiel sieht das aus, als waere sie nie vergeben"
+                    + " worden. Entweder die Rolle wieder eintragen oder sie den"
+                    + " Betroffenen mit /team nimm abnehmen; die Vergabe bleibt sonst"
+                    + " fuer immer in der Datenbank stehen.");
+        }
     }
 
     /**

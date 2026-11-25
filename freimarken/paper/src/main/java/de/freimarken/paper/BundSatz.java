@@ -73,6 +73,27 @@ enum BundSatz implements Satz {
     /** Die Beschreibung von {@code /wettbewerb} in der Befehlsliste [22.11.2026]. */
     BEFEHL_WETTBEWERB("befehl.beschreibung.wettbewerb", Art.WORT),
 
+    /** Die Beschreibung von {@code /team} in der Befehlsliste [Schritt 16a Teil A]. */
+    BEFEHL_TEAM("befehl.beschreibung.team", Art.WORT),
+
+    /** Die Beschreibung von {@code /melden} in der Befehlsliste [Schritt 16a Teil C]. */
+    BEFEHL_MELDEN("befehl.beschreibung.melden", Art.WORT),
+
+    /** Die Beschreibung von {@code /meldung} in der Befehlsliste [Schritt 16a Teil C]. */
+    BEFEHL_MELDUNG("befehl.beschreibung.meldung", Art.WORT),
+
+    /** Die Beschreibung von {@code /strafe} in der Befehlsliste [Schritt 16a Teil B]. */
+    BEFEHL_STRAFE("befehl.beschreibung.strafe", Art.WORT),
+
+    /**
+     * Die Beschreibung von {@code /bannliste} in der Befehlsliste [Schritt 16a Teil B].
+     *
+     * <p>Sie steht fuer JEDEN in der Liste - Plan 12c.4 macht die Bannliste
+     * ausdruecklich oeffentlich. Eine Liste, die niemand findet, zwingt zu keiner
+     * Begruendung.
+     */
+    BEFEHL_BANNLISTE("befehl.beschreibung.bannliste", Art.WORT),
+
     // --- Das nackte /freimarken: vier oder fuenf Chatzeilen -----------------
     STAND_KOPF("stand.kopf", Art.SATZ),
     STAND_VERSION("stand.version", Art.SATZ, "version", "java", "minecraft"),

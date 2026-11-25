@@ -156,7 +156,41 @@ record Hilfeplan(List<Gruppe> gruppen) {
                     new Eintrag("menu", MenueBefehle.RECHT, BundSatz.BEFEHL_MENU),
                     new Eintrag("hilfe", HilfeBefehle.RECHT, BundSatz.BEFEHL_HILFE),
                     new Eintrag("regeln", RegelnBefehle.RECHT, BundSatz.BEFEHL_REGELN),
-                    new Eintrag("freimarken", JEDER, BundSatz.BEFEHL_FREIMARKEN)))));
+                    new Eintrag("freimarken", JEDER, BundSatz.BEFEHL_FREIMARKEN),
+                    // /team steht in derselben Gruppe wie /freimarken und aus demselben
+                    // Grund: Es ist eine Auskunft ueber den Bund und keine Taetigkeit
+                    // eines Spielers. Mit dem Recht davor bleibt die Zeile einem
+                    // gewoehnlichen Spieler verborgen - dafuer ist der Rechtefilter da.
+                    //
+                    // HIERHER GEHOERT ES ABER WIRKLICH: Tafel "Der Hilfeplan 1" haelt
+                    // fest, dass jeder Befehl mit einer Beschreibung auch im Plan steht.
+                    // Ein angemeldeter Befehl, den /hilfe nicht kennt, ist einer, den
+                    // niemand findet - und zwar gerade der Betreiber, der ihn braucht.
+                    new Eintrag("team", TeamBefehle.RECHT, BundSatz.BEFEHL_TEAM),
+                    // /melden steht fuer JEDEN in der Liste [Schritt 16a Teil C] - das
+                    // ist der Sinn der Einrichtung: Wer einen Vorfall sieht, soll den
+                    // Befehl finden, ohne jemanden zu fragen. Darum JEDER und nicht
+                    // MeldeBefehle.RECHT: Das Recht steht auf default true, aber die
+                    // Zeile soll auch dann stehen, wenn ein Betreiber es umhaengt - wer
+                    // es wirklich entzieht, nimmt den Eintrag hier mit heraus.
+                    new Eintrag("melden", JEDER, BundSatz.BEFEHL_MELDEN),
+                    new Eintrag("meldung", MeldungBefehle.RECHT,
+                            BundSatz.BEFEHL_MELDUNG),
+                    // /strafe mit dem Recht fuer die SPERRE davor [Teil B]: Es ist
+                    // das schwerste der drei Artrechte, und wer es hat, hat die
+                    // anderen beiden auch. Ein Helfer, der nur rauswerfen darf, sieht
+                    // die Zeile damit nicht - das ist der Preis dafuer, dass ein
+                    // Eintrag genau EIN Recht nennen kann. Er findet den Befehl ueber
+                    // die Vervollstaendigung, denn das requires auf /strafe fragt
+                    // JEDES Artrecht.
+                    new Eintrag("strafe", StrafBefehle.RECHTE.bann(),
+                            BundSatz.BEFEHL_STRAFE),
+                    // /bannliste steht fuer JEDEN in der Liste, wie /melden - Plan
+                    // 12c.4 macht sie ausdruecklich oeffentlich: Sie zwingt zu
+                    // Begruendungen, die standhalten, und genau deshalb gehoert sie
+                    // dazu. Eine Liste, die niemand findet, zwingt zu nichts.
+                    new Eintrag("bannliste", JEDER,
+                            BundSatz.BEFEHL_BANNLISTE)))));
 
     /** Jeder Befehl des Plans, in der Reihenfolge der Anzeige - fuer die Tafeln. */
     List<String> befehle() {

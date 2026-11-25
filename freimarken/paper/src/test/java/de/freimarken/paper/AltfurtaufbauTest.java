@@ -220,16 +220,33 @@ class AltfurtaufbauTest {
         assertEquals(block(bau, Bauplan.Stueck.FIRST), welt.bei(53, -48, 6), "First");
         // DAS INNERE IST NICHT MEHR EIN SCHACHT [24.11.2026]: Auf der Hoehe des
         // liegenden Bandes liegt eine Geschossdecke, dazwischen ist Luft.
-        assertEquals(Material.AIR, welt.bei(53, -57, 6), "zwischen zwei Decken");
-        assertEquals(block(bau, Bauplan.Stueck.DECKE), welt.bei(53, -54, 6),
-                "die Decke ueber dem Erdgeschoss");
-        assertEquals(block(bau, Bauplan.Stueck.DECKE), welt.bei(53, -52, 6),
-                "und der Dachboden auf der Wandkrone");
-        // SIE LIEGT GENAU DORT, WO AUSSEN DAS BAND SITZT - eine Hoehenrechnung.
-        assertEquals(block(bau, Bauplan.Stueck.BALKEN), welt.bei(48, -52, 6),
+        // GESUCHT UND NICHT ANGENOMMEN [24.11.2026]: Die Deckenhoehen haengen am
+        // Sockel dieses Hauses, und der streut, seit der Betreiber "mehr variation bei
+        // den haeusern" verlangt hat. Ein Flag sagt "gefunden" - KEIN Zahlenwert, denn
+        // in Altfurt ist jedes y negativ.
+        boolean deckeGefunden = false;
+        int ersteDecke = 0;
+        for (int y = Stadtplan.BODEN_Y + 1; y <= Bauplan.dachansatz(bau); y++) {
+            if (Bauplan.stueckBei(bau, 53, y, 6) == Bauplan.Stueck.DECKE) {
+                ersteDecke = y;
+                deckeGefunden = true;
+                break;
+            }
+        }
+        assertTrue(deckeGefunden, "ueber dem Erdgeschoss liegt eine Geschossdecke");
+        assertEquals(block(bau, Bauplan.Stueck.DECKE), welt.bei(53, ersteDecke, 6),
+                "die Decke ueber dem Erdgeschoss, auf y " + ersteDecke);
+        assertEquals(Material.AIR, welt.bei(53, ersteDecke - 1, 6),
+                "darunter das Zimmer");
+        // DER DACHBODEN LIEGT AUF DER WANDKRONE, also genau am Dachansatz.
+        int dachboden = Bauplan.dachansatz(bau);
+        assertEquals(block(bau, Bauplan.Stueck.DECKE), welt.bei(53, dachboden, 6),
+                "der Dachboden auf der Wandkrone");
+        // UND SIE LIEGT GENAU DORT, WO AUSSEN DAS BAND SITZT - eine Hoehenrechnung.
+        assertEquals(block(bau, Bauplan.Stueck.BALKEN), welt.bei(48, dachboden, 6),
                 "aussen auf derselben Hoehe die Wandkrone");
         // UND DER TREPPENSCHACHT TRAEGT EINE LEITER, keine Decke.
-        assertEquals(Material.LADDER, welt.bei(49, -54, 4),
+        assertEquals(Material.LADDER, welt.bei(49, ersteDecke, 4),
                 "die Leiter geht durch die Deckenhoehe hindurch");
     }
 
@@ -894,10 +911,32 @@ class AltfurtaufbauTest {
 
         // JE LAGE DER RICHTIGE BODEN - an einer Stelle, die NEBEN der Achse liegt,
         // sonst gewinnt die Radialgasse.
-        assertEquals(stoffe.block(Stadtplan.Lage.MARKT, Stadtplan.MITTE_X,
+        // DIE MITTE DES MARKTES IST SEIT DEM 24.11.2026 DER KREUZUNGSPLATZ: Dort
+        // treffen sich die vier Arme, und dort kommt an, wer die Welt betritt. Gefragt
+        // wird darum die Lage, die der Plan dort nennt - nicht die, die man erwartet.
+        assertEquals(Stadtplan.Lage.RADIALGASSE,
+                plan.lageBei(Stadtplan.MITTE_X, Stadtplan.MITTE_Z),
+                "in der Mitte kreuzen sich die Arme");
+        assertEquals(stoffe.block(Stadtplan.Lage.RADIALGASSE, Stadtplan.MITTE_X,
                         Stadtplan.MITTE_Z),
                 welt.bei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y, Stadtplan.MITTE_Z),
-                "die Mitte des Marktes");
+                "die Fahrbahn in der Mitte");
+        // UND NEBEN DEM ARM DER MARKT: Ohne das waere die Marktmischung ungeprueft.
+        int nebenArm = Stadtplan.KREUZ_HALB + 4;
+        assertEquals(Stadtplan.Lage.MARKT,
+                plan.lageBei(Stadtplan.MITTE_X + nebenArm,
+                        Stadtplan.MITTE_Z + nebenArm),
+                "schraeg daneben liegt der Markt");
+        assertEquals(stoffe.block(Stadtplan.Lage.MARKT, Stadtplan.MITTE_X + nebenArm,
+                        Stadtplan.MITTE_Z + nebenArm),
+                welt.bei(Stadtplan.MITTE_X + nebenArm, Stadtplan.BODEN_Y,
+                        Stadtplan.MITTE_Z + nebenArm),
+                "das Marktpflaster");
+        // UND DIE KANTE DES ARMS - sie ist der Zug, der das Kreuz sichtbar macht.
+        assertEquals(Stadtplan.Lage.BORDSTEIN,
+                plan.lageBei(Stadtplan.MITTE_X + Stadtplan.KREUZ_HALB,
+                        Stadtplan.MITTE_Z + Stadtplan.KREUZ_HALB),
+                "die Kante an der Diagonalecke des Kreuzungsplatzes");
         // DIE RINGE KOMMEN AUS DEM PLAN und stehen nicht als Zahlen hier: Mit den
         // 81 x 81 Plaetzen sind sie am 23.11.2026 alle gewandert.
         int gasse = plan.quartierAnfang(0) + 2;
@@ -925,14 +964,25 @@ class AltfurtaufbauTest {
                 plan.lageBei(Stadtplan.MITTE_X + kern, Stadtplan.MITTE_Z + 8));
         // UND DAS PFLASTER IST GEMISCHT: Auf der Gasse liegt nicht ueberall
         // derselbe Block - genau das war die Klage des Betreibers.
+        // UEBER DIE GANZE BREITE DER GASSE UND EIN STUECK IHRER LAENGE [24.11.2026]:
+        // Vorher wurden zehn Stellen abgefragt - fuenf Ringe auf zwei z-Linien - und
+        // drei verschiedene Bloecke verlangt. Bei acht Bloecken Mischung ist das zu
+        // knapp: Als die Stadtmitte auf 0/0 wanderte, lagen auf diesen zehn Stellen nur
+        // noch zwei verschiedene, und die Probe war rot, obwohl die Mischung stimmte.
+        // Die Antwort ist nicht, die Drei auf Zwei zu senken, sondern mehr Stellen zu
+        // fragen: Eine Zusage ueber eine Mischung braucht eine Stichprobe, die sie
+        // tragen kann.
         Set<Material> aufDerGasse = new HashSet<>();
+        int stellen = 0;
         for (int r = plan.quartierAnfang(0); r < plan.zeileInnenVon(0); r++) {
-            aufDerGasse.add(welt.bei(Stadtplan.MITTE_X + r, Stadtplan.BODEN_Y,
-                    Stadtplan.MITTE_Z + 8));
-            aufDerGasse.add(welt.bei(Stadtplan.MITTE_X + r, Stadtplan.BODEN_Y,
-                    Stadtplan.MITTE_Z + 9));
+            for (int laengs = 8; laengs <= 27; laengs++) {
+                aufDerGasse.add(welt.bei(Stadtplan.MITTE_X + r, Stadtplan.BODEN_Y,
+                        Stadtplan.MITTE_Z + laengs));
+                stellen++;
+            }
         }
-        assertTrue(aufDerGasse.size() >= 3, "die Gasse ist gemischt: "
+        assertEquals(5 * 20, stellen, "hundert Stellen der Gasse abgefragt");
+        assertTrue(aufDerGasse.size() >= 4, "die Gasse ist gemischt: "
                 + aufDerGasse);
 
         // DIE MAUER STEHT, und zwar genau fuenf Ebenen hoch plus Zinne.
@@ -979,7 +1029,9 @@ class AltfurtaufbauTest {
         assertEquals(Material.AIR,
                 welt.bei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y, Stadtplan.MITTE_Z),
                 "der Boden des Ladens ist unberuehrt");
-        assertEquals(stoffe.block(Stadtplan.Lage.MARKT, Stadtplan.MITTE_X + 3,
+        // EINEN BLOCK WEITER LIEGT PFLASTER - und zwar das der Fahrbahn, denn x + 3
+        // liegt noch im Kreuzarm (KREUZ_HALB ist 4).
+        assertEquals(stoffe.block(Stadtplan.Lage.RADIALGASSE, Stadtplan.MITTE_X + 3,
                         Stadtplan.MITTE_Z),
                 welt.bei(Stadtplan.MITTE_X + 3, Stadtplan.BODEN_Y, Stadtplan.MITTE_Z),
                 "einen Block weiter liegt Pflaster");
@@ -1044,8 +1096,16 @@ class AltfurtaufbauTest {
         Altfurtaufbau.Pflasterung raus =
                 hand().pflastere(plan, loecherig, welt, List.of());
 
+        // GEPRUEFT WIRD AN EINER MARKTSTELLE, und die liegt seit dem 24.11.2026 nicht
+        // mehr in der Mitte: Dort kreuzen sich die vier Arme. Schraeg daneben ist Markt.
+        int nebenArm = Stadtplan.KREUZ_HALB + 4;
+        assertEquals(Stadtplan.Lage.MARKT,
+                plan.lageBei(Stadtplan.MITTE_X + nebenArm,
+                        Stadtplan.MITTE_Z + nebenArm),
+                "die Pruefstelle liegt wirklich auf dem Markt");
         assertEquals(Material.AIR,
-                welt.bei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y, Stadtplan.MITTE_Z),
+                welt.bei(Stadtplan.MITTE_X + nebenArm, Stadtplan.BODEN_Y,
+                        Stadtplan.MITTE_Z + nebenArm),
                 "der Markt bleibt unberuehrt und wird NICHT geloescht");
         int gasse = plan.quartierAnfang(0) + 2;
         assertEquals(loecherig.block(Stadtplan.Lage.RINGGASSE,
@@ -1057,8 +1117,23 @@ class AltfurtaufbauTest {
                 new Kartengriff(), List.of()).bloecke();
         // DER MARKTPLATZ IST NUR EINER VON DREI PLAETZEN: 81 breit, aber nur
         // MARKT_TIEFE tief - Kirchplatz, Rathausplatz und die Kanten haben ihre
-        // eigenen Mischungen und liegen weiter.
-        long marktflaeche = (2L * Stadtplan.MARKT_RING + 1) * Stadtplan.MARKT_TIEFE;
+        // eigenen Mischungen und liegen weiter. Und seit dem 24.11.2026 schneiden die
+        // zwei Kreuzarme durch ihn hindurch.
+        //
+        // GEZAEHLT UND NICHT GERECHNET: Die Flaeche aus Breite mal Tiefe stimmt nicht
+        // mehr, seit der Arm Streifen herausnimmt - und eine neue Formel waere eine
+        // zweite Wahrheit neben lageBei. Abgeschritten wird der Umriss und gezaehlt,
+        // was der Plan MARKT nennt.
+        long marktflaeche = 0L;
+        Quader umriss = plan.umriss();
+        for (int x = umriss.vonX(); x <= umriss.bisX(); x++) {
+            for (int z = umriss.vonZ(); z <= umriss.bisZ(); z++) {
+                if (plan.lageBei(x, z) == Stadtplan.Lage.MARKT) {
+                    marktflaeche++;
+                }
+            }
+        }
+        assertTrue(marktflaeche > 1000L, "der Markt ist eine Flaeche: " + marktflaeche);
         assertEquals(mitMarkt - marktflaeche, raus.bloecke(),
                 "genau die Marktflaeche fehlt");
     }

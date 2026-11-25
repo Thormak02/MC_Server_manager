@@ -7,6 +7,9 @@ import de.freimarken.daten.MariaRundgang;
 import de.freimarken.daten.MariaBerufe;
 import de.freimarken.daten.Kassentabellen;
 import de.freimarken.daten.MariaRaenge;
+import de.freimarken.daten.MariaTeam;
+import de.freimarken.daten.MariaMeldungen;
+import de.freimarken.daten.MariaStrafen;
 import de.freimarken.daten.MariaBlockbuch;
 import de.freimarken.daten.MariaBonus;
 import de.freimarken.daten.MariaLose;
@@ -33,6 +36,7 @@ import de.freimarken.kern.Absteckbuch;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Berufsverzeichnis;
 import de.freimarken.kern.Berufswerte;
+import de.freimarken.kern.Bauplan;
 import de.freimarken.kern.Bautenverzeichnis;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
@@ -80,6 +84,15 @@ import de.freimarken.kern.SpeicherBlockbuch;
 import de.freimarken.kern.SpeicherAnmeldungen;
 import de.freimarken.kern.SpeicherRundgang;
 import de.freimarken.kern.SpeicherRaenge;
+import de.freimarken.kern.SpeicherTeam;
+import de.freimarken.kern.SpeicherMeldungen;
+import de.freimarken.kern.SpeicherStrafen;
+import de.freimarken.kern.Meldeablage;
+import de.freimarken.kern.Meldebuch;
+import de.freimarken.kern.Strafablage;
+import de.freimarken.kern.Strafbuch;
+import de.freimarken.kern.Teamablage;
+import de.freimarken.kern.Teambuch;
 import de.freimarken.kern.SpeicherBonus;
 import de.freimarken.kern.SpeicherLose;
 import de.freimarken.kern.SpeicherWettbewerb;
@@ -633,6 +646,57 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * fuer die sich eine zweite Wahrheit ueber den Rang lohnte.
      */
     private Rangablage rangablage;
+
+    /**
+     * Welche Teamrollen ein Spieler hat - Schritt 16a Teil A.
+     *
+     * <p>KEIN Zwischenspeicher, aus demselben Grund wie beim Rang: Gelesen wird einmal je
+     * Beitritt und sonst nur, wenn ein Betreiber {@code /team} tippt. Und mit einem
+     * strengeren Grund daneben - eine gemerkte Rollenliste waere eine zweite Wahrheit
+     * darueber, wer moderieren darf. Ein Entzug, der erst nach dem Ablauf eines
+     * Zwischenspeichers wirkt, ist genau der Fall, in dem man ihn ausspricht.
+     */
+    private Teamablage teamablage;
+
+    /**
+     * Wo die Meldungen liegen - Schritt 16a Teil C.
+     *
+     * <p>KEIN Zwischenspeicher, aus demselben Grund wie beim Rang und beim Team:
+     * Gelesen wird einmal je Beitritt (die wartenden Antworten) und sonst nur, wenn
+     * ein Moderator {@code /meldung} tippt. Dazu ein strengerer Grund: Eine gemerkte
+     * Meldungsliste waere eine zweite Wahrheit darueber, was anliegt - und zwei
+     * Moderatoren, die denselben zwischengespeicherten Stand sehen, nehmen dieselbe
+     * Meldung. Genau dagegen steht der Riegel in der Ablage.
+     */
+    private Meldeablage meldeablage;
+
+    /**
+     * Die Wache, die die Antworten beim Beitritt ausliefert.
+     *
+     * <p>Als Feld, damit ein spaeterer Aufrufer sie rufen kann - etwa ein Befehl, der
+     * die Antworten auf Wunsch noch einmal zeigt. Heute hoert nur der Beitritt zu.
+     */
+    private Meldewache meldewache;
+
+    /**
+     * Wo die Strafen liegen - Plan 12c.3 [Schritt 16a Teil B].
+     *
+     * <p><b>KEIN Zwischenspeicher</b>, aus demselben Grund wie beim Rang, beim Team und
+     * bei den Meldungen - und hier mit dem strengsten Grund von allen: Ein
+     * zwischengespeicherter Stand, der nach dem AUFHEBEN einer Strafe noch die alte
+     * Zeile haelt, ist eine Stummschaltung, die weiterwirkt, nachdem sie zuruecknahm
+     * wurde. Gelesen wird einmal je Beitritt und je Chatzeile, jeweils auf einen Index.
+     */
+    private Strafablage strafablage;
+
+    /**
+     * Die Wache, die Strafen WIRKSAM macht - Tuer, Chat und gesperrte Befehle.
+     *
+     * <p>Als Feld wie {@link #meldewache}: Ohne sie ist der ganze Teil unsichtbar
+     * wirkungslos - der Kern prueft die Rechte, die Ablage haelt die Strafe, die
+     * Bannliste zeigt sie, und kein gesperrter Spieler merkt davon etwas.
+     */
+    private Strafwache strafwache;
 
     /**
      * Wo die Annahme der Regeln liegt - Plan 10.1 [Schritt 13 Teil C].
@@ -1379,6 +1443,17 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // werden an ihr gemessen. Steht die Leiter vor ihr im Protokoll, liest der
         // Betreiber eine Huerde, deren Messstelle er noch nicht gesehen hat.
         nenneRaenge();
+        // NACH den Raengen, und aus demselben Grund wie jene nach der Spielzeit stehen:
+        // Rollen und Raenge sind beides Rechtequellen, und wer die eine Zeile liest, will
+        // die andere daneben haben. Was eine Rolle gibt, wirkt nur zusammen mit dem, was
+        // die Leiter schon gibt.
+        nenneTeam();
+        getLogger().info(Meldeliste.rechenprobe(wirtschaft.werte().melden()));
+        // Die Strafen DANEBEN, und aus demselben Grund, aus dem die Rollen neben den
+        // Raengen stehen: Melden und Strafen sind ein Vorgang. Wer liest, dass drei
+        // Meldungen je Spieler offen sein duerfen, will daneben lesen, wie lange ein
+        // Moderator dafuer sperren darf.
+        getLogger().info(Strafliste.rechenprobe(wirtschaft.werte().strafen()));
         nenneGoldmark();
         nennePostenOhneWort();
         nenneUnlieferbarePosten();
@@ -1667,9 +1742,42 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Anmeldung waere jeder Gegenstand darin eine Ware - ein Hilfetext zum
         // Herausnehmen.
         getServer().getPluginManager().registerEvents(new Menuewache(getLogger()), this);
-        rangwache = new Rangwache(rangablage, wirtschaft,
+        // Die Teamablage kommt mit herein [Schritt 16a Teil A]: Das Anhaengsel wird
+        // ERSETZT und nicht ergaenzt, also gibt es genau EINEN Zug, der die Rechte eines
+        // Spielers setzt. Eine zweite Wache fuer die Rollen loeschte mit ihrem Zug die
+        // Rangrechte - und zwar je nach Reihenfolge der Beitrittszuhoerer mal so und mal
+        // anders. Gerechnet wird die vereinte Menge in Rechtebuendel.
+        rangwache = new Rangwache(rangablage, teamablage, wirtschaft,
                 new AnhangRechte(this), aufstiegslauf, sprache, getLogger());
         getServer().getPluginManager().registerEvents(rangwache, this);
+        // DIE MELDEWACHE [Schritt 16a Teil C]. OHNE DIESE ZWEI ZEILEN ist der ganze
+        // Rueckmeldeweg unsichtbar wirkungslos: Der Kern merkt sich an jeder Meldung,
+        // ob der Melder die Antwort gelesen hat, die Ablage haelt es, das Buch gibt
+        // es heraus - und kein Spieler merkt davon etwas. Plan 12c.3 begruendet das
+        // Meldewesen mit genau dieser Rueckmeldung.
+        //
+        // Sie wird AUCH bei abgeschaltetem Meldewesen angemeldet, anders als die
+        // Anmeldewache: Was vor dem Abschalten gemeldet und danach erledigt wurde,
+        // soll seinen Melder noch erreichen. /melden verschwindet, die Antwort nicht.
+        meldewache = new Meldewache(new Meldebuch(meldeablage,
+                () -> wirtschaft.werte().melden(), MeldungBefehle.RECHT), sprache,
+                Spielername::von, getLogger());
+        getServer().getPluginManager().registerEvents(meldewache, this);
+
+        // OHNE DIESE ZEILE IST TEIL B UNSICHTBAR WIRKUNGSLOS. Der Kern prueft die
+        // Rechte, die Ablage haelt die Strafe, /bannliste zeigt sie - und ein
+        // gebannter Spieler kommt herein, ein stummgeschalteter schreibt weiter.
+        // Genau diese Art Luecke hat dieses Projekt schon viermal getroffen: eine
+        // gebaute, gruen gepruefte Regel, die niemand verdrahtet hat.
+        //
+        // IMMER angemeldet, ohne Schalter: Es gibt keine Einstellung "keine
+        // Strafen" - wer keine will, entzieht die Rechte. Eine Wache, die an einem
+        // Schalter haengt, waere die Stelle, an der ein Betreiber sein Bannsystem
+        // abschaltet, ohne es zu merken.
+        strafwache = new Strafwache(new Strafbuch(strafablage,
+                () -> wirtschaft.werte().strafen(), StrafBefehle.RECHTE), sprache,
+                () -> wirtschaft.werte().zeit().zone(), Spielername::von, getLogger());
+        getServer().getPluginManager().registerEvents(strafwache, this);
         // DIE WACHE nur bei eingeschalteter Anmeldung - dieselbe Entscheidung wie bei
         // der Torwache, die ohne Tore nicht angemeldet wird. Aus heisst dann wirklich
         // aus: kein Zuhoerer am Beitritt, kein Lesen der Ablage.
@@ -1924,6 +2032,24 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // hat - er steigt wieder auf, sobald der Takt misst, denn die
             // Bedingungen liegen in der Spielzeit und im Besitz und nicht hier.
             rangablage = new SpeicherRaenge();
+            // Die Teamrollen - fluechtig, und das ist hier SCHLIMMER als beim Rang. Ein
+            // verlorener Rang wird vom naechsten Takt wieder gemessen; eine verlorene
+            // Rolle ist weg, weil sie nicht gemessen, sondern gegeben wird. Nach einem
+            // Neustart hat kein Moderator mehr Rechte, und er haelt das fuer einen
+            // Fehler des Plugins. Die Warnung darunter sagt es.
+            teamablage = new SpeicherTeam();
+            // Die Meldungen - fluechtig, und das ist hier das SCHLIMMSTE von allen.
+            // Eine Rolle kann ein Verwalter neu vergeben; eine verlorene Meldung ist
+            // der Vorfall, den der Melder gesehen hat und der Moderator nie. Der
+            // Melder hat gemeldet, nichts geschah, und er meldet nicht wieder -
+            // genau der Zustand, gegen den Plan 12c.3 die Rueckmeldung gesetzt hat.
+            meldeablage = new SpeicherMeldungen();
+            // Die Strafen - fluechtig, und das ist die SCHLIMMSTE Richtung dieser
+            // ganzen Liste: Ein Neustart entsperrt jeden gebannten Spieler. Ein
+            // Server, der einen Wiederholungstaeter dauerhaft bannt und ihn am
+            // naechsten Morgen wieder hereinlaesst, hat keine Moderation - er hat
+            // eine Geste. Und niemand merkt es, denn der Bann war ja erfolgreich.
+            strafablage = new SpeicherStrafen();
             // Die Annahme der Regeln - fluechtig. Das ist hier teurer als beim Rang:
             // Nach jedem Neustart muss jeder erneut zustimmen, und ein NACHWEIS der
             // Zustimmung ist weg. Die Warnung darunter sagt es; wer die Zustimmung als
@@ -1939,6 +2065,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
             wolkenstaende = new ZwischenspeicherWolken(new SpeicherWolken());
             getLogger().warning("Keine Datenbank eingetragen: Parzellen, Guthaben und das"
                     + " Abholfach gelten nur bis zum naechsten Neustart.");
+            getLogger().warning("Und die MELDUNGEN: Ein Neustart wirft jede offene"
+                    + " Meldung weg. Der Melder hat gemeldet, nichts geschah, und er"
+                    + " meldet nicht wieder - das ist der Zustand, gegen den das"
+                    + " Meldewesen gebaut ist.");
+            getLogger().warning("Auch die TEAMROLLEN: Nach einem Neustart hat niemand"
+                    + " mehr eine, und ein Moderator ohne Rechte haelt das fuer einen"
+                    + " Fehler. Eine Rolle wird gegeben und nicht gemessen - kein Takt"
+                    + " holt sie zurueck.");
             getLogger().warning("Zum Festhalten datenbank.url in plugins/"
                     + getName() + "/config.yml ausfuellen.");
             return true;
@@ -2022,6 +2156,23 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // zwischengespeicherter Vergleichswert waere genau der veraltete Stand,
             // den dieser Riegel abweisen soll.
             rangablage = new MariaRaenge(datenbank);
+            // KEIN Zwischenspeicher, aus demselben Grund wie beim Rang - und mit einem
+            // strengeren daneben: Eine gemerkte Rollenliste waere eine zweite Wahrheit
+            // darueber, wer moderieren darf, und ein Entzug wirkte erst nach ihrem
+            // Ablauf. Genau in dieser Zeit ist der Grund fuer den Entzug noch frisch.
+            teamablage = new MariaTeam(datenbank);
+            // KEIN Zwischenspeicher, aus demselben Grund wie beim Team - und mit
+            // einem eigenen daneben: Der Riegel gegen zwei Moderatoren an derselben
+            // Meldung steht in der WHERE-Bedingung des UPDATE. Ein
+            // Zwischenspeicher davor liesse beide denselben Stand lesen, und dann
+            // greift der Riegel erst beim Schreiben - also richtig, aber die Liste
+            // hat sie vorher beide als offen gezeigt.
+            meldeablage = new MariaMeldungen(datenbank);
+            // KEIN Zwischenspeicher, und hier mit dem strengsten Grund: Ein
+            // gemerkter Stand, der nach dem Aufheben die alte Zeile haelt, ist eine
+            // Sperre, die weiterwirkt, nachdem sie zurueckgenommen wurde. Der Riegel
+            // gegen zwei gleichzeitige Aufhebungen steht in der WHERE-Bedingung.
+            strafablage = new MariaStrafen(datenbank);
             // KEIN Zwischenspeicher, aus demselben Grund wie beim Rang - und hier noch
             // strenger: Ein gemerktes "hat zugestimmt" waere eine zweite Wahrheit ueber
             // einen Nachweis.
@@ -2164,6 +2315,165 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     /**
+     * Baut den Befehlsbaum von {@code /team} - im Ereignis, nicht im onEnable.
+     *
+     * <p>Dieselbe Form und derselbe Grund wie bei {@link #berufeBefehle}. Die ZWEI
+     * NAMENSNAEHTE gehen ueber {@link Spielername}: {@code kennungAuchAbwesend}, weil
+     * eine Rolle fast immer an jemanden vergeben wird, der gerade nicht zusieht, und
+     * {@code von} fuer den Rueckweg. Beide holen ihre Antwort aus {@code Bukkit}, und
+     * genau deswegen sind sie Naehte - hinter ihnen laeuft jeder Zweig des Befehls durch
+     * eine Probe.
+     *
+     * <p>Die WERTE kommen als Abfrage und nicht als Wert, wie bei
+     * {@code FreistadtBefehle}: Die Rollen und die Zone stehen in der {@code config.yml},
+     * und {@code /freimarken neuladen} muss sie erreichen. Ein hier festgehaltenes
+     * Exemplar waere nach dem ersten Neuladen die alte Datei - und dann vergaebe
+     * {@code /team gib} eine Rolle mit den Rechten von vorhin.
+     */
+    private TeamBefehle teamBefehle() {
+        return new TeamBefehle(new Teambuch(teamablage,
+                () -> wirtschaft.werte().team()), sprache,
+                Spielername::kennungAuchAbwesend, Spielername::von, uhr::instant,
+                () -> wirtschaft.werte().zeit().zone(), getLogger());
+    }
+
+    /**
+     * Baut den Befehlsbaum von {@code /melden} - im Ereignis, nicht im onEnable.
+     *
+     * <p>Dieselbe Form und derselbe Grund wie bei {@link #berufeBefehle}. Vier Naehte
+     * gehen ueber Bukkit und sind darum hereingegeben:
+     * {@code kennungAuchAbwesend} (ein Griefer verschwindet, bevor man ihn meldet),
+     * {@link Spielername#von} fuer den Rueckweg, der ORT des Melders (daran haengt das
+     * Hinspringen) und der ANSAGEKREIS - die anwesenden Moderatoren.
+     *
+     * <p>Der Ansagekreis fragt {@code freimarken.meldungen} und nicht eine Teamrolle:
+     * Wer Meldungen bearbeiten darf, soll von einer neuen erfahren - unabhaengig davon,
+     * aus welcher Quelle sein Recht kommt.
+     */
+    private MeldeBefehle meldeBefehle() {
+        return new MeldeBefehle(new Meldebuch(meldeablage,
+                () -> wirtschaft.werte().melden(), MeldungBefehle.RECHT), sprache,
+                Spielername::kennungAuchAbwesend,
+                spieler -> new MeldeBefehle.Ort(spieler.getWorld().getName(),
+                        spieler.getLocation().getBlockX(),
+                        spieler.getLocation().getBlockY(),
+                        spieler.getLocation().getBlockZ()),
+                () -> {
+                    List<net.kyori.adventure.audience.Audience> kreis =
+                            new java.util.ArrayList<>();
+                    for (org.bukkit.entity.Player wer : getServer().getOnlinePlayers()) {
+                        if (wer.hasPermission(MeldungBefehle.RECHT)) {
+                            kreis.add(wer);
+                        }
+                    }
+                    return kreis;
+                },
+                Spielername::von, uhr::instant, getLogger());
+    }
+
+    /**
+     * Baut den Befehlsbaum von {@code /meldung} - im Ereignis, nicht im onEnable.
+     *
+     * <p>Die REISEHAND geht ueber dasselbe {@code Reise.fuehre}, das auch {@code /warp}
+     * benutzt: Wartezeit, Rueckweg und Hindernisse gelten damit genauso. Ein eigenes
+     * {@code teleport} hier waere ein zweiter Reiseweg - und dann gilt die Wartezeit fuer
+     * den einen und nicht fuer den anderen.
+     *
+     * <p>Sie gibt {@code false}, wenn es die Welt nicht mehr gibt. Das kommt vor: Eine
+     * Meldung aus Kornmark ueberlebt den Reset der Welt, und eine aus einer
+     * abgeschalteten Welt ueberlebt die Aenderung der {@code config.yml}. Ist
+     * {@code reise} null - der Start ist vorher abgebrochen -, gilt dasselbe: Der
+     * Moderator liest, dass dorthin kein Weg fuehrt, und keinen Absturz.
+     */
+    private MeldungBefehle meldungBefehle() {
+        return new MeldungBefehle(new Meldebuch(meldeablage,
+                () -> wirtschaft.werte().melden(), MeldungBefehle.RECHT), sprache,
+                Spielername::von,
+                (wer, welt, x, y, z, ziel) -> {
+                    org.bukkit.World gefunden = getServer().getWorld(welt);
+                    if (gefunden == null || reise == null) {
+                        return false;
+                    }
+                    reise.fuehre(wer, new org.bukkit.Location(gefunden, x + 0.5, y,
+                            z + 0.5), ziel);
+                    return true;
+                },
+                uhr::instant, getLogger());
+    }
+
+    /**
+     * Baut die Befehlsbaeume von {@code /strafe} und {@code /bannliste} - im Ereignis,
+     * nicht im onEnable.
+     *
+     * <p><b>Die TEAMFRAGE geht an die Teamablage und nicht an Bukkit</b>, und das ist
+     * die tragende Naht dieses Befehls: Der Betroffene kann offline sein, und offline
+     * hat niemand Rechte. Mit einer Rechtemenge als Grundlage waere jeder Abwesende
+     * ungeschuetzt - und das ist genau der Augenblick, in dem man einen Kollegen bannt.
+     *
+     * <p>Eine Stoerung der Teamablage gibt {@code true}: Wer nicht weiss, ob der
+     * Betroffene im Team ist, soll die Strafe NICHT verhaengen. Von zwei Fehlern der,
+     * der sich zuruecknehmen laesst. Ist die Teamablage null - der Start ist vorher
+     * abgebrochen -, gilt dasselbe.
+     *
+     * <p><b>Der ANSAGEKREIS sind ALLE Anwesenden</b>, anders als bei {@code /melden},
+     * wo nur die Moderatoren mitlesen: Eine Strafe ist oeffentlich, und Plan 12c.4
+     * macht sogar die Bannliste oeffentlich. Wer zusieht, wie jemand grieft, und nichts
+     * geschieht, meldet beim naechsten Mal nicht.
+     */
+    private StrafBefehle strafBefehle() {
+        return new StrafBefehle(new Strafbuch(strafablage,
+                () -> wirtschaft.werte().strafen(), StrafBefehle.RECHTE), sprache,
+                Spielername::kennungAuchAbwesend,
+                wer -> {
+                    if (teamablage == null) {
+                        return true;
+                    }
+                    try {
+                        return !teamablage.lies(wer).zeilen().isEmpty();
+                    } catch (IllegalStateException gestoert) {
+                        getLogger().warning("Die Teamrollen von " + wer + " sind nicht"
+                                + " lesbar: " + gestoert.getMessage() + ". Die Strafe"
+                                + " wird behandelt, als waere er im Team - sie braucht"
+                                + " dann " + StrafBefehle.RECHTE.team() + ".");
+                        return true;
+                    }
+                },
+                () -> {
+                    List<net.kyori.adventure.audience.Audience> kreis =
+                            new java.util.ArrayList<>(getServer().getOnlinePlayers());
+                    return kreis;
+                },
+                new StrafBefehle.Spielerhand() {
+                    @Override
+                    public boolean wirfHinaus(java.util.UUID wer,
+                            net.kyori.adventure.text.Component zeile) {
+                        org.bukkit.entity.Player spieler = getServer().getPlayer(wer);
+                        if (spieler == null) {
+                            return false;
+                        }
+                        // kick und nicht kickPlayer: Jenes ist seit Paper 1.20
+                        // abgekuendigt und nimmt einen String. Die Zeile ist ein
+                        // Component mit Farben aus der Sprachdatei.
+                        spieler.kick(zeile);
+                        return true;
+                    }
+
+                    @Override
+                    public boolean sage(java.util.UUID wer,
+                            net.kyori.adventure.text.Component zeile) {
+                        org.bukkit.entity.Player spieler = getServer().getPlayer(wer);
+                        if (spieler == null) {
+                            return false;
+                        }
+                        spieler.sendMessage(zeile);
+                        return true;
+                    }
+                },
+                Spielername::von, uhr::instant,
+                () -> wirtschaft.werte().zeit().zone(), getLogger());
+    }
+
+    /**
      * Baut den Befehlsbaum von {@code /markt} - im Ereignis, nicht im onEnable.
      *
      * <p>Dieselbe Form und derselbe Grund wie bei {@link #berufeBefehle}.
@@ -2302,6 +2612,57 @@ public final class FreimarkenPlugin extends JavaPlugin {
             angemeldet.addAll(verzeichnis.register(rangBefehle().rang(),
                     sprache.wort(BundSatz.BEFEHL_RANG, Einsatz.keine()),
                     List.of("rank")));
+            // /team [Schritt 16a Teil A] - Teamrollen vergeben und nachsehen. KEIN
+            // Zweitname: Ein Betreiberwerkzeug braucht keine zweite Schreibweise, und
+            // "staff" waere der Name, den jedes andere Plugin auch belegt.
+            //
+            // Die Pruefung auf null faengt den Fall, dass der Start vorher abgebrochen
+            // ist - dieselbe Linie wie bei der Lotterie. Ohne sie fehlten AUCH die
+            // Befehle darunter.
+            if (teamablage != null) {
+                angemeldet.addAll(verzeichnis.register(teamBefehle().team(),
+                        sprache.wort(BundSatz.BEFEHL_TEAM, Einsatz.keine()),
+                        List.of()));
+            }
+            // /melden und /meldung [Schritt 16a Teil C]. ZWEI Befehle und nicht
+            // einer mit Zweigen: Sie haben verschiedene Rechte, verschiedene
+            // Leserschaften und verschiedene Gattungen - der eine gibt etwas ab, der
+            // andere arbeitet eine Liste durch. Ein gemeinsamer Baum haette den
+            // Melder durch die Moderationszweige tippen lassen.
+            //
+            // /report als Zweitname fuer /melden, dieselbe Linie wie plot, balance
+            // und job: Wer von einem englischsprachigen Server kommt, tippt ihn
+            // zuerst - und wer im Augenblick eines Vorfalls "unbekannter Befehl"
+            // liest, meldet ihn nicht.
+            if (meldeablage != null) {
+                angemeldet.addAll(verzeichnis.register(meldeBefehle().melden(),
+                        sprache.wort(BundSatz.BEFEHL_MELDEN, Einsatz.keine()),
+                        List.of("report")));
+                angemeldet.addAll(verzeichnis.register(meldungBefehle().meldung(),
+                        sprache.wort(BundSatz.BEFEHL_MELDUNG, Einsatz.keine()),
+                        List.of()));
+            }
+            // /strafe und /bannliste [Schritt 16a Teil B]. ZWEI Befehle, aber anders
+            // getrennt als bei /melden und /meldung: Dort waren es zwei
+            // Leserschaften, hier sind es die SELBEN Moderatoren - darum hat /strafe
+            // seine Arten als ZWEIGE. /bannliste ist der eigene Befehl, weil sie nach
+            // Plan 12c.4 fuer jeden ist.
+            //
+            // KEINE Zweitnamen auf /ban, /kick oder /mute: Vanilla hat /ban und
+            // /kick selbst, und Paper vergibt den kurzen Namen dann je nach
+            // Registrierungsreihenfolge. Ein Moderator, der /kick tippt und Vanillas
+            // Fassung erreicht, liest "You do not have permission" - er ist kein
+            // Operator - und glaubt, der Rauswurf sei gescheitert. Die deutschen
+            // Namen kollidieren mit nichts.
+            if (strafablage != null) {
+                StrafBefehle strafen = strafBefehle();
+                angemeldet.addAll(verzeichnis.register(strafen.strafe(),
+                        sprache.wort(BundSatz.BEFEHL_STRAFE, Einsatz.keine()),
+                        List.of()));
+                angemeldet.addAll(verzeichnis.register(strafen.bannliste(),
+                        sprache.wort(BundSatz.BEFEHL_BANNLISTE, Einsatz.keine()),
+                        List.of()));
+            }
             // /bundesmarkt als zweiter Name: Der Ort heisst so, und wer ihn sucht, tippt
             // seinen Namen und nicht die Abkuerzung.
             angemeldet.addAll(verzeichnis.register(marktBefehle().markt(),
@@ -3554,6 +3915,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         }
         meldeAltereStadt(griff);
         meldeSpawnImHaus();
+        meldeSperrerImKreuzarm();
         if (gesetzt == 0 && bloecke == 0L) {
             getLogger().info("Die Stadt steht: " + zuBauen.size()
                     + " Zeilenhaeuser, nichts zu setzen.");
@@ -3568,6 +3930,53 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + pflasterstoffe.bericht() + ". Wer ein Haus neu setzen will, nimmt"
                 + " seine Wandecke eine Ebene ueber dem Boden weg; wer neu pflastern"
                 + " will, den Block in der Mitte des Marktes.");
+    }
+
+    /**
+     * Meldet einen eingetragenen Bau, der einen Kreuzarm SPERRT.
+     *
+     * <p><b>Warum das eine eigene Meldung braucht</b> [24.11.2026]: Ein Bau, der einen
+     * Arm GANZ ueberspannt, bekommt eine Laube - der Weg geht durch ihn hindurch. Einer,
+     * der nur hineinreicht, bekommt keine: Ein Durchgang wuerde ihn abschneiden. Dann
+     * steht er aber mitten auf der Strasse zum Tor, und zwar unsichtbar fuer jede Probe -
+     * {@code Bauplan} und {@code Stadtplan} rechnen beide richtig, nur die Stadt ist
+     * zu. Gemessen in der Welt: Zunfthaus und Kaufmannskontor reichten bis z 3, der Arm
+     * braucht bis z 4 - EIN Block, und der Ost- und der Westarm waren versperrt.
+     *
+     * <p>Gesagt wird, was zu tun ist: verschieben, bis der Bau den Arm nicht mehr
+     * beruehrt, oder weiten, bis er ihn ganz ueberspannt. Beides ist richtig; die Stadt
+     * kann es nicht entscheiden.
+     */
+    private void meldeSperrerImKreuzarm() {
+        if (stadtplan == null) {
+            return;
+        }
+        for (Platzhalterbau bau : platzhalterbauten.alle()) {
+            Quader q = bau.bereich();
+            boolean beruehrt = false;
+            for (int x = q.vonX(); x <= q.bisX() && !beruehrt; x++) {
+                for (int z = q.vonZ(); z <= q.bisZ(); z++) {
+                    if (Stadtplan.imKreuzarm(x, z)) {
+                        beruehrt = true;
+                        break;
+                    }
+                }
+            }
+            if (!beruehrt || Bauplan.ueberspanntKreuzarm(bau)) {
+                continue;
+            }
+            getLogger().severe("Der Bau \"" + bau.schluessel() + "\" ("
+                    + q.alsText() + ") steht IM Kreuzarm, ueberspannt ihn aber nicht"
+                    + " ganz - damit ist der Weg von der Marktmitte zum Tor dort"
+                    + " versperrt. Ein Bau, der den Arm GANZ ueberspannt, bekommt eine"
+                    + " Laube und der Weg geht durch ihn hindurch; einer, der nur"
+                    + " hineinreicht, kann keine bekommen, weil ein Durchgang ihn"
+                    + " abschneiden wuerde. Verschieb ihn in bauten.haeuser."
+                    + bau.schluessel() + " so weit, dass er mehr als "
+                    + Stadtplan.KREUZ_HALB + " Bloecke von den Achsen " + Stadtplan.MITTE_X
+                    + " und " + Stadtplan.MITTE_Z + " entfernt bleibt - oder weite ihn,"
+                    + " bis er ueber den ganzen Arm reicht.");
+        }
     }
 
     /**
@@ -4354,6 +4763,51 @@ public final class FreimarkenPlugin extends JavaPlugin {
             angemeldet.add(recht.getName());
         }
         Rangliste.unbekannteRechte(werte, angemeldet).forEach(getLogger()::severe);
+    }
+
+    /**
+     * Nennt die Teamrollen - und was an ihnen nicht wirkt (Schritt 16a Teil A).
+     *
+     * <p>Drei Saetze, und sie beantworten die drei Fragen, die ein Betreiber beim Start
+     * zu den Rollen hat:
+     * <ul>
+     *   <li><b>Ist meine Datei angekommen?</b> Die Rechenprobe nennt jede Rolle mit der
+     *       ZAHL ihrer Rechte. Wer "keine" liest, wo fuenf stehen sollten, sieht es
+     *       sofort - und wer die Vorgabe des Programms bekommt, obwohl er eigene Rollen
+     *       eingetragen hat, erkennt es an den Namen.</li>
+     *   <li><b>Vergibt eine Rolle etwas, das es nicht gibt?</b> Ein vertipptes
+     *       {@code blockbuchh} faellt sonst nirgends auf: Das Anhaengsel setzt jeden
+     *       Namen klaglos, und es fragt es nie jemand. Gefragt wird die
+     *       Rechteverwaltung des Servers, weil nur sie weiss, was angemeldet ist -
+     *       dieselbe Linie wie bei den Raengen.</li>
+     *   <li><b>Fehlt einer Rolle ihr Name?</b> Dann steht in {@code /team} ihr Pfad. Das
+     *       ist eine Warnung und KEIN verweigerter Start, anders als bei einem Beruf:
+     *       Ein Beruf steht einem Spieler im Zunfthaus vor der Nase, eine Rolle nur dem
+     *       Betreiber in einer Verwaltungsliste. Ein Server, der wegen einer haesslichen
+     *       Verwaltungsliste nicht startet, ist die schlechtere Antwort.</li>
+     * </ul>
+     */
+    private void nenneTeam() {
+        var werte = wirtschaft.werte().team();
+        getLogger().info(Teamliste.rechenprobe(werte));
+        var angemeldet = new java.util.TreeSet<String>();
+        for (var recht : getServer().getPluginManager().getPermissions()) {
+            angemeldet.add(recht.getName());
+        }
+        Teamliste.unbekannteRechte(werte, angemeldet).forEach(getLogger()::severe);
+        List<String> ohneNamen = new ArrayList<>();
+        for (String rolle : werte.schluessel()) {
+            if (!sprachstand.buch().saetze().containsKey(new Teamrolle(rolle).pfad())) {
+                ohneNamen.add(rolle);
+            }
+        }
+        if (!ohneNamen.isEmpty()) {
+            getLogger().warning("Zu " + ohneNamen.size() + " Teamrolle(n) fehlt die"
+                    + " Sprachzeile: " + String.join(", ", ohneNamen) + ". Vergeben"
+                    + " lassen sie sich weiter; in /team steht bis dahin ihr Pfad"
+                    + " statt ihres Namens. sprache-vorlage.yml zeigt im Abschnitt"
+                    + " team: rolle:, wie die Zeilen aussehen.");
+        }
     }
 
     /**

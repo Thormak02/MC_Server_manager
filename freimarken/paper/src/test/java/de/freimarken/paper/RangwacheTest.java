@@ -14,6 +14,8 @@ import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.SpeicherRaenge;
 import de.freimarken.kern.SpeicherSpielzeit;
+import de.freimarken.kern.SpeicherTeam;
+import de.freimarken.kern.Teamwerte;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
 import java.time.Instant;
@@ -52,6 +54,9 @@ class RangwacheTest {
     private Griffprobe griff;
     private SpeicherRaenge ablage;
 
+    /** Die Teamrollen - die zweite Quelle der Rechte [Schritt 16a Teil A]. */
+    private SpeicherTeam team;
+
     @BeforeAll
     static void server() {
         Serverprobe.einmalSetzen();
@@ -61,6 +66,7 @@ class RangwacheTest {
     void frisch() {
         griff = new Griffprobe();
         ablage = new SpeicherRaenge();
+        team = new SpeicherTeam();
     }
 
     @Test
@@ -235,6 +241,103 @@ class RangwacheTest {
                 griff.gesetzt(anna));
     }
 
+    // ------------------------------------------------------------------------
+    // DIE TEAMROLLEN ALS ZWEITE QUELLE [Schritt 16a Teil A]
+    //
+    // Das Anhaengsel wird ERSETZT und nicht ergaenzt, also gibt es genau EINEN Zug, der
+    // die Rechte setzt. Diese vier Proben halten fest, dass er BEIDE Quellen vereint -
+    // ohne sie waere die Teamrolle unsichtbar wirkungslos oder, schlimmer, der Loescher
+    // der Rangrechte.
+    // ------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Rang UND Rolle geben zusammen - keine der beiden verdraengt die andere")
+    void rangUndRolleZusammen() {
+        Spielerprobe anna = spieler(20);
+        aufstieg(anna, "siedler");
+        team.gib(anna.spieler().getUniqueId(), "moderator", MITTAGS, null);
+
+        wache(Rangwerte.VORGABE, Teamwerte.VORGABE).beimBeitritt(beitritt(anna));
+
+        // BEIDES in einer Menge. Waere es nur eines, haette der zweite Zug den ersten
+        // geloescht - und zwar je nach Reihenfolge der Beitrittszuhoerer mal so und mal
+        // anders. Das ist der Fehler, der sich nicht einmal zuverlaessig zeigt.
+        Set<String> gesetzt = griff.gesetzt(anna);
+        assertTrue(gesetzt.contains("freimarken.parzellen.2"),
+                "die Rangzahl des Siedlers: " + gesetzt);
+        assertTrue(gesetzt.contains("freimarken.blockbuch"),
+                "und das Recht des Moderators: " + gesetzt);
+        assertTrue(gesetzt.contains("freimarken.spielzeit.andere"), gesetzt.toString());
+    }
+
+    @Test
+    @DisplayName("Ist die LEITER aus, bleiben die Rollenrechte trotzdem")
+    void leiterAusLaesstDieRolle() {
+        Spielerprobe anna = spieler(21);
+        aufstieg(anna, "buerger");
+        team.gib(anna.spieler().getUniqueId(), "moderator", MITTAGS, null);
+
+        wache(Rangwerte.VORGABE.mitAn(false), Teamwerte.VORGABE)
+                .beimBeitritt(beitritt(anna));
+
+        // DER FALL, DER BIS ZUM 24.11.2026 GEBROCHEN WAR: In Rangwache.vergibNeu stand
+        // ein frueher Rueckweg, der bei abgeschalteter Leiter Set.of() setzte. Mit
+        // Teamrollen daneben haette ein Betreiber die Raenge abgeschaltet, und am
+        // naechsten Tag koennte sein Moderator nichts mehr - zwei Einstellungen, von
+        // denen jede fuer sich richtig aussieht.
+        //
+        // Die Probe leiterAusGibtNichts daneben bleibt gruen, weil DORT niemand eine
+        // Rolle hat. Sie allein konnte den Fehler darum nicht fangen.
+        Set<String> gesetzt = griff.gesetzt(anna);
+        assertTrue(gesetzt.contains("freimarken.blockbuch"),
+                "die Rolle wirkt weiter: " + gesetzt);
+        assertFalse(gesetzt.contains("freimarken.parzellen.4"),
+                "aber keine Rangzahl mehr: " + gesetzt);
+    }
+
+    @Test
+    @DisplayName("Ohne Rollen in der Datei bleiben die Rangrechte")
+    void keinTeamLaesstDenRang() {
+        Spielerprobe anna = spieler(22);
+        aufstieg(anna, "siedler");
+        team.gib(anna.spieler().getUniqueId(), "moderator", MITTAGS, null);
+
+        // Die Gegenrichtung der Probe darueber: Diesmal ist das TEAM leer und die Leiter
+        // an. Ohne diese Probe koennte der Rueckweg im Rechtebuendel an der falschen
+        // Stelle stehen, und es fiele nicht auf.
+        wache(Rangwerte.VORGABE, Teamwerte.VORGABE.mitRollen(List.of()))
+                .beimBeitritt(beitritt(anna));
+
+        Set<String> gesetzt = griff.gesetzt(anna);
+        assertTrue(gesetzt.contains("freimarken.parzellen.2"), gesetzt.toString());
+        assertFalse(gesetzt.contains("freimarken.blockbuch"),
+                "eine Rolle, die die Datei nicht kennt, gibt nichts: " + gesetzt);
+    }
+
+    @Test
+    @DisplayName("Eine weggefallene Rolle gibt nichts und wird EINMAL gemeldet")
+    void weggefalleneRolleWirdGemeldet() {
+        Spielerprobe anna = spieler(23);
+        Spielerprobe bert = spieler(24);
+        team.gib(anna.spieler().getUniqueId(), "hausmeister", MITTAGS, null);
+        team.gib(bert.spieler().getUniqueId(), "hausmeister", MITTAGS, null);
+        List<String> gemeldet = new ArrayList<>();
+        Rangwache wache = wache(Rangwerte.VORGABE, Teamwerte.VORGABE,
+                protokollNach(gemeldet));
+
+        wache.beimBeitritt(beitritt(anna));
+        wache.beimBeitritt(beitritt(bert));
+        wache.beimBeitritt(beitritt(anna));
+
+        // Der Betroffene verliert still die Rechte - im Spiel sieht es aus, als waere
+        // die Rolle nie vergeben worden. Darum die Zeile, und sie muss die ROLLE nennen.
+        // Einmal und nicht je Beitritt: sonst liest sie niemand.
+        assertEquals(1, gemeldet.size(), gemeldet.toString());
+        assertTrue(gemeldet.get(0).contains("hausmeister"), gemeldet.get(0));
+        assertTrue(griff.gesetzt(anna).contains("freimarken.parzellen.1"),
+                "der Rang wirkt weiter: " + griff.gesetzt(anna));
+    }
+
     @Test
     @DisplayName("Ohne Ablage, Werte, Griff oder Protokoll gibt es keine Wache")
     void riegel() {
@@ -244,17 +347,29 @@ class RangwacheTest {
         var sprache = Sprachprobe.spracheAusDemJar();
         var lauf = lauf(wirtschaft);
         assertThrows(IllegalArgumentException.class,
-                () -> new Rangwache(null, wirtschaft, griff, lauf, sprache, stumm));
+                () -> new Rangwache(null, team, wirtschaft, griff, lauf, sprache,
+                        stumm));
+        // Die TEAMABLAGE ist Pflicht wie die Rangablage [Schritt 16a Teil A]: Ohne
+        // sie waere der Griff eine Zeile spaeter ein Wurf beim Beitritt, und zwar
+        // bei JEDEM - also auch bei dem, der es melden koennte.
         assertThrows(IllegalArgumentException.class,
-                () -> new Rangwache(ablage, null, griff, lauf, sprache, stumm));
+                () -> new Rangwache(ablage, null, wirtschaft, griff, lauf, sprache,
+                        stumm));
         assertThrows(IllegalArgumentException.class,
-                () -> new Rangwache(ablage, wirtschaft, null, lauf, sprache, stumm));
+                () -> new Rangwache(ablage, team, null, griff, lauf, sprache,
+                        stumm));
         assertThrows(IllegalArgumentException.class,
-                () -> new Rangwache(ablage, wirtschaft, griff, null, sprache, stumm));
+                () -> new Rangwache(ablage, team, wirtschaft, null, lauf, sprache,
+                        stumm));
         assertThrows(IllegalArgumentException.class,
-                () -> new Rangwache(ablage, wirtschaft, griff, lauf, null, stumm));
+                () -> new Rangwache(ablage, team, wirtschaft, griff, null, sprache,
+                        stumm));
         assertThrows(IllegalArgumentException.class,
-                () -> new Rangwache(ablage, wirtschaft, griff, lauf, sprache, null));
+                () -> new Rangwache(ablage, team, wirtschaft, griff, lauf, null,
+                        stumm));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Rangwache(ablage, team, wirtschaft, griff, lauf, sprache,
+                        null));
     }
 
     private Rangwache wache(Rangwerte werte) {
@@ -262,9 +377,21 @@ class RangwacheTest {
     }
 
     private Rangwache wache(Rangwerte werte, Logger protokoll) {
-        var wirtschaft =
-                new Wirtschaftsstand(Wirtschaftswerte.VORGABE.mitRaengen(werte));
-        return new Rangwache(ablage, wirtschaft, griff, lauf(wirtschaft),
+        // OHNE Rollen, damit jede Probe oben genau das messen kann, was sie messen will:
+        // die Rechte aus dem RANG. Eine Vorgabe mit fuenf Rollen hier liesse eine Probe,
+        // die Set.of() erwartet, von der Rollenliste abhaengen.
+        return wache(werte, Teamwerte.VORGABE.mitRollen(List.of()), protokoll);
+    }
+
+    private Rangwache wache(Rangwerte werte, Teamwerte rollen) {
+        return wache(werte, rollen,
+                Logger.getLogger("RangwacheProbe-" + UUID.randomUUID()));
+    }
+
+    private Rangwache wache(Rangwerte werte, Teamwerte rollen, Logger protokoll) {
+        var wirtschaft = new Wirtschaftsstand(
+                Wirtschaftswerte.VORGABE.mitRaengen(werte).mitTeam(rollen));
+        return new Rangwache(ablage, team, wirtschaft, griff, lauf(wirtschaft),
                 Sprachprobe.spracheAusDemJar(), protokoll);
     }
 

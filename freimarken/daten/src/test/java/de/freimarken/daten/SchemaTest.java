@@ -91,6 +91,9 @@ class SchemaTest {
         1227759879, // Schritt 36 - Tabelle lotterie_lose
         -1991130253, // Schritt 37 - Tabelle wettbewerb_punkte
         -812230402, // Schritt 38 - Tabelle wettbewerb_lauf
+        737655663, // Schritt 39 - Tabelle team
+        1212480773, // Schritt 40 - Tabelle meldungen
+        492034302, // Schritt 41 - Tabelle strafen
     };
 
     private static String datenbanktext() {

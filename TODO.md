@@ -724,6 +724,489 @@ Offen: ein Weltname MIT Umlaut fällt auf "world" zurück (die Positivliste ist 
   mitgeaendert.~~ 23.11.: `palettenname` ist ein Einzeiler auf `palette_entry`; die Regel steht im
   Dienst, weil das Skript am Dienst haengt und nie umgekehrt.
 
+## Erhebung 25.11.2026: was vor der Map-Entscheidung offen ist
+
+Vierzehn Leser und Pruefer auf Plan, TODO, config.yml, Quelltext und Manager:
+**157 belegte offene Punkte, davon warten nur 13 wirklich auf die Map.** Acht Funde
+fielen als erledigt oder falsch weg - alle aus veralteten Plan- und TODO-Zeilen.
+Hier steht nur, was noch NICHT in dieser Datei stand.
+
+### Gehoert VOR den Kauf, nicht danach
+
+- **Nutzungsrecht beider Kandidaten klaeren.** Der einzige Punkt, der wirklich vor dem
+  Kauf steht. Eine Welt, deren Lizenz bezahlte Mitgliedschaften ausschliesst, ist keine
+  Wahl.
+
+### ~~Lobby-Basisversion~~ VERWECHSLUNG MEINERSEITS, berichtigt 25.11.2026
+
+~~`docs/velocity_network_plan.md:140-143` sei eine offene Entscheidung vor dem Kauf.~~
+Der Betreiber hat es richtiggestellt: Dort geht es um die **universal Velocity-Lobby**,
+den Netzeingang, der jede Client-Version annehmen soll - nicht um den **Citybuild-Spawn**,
+den er gelegentlich auch "Lobby" nennt. Von der universal Lobby kommt man auf den
+Citybuild, und **der Citybuild laeuft immer auf der modernsten Version, aktuell 26.3**.
+Die Versionsliste einer Kaufmap (Larinor nennt bis 26.3) ist damit genau das richtige
+Kriterium, und die Entscheidung in `velocity_network_plan.md` beruehrt den Kauf nicht.
+
+**Merkregel fuer kuenftige Erhebungen:** "Lobby" ist in diesem Projekt zweideutig.
+Universal Lobby = Velocity-Netzeingang, alte Versionen ueber Via. Citybuild-Spawn =
+Altfurt, immer neueste Version. Die Dokumente `velocity_network_plan.md` und
+`lobby_gateway_plan.md` meinen immer das ERSTE.
+
+### ENTSCHIEDEN 25.11.2026: die Weltenliste und damit die Portalzahl
+
+Der Betreiber: *"es schadet nicht mehr platz zu haben"*, und zu den Zielen:
+*"mindestens Farmwelt, Wildnis und Inselwildnis existieren (eventuell unter anderen namen
+an mein branding angepasst, zb. inselwerder oder hochwald)"*.
+
+**Nachgesehen - diese drei gibt es bereits, genau unter Brandingnamen:**
+
+| Lumia | Freimarken | Zustand |
+|---|---|---|
+| Farmwelt | **Kornmark** | da, `art: gewoehnlich`, Kante 2000, Reset je MC-Version |
+| Wildnis / Freibau | **Hochwald** | da, `art: gewoehnlich`, Kante 5000 |
+| Inselwildnis | **Hafenwerder** | da, Meerinseln auf gerasterter Welt |
+| Grundstueckswelt | **Marktstadt** | da, 64er-Raster |
+| Staedtewelt | **Freistaedte** | da, 256er-Raster |
+| Nether / End | **nether / end** | da |
+| (ohne Vorbild) | **Wolkenwerder** | da, Skyblock |
+
+**Gewuenscht und noch nicht vorhanden** (*"gute ideen, die ich gerne noch haette"*):
+- **Farmwelt VIP** - eine zweite Kornmark nur fuer Mitglieder. `art: gewoehnlich`, also
+  ein Eintrag in der `config.yml` plus ein Recht am Tor. Kein Quelltext.
+- **Mine** - Ressourcenwelt. Dieselbe Gattung, dieselbe Arbeit.
+- **Farmen** - bei Lumia Holz-, Tier- und Monsterfarmen. Ob eigene Welt oder Anlage am
+  Spawn ist offen; als Welt waere es wieder nur ein Eintrag.
+
+**SEPARAT, nicht am Citybuild** (*"separat vom citybuild aus der universal lobby fuer
+spaeter"*): Paintball, Skybridgewars, weitere Minigames. Sie haengen am
+Velocity-Netz, nicht an Altfurt - sie brauchen also KEINEN Portalplatz im Spawn.
+*"eventuell teilen sie sich das kosmetik und raenge system, sonst erstmal separat"* -
+offene Entscheidung fuer spaeter, mit Folge fuer die Datenhaltung (ein Schema fuer
+mehrere Netze oder je Netz eines).
+
+**Damit steht die Portalzahl fuer den Spawn:** acht Tore heute (marktstadt, freistaedte,
+hafenwerder, wolkenwerder, hochwald, kornmark, nether, end) plus Farmwelt VIP, Mine,
+Farmen = **elf**, plus ein Weg zurueck in die universal Lobby = **zwoelf**. Die Zahl aus
+der Lumia-Erhebung stimmt also, nur speisen sich drei Portale aus noch nicht angelegten
+Welten - alle drei `art: gewoehnlich` und damit reine Dateiarbeit.
+
+### Anpassung statt Neubau? Recherche 25.11.2026 - 82 belegte Funde, 11 Gegenbefunde
+
+Frage des Betreibers: *"denkst du ein auftrag an die pixelbiester ist guenstiger, wenn ich
+eine existierende an meine beduerfnisse angepasste map von ihnen beauftrage?"*
+
+**DER ENTSCHEIDENDE FUND steht in ihrem eigenen Laden** -
+`chunkfactory.com/pages/buy-minecraft-lobbies/`, woertlich: *"A good option is to buy a
+premade map and then have it customized a little by yourself or by architects. [...] It's
+also possible to get lobbies built by a large build team, such as Pixelbiester. But then
+you have to expect to pay a lot of money for a Minecraft spawn. [...] we recommend
+investing no more than EUR 150 to get started"*.
+
+Pixelbiester empfehlen also in ihrem eigenen Shop **gegen** einen Auftrag an sich selbst -
+und nennen 150 EUR als Startbudget. Das ist die belastbarste Antwort, die dieser Markt
+hergibt.
+
+**Was die Gegenlese daran korrigiert hat** (vier tragende Befunde, selbst nachgeprueft):
+
+1. **Die 150 EUR gelten dem KAUF, nicht einem Auftrag.** Dieselbe Seite sagt zwei
+   Abschnitte hoeher, bei einem Bauteam sei *"a lot of money"* zu erwarten. Eine daraus
+   gerechnete Zahl ("150 minus Mappreis = Budget fuer die Anpassung") steht in keiner
+   Quelle. **Fuer einen Anpassungsauftrag an Pixelbiester gibt es keine belegte Zahl** -
+   die Recherche traegt "erst fragen", nicht "Auftrag erteilen".
+2. **Pixelbiester koennen die Rechte an den Favoriten gar nicht vergeben.** Die AGB:
+   *"Der Verkaeufer bleibt Eigentuemer der von ihm eingestellten Produkte, einschliesslich
+   der Urheberrechte"* - chunkfactory lizenziert nur in seinem Namen. RPG Village gehoert
+   BreadBuilds, Larinor gehoert StormBlock. **Der Weg, der die Lizenzluecke vermeidet:
+   den VERKAEUFER seine eigene Map anpassen lassen** - StormBlock hat dafuer einen
+   eigenen Laden, und dort kostet Larinor 13,50 GBP statt 19,00 EUR, mit eigener EULA und
+   Versionsauswahl bis 26.3.
+3. **Die AGB verbieten genau den Drittweg.** Unter "Limitations": *"not market the
+   products or provide sub-licences or loan them"*. Die Weltdatei einem fremden Bauhaus
+   zum Umbauen zu geben, ist ein Verleihen.
+4. **KORREKTUR MEINER EIGENEN FRUEHEREN AUSSAGE:** Dass mcmodels *"license to use
+   commercially in-game"* gebe, stammt aus einem VERKAEUFER-Dokument (Vendor Terms 6e) und
+   sagt ueber Kaeuferrechte nichts. Die echte Kaeuferlizenz verbietet Bearbeitung zum
+   Verkauf und Weitergabe der Quelldateien; das Wort Server, Mitgliedschaft oder
+   Monetarisierung kommt dort nicht vor. **"Kommerzieller Einsatz erlaubt" ist bei
+   mcmodels in BEIDE Richtungen unbelegt.**
+
+**Die Lizenzlage bei chunkfactory, am Text gezaehlt:** Die Woerter *modif, edit,
+derivative, adapt, commercial, monetis, public* kommen **null Mal** vor. Der Umfang ist
+*"personal business purposes"* bzw. *"internal business purposes"* - ein oeffentlicher
+Server mit bezahlten Mitgliedschaften ist nach dem Wortlaut nicht gedeckt. Zur Bearbeitung
+steht nichts, und das faellt auf **Paragraph 23 UrhG** zurueck: Bearbeitungen duerfen nur
+mit Zustimmung des Urhebers veroeffentlicht oder verwertet werden. Still umbauen ist frei,
+die umgebaute Map oeffentlich betreiben ist Verwertung.
+
+Gegenlaeufig, aber nur Hilfetext von Dez. 2021 (`chunkfactory.com/help/faq/`): *"No! You
+are allowed to use it on your server and keep the income."* Paragraph 305c Abs. 2 BGB legt
+den Widerspruch dem Verwender zur Last - aber Streiten ist teurer als Fragen.
+
+**DER LADEN, DER DIE LUECKE SCHLIESST:** `mcmeddon.com` liefert unter **CC BY-NC** und
+zaehlt ausdruecklich als erlaubt auf: Nutzung auf kommerziellen Servern, Veraendern,
+Remixen, Weiterverbreiten, keine Lizenzgebuehren - gegen Namensnennung. Fertige Welten ab
+5 USD. Seine Auftragsliste trennt ausserdem als einzige im ganzen Markt die zwei Faelle:
+*"Changes to existing worlds / Starting at $25+"* (25/50/150 USD) gegen Neubau 50/100/200
+USD. Also etwa die Haelfte beim kleinen Umfang.
+
+**Gegenbeispiel, damit die Faustregel nicht geglaubt wird:** Auf `buildible.net` kostet
+die Arbeit an der bestehenden Welt ab 10 USD, der guenstigste Neubau ab 5 USD. Anpassen
+ist dort teurer.
+
+**Preistreiber, zwei Quellen unabhaengig:** Flaeche ist fast gratis, Detail kostet alles -
+25x25 = 40 USD gegen 200x200 = 355 USD bei einem Erbauer mit veroeffentlichter Tafel, also
+64-fache Flaeche fuer den 8,9-fachen Preis. **Innenraeume sind der Treiber**, und bei einer
+Fertigmap sind sie schon bezahlt. Praktische Folge: *"es schadet nicht mehr platz zu
+haben"* ist der billigste Wunsch auf der Liste.
+
+**Der Einwand, der am meisten wiegt** (Gegenbefund 8): Der **eigene Altfurt-Generator**
+existiert, laeuft auf 26.3 und hat keine Lizenzfrage - 3.531 Zeilen, Ringgassen,
+Haeuserzeilen mit Tuer zur Gasse, Markt 81x81, Wehrgang. Eine Kaufmap ergaenzt ihn nicht,
+sie entwertet ihn. **Dagegen steht der Grund, aus dem der Betreiber ihn verworfen hat, und
+der ist kein Geschmack:** *"wir brachen ja aber auch beispielsweise wasserflaechen fuer den
+angel wettbewerb"* - eine gerechnete Ringstadt hat kein Wasser, und der Angelwettbewerb
+ist gebaut. Die Entscheidung bleibt also bestehen; was sie kostet, steht jetzt dabei.
+
+**15 Quellen waren gesperrt** (403/Login/Cloudflare) und sind selbst zu oeffnen - sie
+stehen mit URL im Lauf `w2b3suror`.
+
+### ENTSCHIEDEN 25.11.2026: die Namen der drei neuen Welten
+
+- **Farmwelt VIP -> `vogtei`.** Der Betreiber: *"Vogtei finde ich besser, eventuell aber
+  anspielung auf die premium raenge, die Farmwelt VIP war damals auch fuer nur
+  bezahlmitglieder und bot meiner erinnerung nach besserem loot usw."*
+
+  **Gegen eine Rang-Anspielung IM WELTNAMEN spricht ein Sachgrund:** Weltnamen sind nach
+  Plan 4.3 *reserviert* (niemand kann einen Warp `kornmark` nennen) und nach Plan 12a.6
+  nur lesbar - an ihnen haengen Sicherungen und Datensaetze. Ein Weltname ist damit
+  praktisch unveraenderlich. Hiesse die Welt `stiftermark`, waere sie an einen RANGNAMEN
+  gekoppelt, und Rangnamen aendern sich (siehe die Nutzerregel, Rangzahlen nie fest
+  einzubauen). Dazu: "Stifter" ist nur die obere der zwei Bezahlstufen (Foerderer 10 EUR,
+  Stifter 20 EUR) - die Welt soll beiden offenstehen.
+
+  **Darum die Trennung, die bei den Teamrollen heute schon gilt:** der SCHLUESSEL ist
+  neutral (`vogtei`), der ANZEIGENAME in der Sprachdatei nennt die Mitgliedschaft
+  (`reise.welt.vogtei` o.ae., z.B. "Vogtei - Farmwelt der Foerderer"). Den Namen aendert
+  der Betreiber dann in einer Textzeile, ohne eine Welt umzubenennen.
+- **Mine -> `stollenberg`.** Gewaehlt aus den zwei Vorschlaegen: Die vorhandenen Namen
+  sind Landschaft plus Endung (Hoch-WALD, Korn-MARK, Hafen-WERDER, Alt-FURT), und
+  "Stollenberg" setzt das fort; "Erzgrube" nennt den Zweck und faellt aus der Reihe.
+- **Farmen -> offen bis zur Map.** *"farmen lasse ich erstmal offen, bis die map steht,
+  dann sehe ich ob und wie es passt und ob eine separate welt noetig ist, oder ob lieber am
+  spawn."* Inhalt steht: Holz-, Tier- und Monsterfarmen *"gerne noch zusaetzliche wie
+  tiere oder pflanzen usw."*
+
+### DREI BEFUNDE zur Vogtei - sie ist NICHT nur ein Eintrag in der config.yml
+
+Nachgesehen am 25.11.2026, und das korrigiert meine eigene Einschaetzung von vorhin:
+
+1. **Es gibt heute kein Zugangsrecht je Welt.** `Weltangabe` fuehrt Name, Art, Umgebung,
+   Startwert, Kante, Sprungbestaetigung, Spielmodus und Tor - **kein Recht**. `WarpBefehle`
+   prueft nur `freimarken.reisen`, und das gilt fuer ALLE Welten gleich. Eine Welt nur fuer
+   Mitglieder braucht also Quelltext: ein Feld in `Weltangabe`, einen Leser in
+   `Weltenliste`, eine Absage in der Sprachdatei.
+2. **Es gibt MEHRERE Wege in eine Welt**, und der Riegel gehoert an die eine Stelle, die
+   alle fragen - nicht in jeden Befehl. Aufrufer von `Reise.fuehre` sind heute
+   `AnfragenBefehle` (/tpa), `FreimarkenPlugin` (Warp und Parzellensprung) und die
+   Portalwache; dazu kommen Torwache und Rueckweg. **`/tpa` ist die Umgehung**: Ein
+   Foerderer holt sonst einen Nicht-Foerderer in die Vogtei, und niemand merkt es.
+   Nutzergrundsatz "alle Wege zur selben Tat".
+3. **Plan 8.5 kennt den Fall nicht - und das entscheidet die GATTUNG der Welt.** Die
+   Tabelle "Wenn eine Mitgliedschaft auslaeuft" sagt: *"Parzellen, Freistaedte, Inseln,
+   Laeden, Geld, Gebautes - bleiben unangetastet."* Eine VIP-WELT steht dort nicht. Wer
+   dort baut und dann auslaeuft, behaelt sein Gebautes und kann nicht hin - genau die
+   Enttaeuschung, gegen die 8.5 geschrieben ist.
+
+   **Folge: Die Vogtei muss dieselbe Gattung wie Kornmark sein** - Farmwelt ohne Besitz,
+   mit Reset bei jeder MC-Version (*"deshalb haengt an ihr kein Besitz"*, Plan 4.2). Dann
+   ist das Auslaufen harmlos, weil dort ohnehin nichts bleibt. Eine Vogtei, in der man
+   bauen darf, braeuchte eine neue Zeile in 8.5 - und die waere schwer zu formulieren.
+
+   *Das ist zu entscheiden, bevor die Welt angelegt wird, nicht danach.*
+
+### ENTSCHIEDEN 25.11.2026: Zahlungsanbieter
+
+*"am einfachsten erstmal nur ueber paypal und dann manuell freischalten, spaeter dann wenn
+es laeuft und es sich lohnen wuerde, dafuer geld auszugeben eventuell einen ordendlichen
+recherchieren, der zb. auch ueberweisung oder kreditkarte annimmt, aber das eher fuer
+spaeter."*
+
+Folge fuer Schritt 16: Der **Webhook faellt zunaechst weg** - keine Anbieterschnittstelle,
+keine Signaturpruefung, kein Zahlungsabgleich. Was bleibt, ist der Teil, der ohnehin
+gebraucht wird und den der Manager heute schon halb hat: eine
+**Mitgliedschaft von Hand eintragen** (Spieler, Stufe, Laufzeit) und die **Ablaufpruefung**,
+die beim Auslaufen entzieht, ohne Besitz anzufassen. Das Plugin spricht nie mit dem
+Anbieter - es liest nur `freimarken.extra.<name>.<zahl>`. Damit ist Schritt 16 ohne
+Anbieterwahl baubar, und der spaetere Wechsel auf einen richtigen Anbieter ergaenzt nur
+den Weg, der die Zeile heute von Hand schreibt.
+
+**Nicht vergessen:** Die Rechtspflichten aus Plan Anhang C haengen am ersten verkauften
+Monat, nicht am Anbieter - AGB, Widerrufsbelehrung fuer wiederkehrende Zahlung,
+Kuendigungsschaltflaeche, Datenschutz. In `app/` steht heute keines davon.
+
+### KORREKTUR: das Portalsystem ist gebaut
+
+TODO.md:178 (*"nicht einfach so portale platzieren, sondern das system liefern um diese
+als operator / builder manuell zu setzen"*) ist nicht durchgestrichen, aber **die Sache
+steht** - nachgesehen am 25.11.:
+
+- `app/assets/lobby_plugin/src/net/mcsm/lobby/MCSMLobby.java` hat begehbare
+  Portal-Regionen: *"Portal-Regionen (Quader in der config) -> reinlaufen transferiert"*,
+  mit Abklingzeit und einem einzigen Trichter fuer jeden Serverwechsel.
+- `lobby_service.py:447` haelt `regions` beim Neuschreiben der config **absichtlich**:
+  *"Bestehende regions/cooldown_ms bleiben erhalten; bei kaputter config wird abgebrochen
+  statt ueberschrieben (schuetzt Nutzer-Portale)."*
+- `LOBBY-SETUP.txt` erklaert dem Betreiber die Quader-Form.
+
+**Was wirklich fehlt, ist der SETZWEG**: Die Quader kommen nur von Hand in die YAML - kein
+`/portal setzen` im Spiel, keine Oberflaeche im Manager. Das ist ortsunabhaengig baubar;
+nur die Koordinaten warten auf die Map.
+
+### Die zwei schwersten Punkte des ganzen Satzes
+
+Beide im Manager, beide **eine gemeldete Tat, die nicht geschehen ist** - die
+unangenehmste Fehlerklasse, weil niemand nachsieht:
+
+- **Die Whitelist bleibt an, obwohl der Manager sie abgeschaltet meldet.**
+  `_parse_properties` kennt Javas `:` als Trenner nicht, `_dump_properties` haengt
+  unbekannte Zeilen HINTER die sortierten - und Java nimmt die letzte. Vier Rufer
+  (`file_service.py:657, 672, 812`, `lobby_service.py:1043`).
+- **Die Konsole gibt nie eine Antwort zurueck.** `send_console_command` liefert hart
+  `(True, "Befehl gesendet.")`, auch bei `UNBEKANNTER_SPIELER` oder `NICHT_GEDECKT`;
+  `console.py:120` macht daraus die Erfolgsmeldung. Die Kontenseite meldet also Erfolg
+  fuer Korrekturen, die nicht gebucht wurden. Der echte Ausgang steht im Protokoll hinter
+  `Ausgang `.
+
+### Textpflege - Zeilen, die etwas Falsches behaupten
+
+Gefunden, weil alle acht verworfenen Funde aus genau dieser Gattung stammen:
+
+- `config.yml:3424` verweist auf **`reisen.tore` - diesen Schluessel gibt es nicht**;
+  gelesen wird `welten.<welt>.tor` (`Weltenliste.java:211`). Ausgerechnet der Satz, der
+  nach einer neuen Map sagen soll, wo die Torquader stehen.
+- `config.yml:1182` sagt *"Was ein Beruf einbringt, steht noch nirgends"* - die Lohntafel
+  steht 149 Zeilen tiefer, 154 Saetze.
+- `config.yml:3437` nennt als Truhen-Beispiel `[72, -60, 20]`: Koordinaten der alten
+  Stadtmitte, die am 24.11. auf 0/0 gewandert ist. Dasselbe in der Prosa 476-483.
+- `config.yml:455` haelt fest, dass das PROGRAMM baut; `Rundgangsverzeichnis.java:23`
+  sagt noch *"Die Gebaeude in Altfurt sind Handarbeit"*.
+- ~~TODO.md:583 sagt "bleibt bei 4"~~, `config.yml:152` sagt `1` - die Datei ist die
+  Wahrheit, die Entscheidung "1 -> 4" ist offen.
+- "acht Welten" und "sieben Tore" sind seit Wolkenwerder (18.11.) ueberholt: neun und
+  acht. Die Proben sind nachgezogen, die Prosa nicht.
+- Der Plan nennt zweimal einen **"Schritt 12b"**, die Baureihenfolge-Tafel hat aber keine
+  solche Zeile (12, 12a, 13) - wer nach Planreihenfolge erhebt, findet ihn nicht.
+
+### Einordnung, die der Bericht falsch hatte
+
+Die Arbeit an der **Bauhand** (gesicherter Bau wird bei jedem Start neu gesetzt,
+`Strukturgriff.setze` nimmt Wesen mit - Bilder und Ruestungsstaender verdoppeln sich) ist
+**ortsabhaengig**, nicht ortsunabhaengig: TODO.md:876 sagt *"Die Bauhand selbst ist davon
+unabhaengig - ein fertiger Spawn braucht sie nicht, die Platzhalterbauten und die
+Feingriff-Naht aber schon."* Sie haengt an den Platzhalterbauten, und die fallen mit einer
+gekauften Map, die ihre Innenraeume mitbringt. Der Fehler selbst ist aelter als die
+gerechnete Stadt (TODO.md:1127).
+
+### Offene Spieltests: die eigentliche Luecke ist der ZWEITE Spieler
+
+Rund 30 Pruefzeilen aus den Schritten 7 bis 13 warten, und **alle laufen auf dem flachen
+Probeserver** - die Inselwelten, die Staedtewelt und Wolkenwerder erzeugt das Plugin
+selbst. Der gemeinsame Mangel: *jeder bisherige Spieltest lief mit einem Operator.* Ein
+Konto OHNE Rechte fehlt in `/menu` (Rechtefilter), `/beruf`, `/markt`, bei der
+Kistenfreigabe gegen einen Fremden und beim Ladenschutz. Fuer Schritt 11 (Wolkenwerder)
+steht ueberhaupt noch keine Prueffolge im TODO - sie ist vorher aufzuschreiben wie bei
+Schritt 10.
+
+## Schritt 16a: Moderation
+
+### Teil B: Strafen - 25.11.2026
+
+- `/strafe` mit den Arten als ZWEIGEN (`stumm`, `rauswurf`, `bann`), dazu `aufheben` und
+  `verlauf`; `/bannliste` fuer jeden. **Keine Zweitnamen auf `/ban` oder `/kick`**: Die
+  hat Vanilla selbst, und Paper vergibt den kurzen Namen dann nach
+  Registrierungsreihenfolge - ein Moderator liest "You do not have permission" und
+  glaubt, der Rauswurf sei gescheitert.
+- Die Zweige werden aus `Strafart.values()` GERECHNET, nicht aufgezaehlt: Eine vierte Art
+  bringt Zweig, Recht, Vervollstaendigung und Dauerfrage von selbst mit.
+- **DER TRAGENDE RIEGEL ist die Dauer**, und er braucht ZWEI Faenger: die Strafe ohne
+  Ende UND die zu lange. Wer nur auf "unbegrenzt" prueft, hat einen Moderator, der
+  `3650d` tippt - formal befristet und praktisch endgueltig. Die Grenze steht je Art in
+  der `config.yml` (168 Std. stumm, 720 Std. Bann) und ist die Linie aus Plan 12c.2
+  zwischen Moderator und Verwalter. Die Absage NENNT sie.
+- **Der zweite Riegel: wer im Team ist, wird nur vom Team gestraft.** Ohne ihn bannen
+  zwei Moderatoren im Streit einander, und wer schneller tippt, hat gewonnen. Ob jemand
+  im Team ist, sagt die **Teamtabelle und nicht Bukkit** - der Betroffene kann offline
+  sein, und offline hat niemand Rechte. Eine gestoerte Teamfrage gilt als "im Team": Von
+  zwei Fehlern der, der sich zuruecknehmen laesst.
+- **Eine unbegrenzte Strafe aufzuheben braucht dasselbe Recht wie sie zu verhaengen** -
+  sonst nimmt ein Moderator den dauerhaften Bann eines Verwalters zurueck, und die
+  Unterscheidung waere in einer Richtung gesichert und in der anderen offen.
+- Der GRUND ist Pflicht und steht in jeder Zeile an den Betroffenen (Plan 12c.3: *"Eine
+  Strafe, die niemand erklaert, erzeugt nur Wiederkehr."*). Dauerhaft und befristet sind
+  **zwei Saetze**: Wer dauerhaft gesperrt ist, soll das lesen und nicht ein Datum im Jahr
+  2126.
+- **Ohne die `Strafwache` waere alles davon unsichtbar wirkungslos**: Tuer
+  (`AsyncPlayerPreLoginEvent`, nicht `PlayerJoinEvent` - dort ist der Spieler schon
+  drin), Chat und die mitgesperrten Befehle. Letztere sind die Luecke, die eine
+  Stummschaltung sonst wertlos macht: Wer nur den Chat sperrt, hat einen Spieler, der
+  weiter `/msg` tippt. Welche Befehle, steht als **Liste** in der `config.yml`; der
+  Namensraum (`/minecraft:msg`) wird mitgefangen. `/melden` steht ausdruecklich nicht
+  darin - gerade der Bestrafte braucht den Meldeweg.
+- **Bei einer Datenbankstoerung kommt der Spieler HEREIN und darf sprechen**, mit einer
+  Warnung im Protokoll. Die Gegenrichtung waere ein Server, der bei einer Stoerung fuer
+  alle zu ist - aus einem Riegel gegen einen Griefer wuerde einer gegen jeden.
+- Schemaschritt 41, Tabelle `strafen`: ein ENDE und keine Dauer (nur danach laesst sich
+  fragen, wer JETZT gesperrt ist), `NULL` heisst unbegrenzt, zwei Indizes, kein Loeschen.
+  Der Riegel gegen zwei Aufhebungen steht in `WHERE ... AND aufgehoben_am IS NULL`.
+- **Sechs Funde beim Bauen, alle gemessen:**
+  - `Teamwerte.VORGABE` und die ausgelieferte `config.yml` waren **auseinandergelaufen**:
+    Die neuen Strafrechte standen nur im Programm. Ein Erststart haette andere
+    Rollenrechte gegeben als der Rueckfall - und wer die Datei behaelt, haette sie nie
+    bekommen.
+  - Drei Saetze an der Tuer haben eine **Umbruchmarke** (Grund, Frist, Ausweg), wurden
+    aber mit `eineZeile` geholt - das WIRFT zur Laufzeit, mitten im Zweig, der senden
+    soll. Jetzt `sprache.bau`, und wo ein einzelnes `Component` noetig ist (Kick,
+    Abweisung), fuegt `Straftext.alsEine` sie mit echten Umbruechen zusammen.
+  - Der Rueckfall auf das Wort "Sperre" in der Absage beim AUFHEBEN war zweierlei falsch:
+    inhaltlich ("Fuer Sperre fehlt dir das Recht", waehrend er aufheben wollte) und
+    mechanisch - das Literal zerriss die Familiendeckung der drei Artworte. Jetzt zwei
+    eigene Saetze je Zweig.
+  - Im Startlauf stand **"Rauswurf fuer 0 Sek."**: Eine Art ohne Dauer bekam die
+    Restzeit eingesetzt. Eine Dauer von null Sekunden ist keine Angabe, sondern eine
+    Rechnung, die nach aussen durchgeschlagen ist - jetzt ein eigener Satz ohne Dauer.
+    Dazu "Sperre fuer dauerhaft" auf einen Bindestrich gebracht.
+  - `Meldeliste.SCHLUESSEL` war gebaut und **nirgends gelesen** (Fund in Teil C): Wer
+    eine Zeile aus der Datei nimmt, bekommt die Vorgabe und erfuhr es nicht. In beiden
+    Lesern angeschlossen.
+  - Gemessen, dass `AsyncPlayerPreLoginEvent` und `PlayerCommandPreprocessEvent` sich
+    ohne Server **nicht bauen lassen** (sie brauchen `Server.createProfile`
+    beziehungsweise `Player.getServer`). Darum stehen die drei Entscheidungen in eigenen
+    Methoden, und **Tafel 31eb** haelt, dass die Ereigniszweige sie rufen und
+    eingreifen - sonst waere der ganze Teil gruen und wirkungslos.
+- **5.923 Proben gruen** (Kern 2.286, Daten 520, Plugin 3.117), davon 36 neu gegen die
+  echte Datenbank. Zwei Startlaeufe, `Done (11.687s)`; die Rechenprobe im Protokoll:
+  *"Strafen: stumm bis 168 Std. (7 Tg.), bann bis 720 Std. (30 Tg.) ohne
+  freimarken.strafen.dauerhaft; 7 Befehl(e) sperrt eine Stummschaltung mit; Bannliste
+  oeffentlich, Ansage an."* Die ganze Kette an der Konsole durchgegangen: verhaengen,
+  Bannliste, zweite Strafe abgewiesen mit Nummer, Verlauf, aufheben, Rauswurf nicht
+  aufhebbar, `99999d` abgewiesen.
+- **Offen in 16a:** Teil D Einsehen ohne Baurecht, Teil E Protokoll im Manager. Dazu der
+  **Spieltest zu zweit** - er braucht ein Konto OHNE Rechte, und genau das fehlt in
+  diesem Projekt bei jedem bisherigen Spieltest. Fuer Teil B waere er der Nachweis, dass
+  ein Moderator ohne `strafen.dauerhaft` an der Grenze wirklich haengt.
+
+### Teil C: Melden und bearbeiten - 25.11.2026 (nachts)
+
+- Gewaehlt, weil das **Abnahmekriterium des Plans woertlich daran haengt**: *"eine Meldung
+  wird angelegt, bearbeitet und beantwortet"*. Teil B (Strafen) haengt an derselben
+  Tabelle, ist aber nicht das Kriterium.
+- `/melden <spieler> <grund>` fuer JEDEN, `/meldung` fuer Moderatoren mit sechs Zweigen:
+  Liste, Einzelansicht, `annehmen`, `abschliessen [vermerk]`, `abweisen [vermerk]`, `hin`.
+- **DER KERN DES TEILS ist die Rueckmeldung**, und sie ist als ZUSTAND gebaut, nicht als
+  Chatzeile: `Meldung.gelesen`. Ein Moderator erledigt eine Meldung um drei Uhr nachts -
+  eine Zeile ginge an niemanden. Die `Meldewache` liefert sie beim naechsten Beitritt,
+  und zwar in der Folge *lesen, senden, vermerken*: Bricht das Vermerken ab, liest der
+  Melder die Antwort noch einmal. Von zwei Fehlern der, der nichts verliert.
+- **Zwei Antwortsaetze und nicht einer**: `abgeschlossen` und `abgewiesen`. Wer liest
+  "deine Meldung wurde bearbeitet", weiss nicht, ob man ihm geglaubt hat - und wer erfaehrt,
+  dass nichts dran war, meldet das naechste Mal genauer statt gar nicht.
+- **Der Riegel gegen zwei Moderatoren steht in der WHERE-Bedingung**
+  (`UPDATE ... WHERE nummer = ? AND stand = ?`), nicht in Java. Zwischen Lesen und
+  Schreiben liegt ein Augenblick; eine Pruefung in Java faellt nur auf, wenn zwei
+  gleichzeitig arbeiten - also im Ernstfall. Der zweite liest, WER sie hat.
+- **Der Tatort ist der Ort des MELDERS**, nicht des Betroffenen: Was er gesehen hat, hat
+  er von dort gesehen. Wer eine Stunde spaeter zum Betroffenen springt, findet den
+  Spieler, aber nicht die Tat.
+- Drei Bremsen, alle gegen den STREITFALL und nicht gegen den Angreifer: keine
+  Selbstmeldung, 60 Sekunden Abklingzeit, 3 unerledigte je Melder. Die vierte Meldung wird
+  **verschoben, nicht verweigert** - und genau das liest der Melder.
+- Schemaschritt 40, Tabelle `meldungen`: AUTO_INCREMENT fuer die Nummer (die ANREDE fuer
+  `/meldung 7`), zwei Indizes fuer die Abfragen je Beitritt, kein Loeschen - eine Meldung
+  ist ein Protokoll.
+- **Vier Befunde beim Bauen, alle gemessen:**
+  - `setTimestamp(i, null, kalender)` wirft eine **NullPointerException** ("date must not
+    be null"): Der Treiber fuettert den Kalender mit dem Wert. Die drei-Argument-Form
+    vertraegt kein null, die zwei-Argument-Form schon. Trifft JEDE offene Meldung, denn
+    die hat keinen Erledigungszeitpunkt - aufgefallen erst gegen die echte Datenbank.
+  - **Die Rechtenamen lagen im KERN, wo keine Tafel sie sieht.** `GrenzeTest` 31al liest
+    die `"freimarken.*"`-Literale des Plugin-Moduls; ein Name im Kern gilt ihr als
+    angemeldet-aber-nie-gefragt. Jetzt kommt der Name beim Bau herein, der Riegel bleibt
+    im Kern.
+  - `Art.GEZAEHLT` ist in diesem Projekt **immer eine gesendete Zeile, nie ein
+    eingesetztes Wortstueck** (`Sprache.wort` verlangt `Art.WORT`). Das Alter einer
+    Meldung wird aber eingesetzt - geloest mit Abkuerzungen ("vor 3 Std."), die sich nicht
+    beugen.
+  - `meldung.hin.nur-spieler` wurde von DREI Zweigen gesendet, der Pfad log also ueber
+    seinen Geltungsbereich. Jetzt `meldung.nur-spieler`.
+- **Eine Probe musste ihre Sache abgeben:** `TeamlisteTest` 3 hielt den `fertig()`-Umbau
+  an der Ungereimtheit der Vorgabe (Helfer und Eventleiter gleich). Seit der Helfer
+  `freimarken.meldungen` hat, ist die Vorgabe sauber - die Probe waere gruen mit UND ohne
+  den Umbau. Gehalten wird er jetzt am QUELLTEXT: jeder `return` in `ausKonfiguration`
+  ruft `fertig(`. Dabei fiel auf, dass es **fuenf** Rueckwege sind und nicht vier - der
+  im `catch` war vergessen.
+- **5.640 Proben gruen** (Kern 2.147, Daten 484, Plugin 3.009), davon 44 neu gegen die
+  echte Datenbank. Startlauf `Done (8.949s)`, beide Rechenproben im Protokoll:
+  *"Melden: an - 3 offene Meldungen je Spieler, dazwischen 60 Sekunden Wartezeit"*.
+- ~~Offen in 16a: Teil B Strafen~~ - gebaut, siehe darunter. Offen bleiben Teil D
+  Einsehen ohne Baurecht, Teil E Protokoll im Manager und der **Spieltest zu zweit** - er
+  braucht ein Konto OHNE Rechte, und genau das fehlt in diesem Projekt bei jedem
+  bisherigen Spieltest.
+
+### Teil A: die Teamrollen - 25.11.2026
+
+- Gewaehlt, weil er **keinen gebauten Ort braucht**: Der einzige offene Planschritt, der
+  nicht an Altfurt oder am Spawn haengt. Schritt 15 faellt aus (Drachenfluege, Live-Karte
+  und Events brauchen Orte), Schritt 16 braucht die Entscheidung ueber den
+  Zahlungsanbieter.
+- **Rollen als LISTE in der `config.yml`**, nicht als Aufzaehlung im Programm - wie
+  Raenge und Berufe. Ab Werk die fuenf aus Plan 12c.2: helfer (2 Rechte), moderator (4),
+  verwalter (9), eventleiter (2), baumeister (3).
+- **Ein Spieler kann mehrere Rollen haben**; seine Rechte sind die Vereinigung. Der Plan
+  sagt "niemand braucht beides" ueber Strafen und Bauen - das ist Personalpolitik und
+  keine Technik.
+- **DER RIEGEL: Eine Rolle vergibt nur, wer jedes ihrer Rechte selbst hat.** Nicht "nur
+  Verwalter duerfen" - welche Rolle wie viel darf, steht in der Datei und kann morgen
+  anders sein. Ohne ihn braeuchte ein Moderator mit `team.vergeben` nur einen Komplizen
+  zum Verwalter zu machen und haette ueber ihn `freimarken.besitz`. Derselbe Riegel beim
+  NEHMEN, sonst baut die untere Rolle die obere ab.
+- **Sich selbst eine Rolle geben ist erlaubt** - der Rechteriegel faengt das Hochsetzen
+  schon. Ein zweites Verbot waere ein zweiter Riegel fuer denselben Fall, und zwei Riegel
+  fuer einen Fall machen sich gegenseitig unpruefbar.
+- **Die Konsole darf alles** (`rechte == null`). Wer dort steht, hat Dateizugriff; ein
+  Riegel, den man mit einer getippten Zeile umgeht, ist eine Unbequemlichkeit und kein
+  Riegel. `Set.of()` ist etwas anderes - ein Spieler ohne jedes Recht.
+- **Rechte aus RANG UND ROLLE in EINEM Zug** (`Rechtebuendel`): Das Anhaengsel wird
+  ersetzt und nicht ergaenzt, also loescht ein zweiter Verbraucher den ersten. Dabei
+  musste der fruehe Rueckweg aus `Rangwache.vergibNeu` weg - er setzte bei
+  `raenge.an: false` ein `Set.of()` und haette damit die Rollenrechte mitgenommen. Zwei
+  Einstellungen, von denen jede fuer sich richtig aussieht.
+- Schemaschritt 39, Tabelle `team`: eine Zeile je Spieler UND Rolle, `vergeber` darf NULL
+  sein (die Konsole hat keine UUID). Geschrieben mit `INSERT IGNORE` und nicht
+  `ON DUPLICATE KEY UPDATE` - jenes zerstoerte die Spur des ersten Gebens, und "seit wann"
+  waere fuer immer falsch beantwortet.
+- Zwei Befunde beim Bauen, beide gemessen:
+  - Die Ungereimtheiten des Lesers (zwei Rollen mit gleicher Rechteliste) standen nur im
+    letzten Zweig. Ein Server ohne `team:`-Abschnitt bekam die Vorgabe OHNE ihre Meldung -
+    also genau der Server, dem die Auskunft am meisten hilft. Jetzt geht jeder Rueckweg
+    durch `fertig()`.
+  - **Bukkit unterscheidet einen LEEREN Schluessel nicht von einem fehlenden**: Fuer
+    `rollen:` ohne Inhalt ist `contains("team.rollen", true)` schon `false`. Der Leser
+    fragt darum den Elternknoten `team:` - sonst bekaeme ein Betreiber, der seine Rollen
+    abgeschafft hat, die fuenf des Programms zurueck.
+- Startlauf am 25.11. durch: `Done (10.766s)`, die Rechenprobe im Protokoll, und alle
+  zehn Rechte der Vorgabe sind angemeldet (keine severe-Zeile). An der Konsole gepruefte
+  Wege: `/team`, `/team rollen`, `/team gib`, `/team zeigen`, `/team nimm`, unbekannte
+  Rolle, unbekannter Spieler. Jede Aenderung steht mit Absender im Protokoll.
+- 5.458 Proben gruen (Kern 2.080, Daten 456, Plugin 2.922), davon 20 neu gegen die echte
+  Datenbank. Neun Tafeln nachgezogen; eine davon fand einen echten Fehler - ein Kommentar
+  in der `config.yml` nannte `freimarken.freimarken.blockbuch` als Beispiel, und Tafel
+  31cy liest Rechtenamen auch aus Kommentaren.
+- **Offen in Schritt 16a:** Teil B Strafen (stummschalten, kicken, bannen mit Dauer und
+  Grund), Teil C Melden (`/melden`, Liste, Bearbeiten, Rueckmeldung an den Melder), Teil D
+  Einsehen ohne Baurecht, Teil E das Protokoll im Manager. Die Rechte dafuer kommen mit
+  ihren Teilen in die Rollen; bis dahin duerfen helfer und eventleiter dasselbe, und der
+  Startbericht sagt es.
+
 ## Schritt 14: Kleine Spiele in Altfurt
 
 ### Teil A: die Lotterie - 22.11.2026
@@ -806,6 +1289,32 @@ Offen: ein Weltname MIT Umlaut fällt auf "world" zurück (die Positivliste ist 
 - ~~Offen: ein Platzhalter hat keine Schilder und keine Einrichtung - wer echte Türen und Schilder will, braucht eine zweite Naht neben `Weltgriff.setze`.~~ 23.11. GEBAUT: `Altfurtaufbau.Feingriff`, in der Gestalt von `Wolkenaufbau.Truhengriff` und aus demselben Grund - `Material.createBlockData()` geht über `Bukkit.getServer()` und wirft ohne Server. Die Tür wird mit BEIDEN Hälften gesetzt, ohne Physik; das Schild hängt INNEN über der Tür (außen läge es jenseits des Quaders und damit außerhalb jeder Kollisionsprüfung) und trägt den Stationsnamen aus der sprache.yml - keine fünfte offene Satzfamilie. Ein Bau von drei Blöcken Höhe bekommt keine Tür: Sie braucht zwei Ebenen, und die zweite wäre dort das Dach.
 - Offen: ein Platzhalter hat weiter keine EINRICHTUNG - keine Truhen, keine Werkbänke, keine Teleporter zu den Freistädten. Was in jedem Haus stehen soll, nennt Plan 2.1 je Gebäude; gebaut ist davon nichts.
 - Offen: die vier Abschriften der Zahlenprüfung (`Ladenliste.drei`, `Rundgangsliste.drei`, `Weltenliste.ecke`, `Truhenliste`) gehören auf `Zahlenzeile` gezogen. Die Worte bleiben je Rufer - sie stehen in Proben. Eigener Schritt, damit die Altfurt-Änderung lesbar bleibt.
+
+### Teil D: der Parkour - offen
+
+- ENTSCHIEDEN (Chat 24.11.): Belohnung ist **einmalig Geld je Spieler, dazu eine Praemie fuer die Tagesbestzeit**. Zwei Buchungsgruende, also je vier Stellen. Der einmalige Teil deckelt die Quelle an der Spielerzahl (wie die Herausforderungen in Wolkenwerder, je Insel EINMAL); die Tagespraemie laeuft weiter und gehoert darum klein gehalten.
+- OFFEN, und es haengt alles daran: der ORT. Siehe den Richtungswechsel unten.
+
+### Richtungswechsel 24.11.2026: Altfurt wird nicht gerechnet
+
+- Der Betreiber nach dem Anschauen der gerechneten Stadt: *"wir haben jetzt eine viereckige kleine siedlung. wir brachen ja aber auch beispielsweise wasserflaechen fuer den angel wettbewerb. wir fangen nochmal neu an, indem du mir passende vorgebaute server / citybuild spawns raussuchst"*
+- Der Mangel ist nicht die Gleichmaessigkeit, die heute behoben wurde, sondern das, was eine gerechnete Ringstadt gar nicht hat: **Wasser**. Der Angelwettbewerb (Teil B, gebaut) wertet in jeder Welt, aber in Altfurt gibt es nichts zu angeln. Dasselbe gilt fuer die Bootsrennen am Hafen aus Plan 2.1.
+- Zu klaeren: ob die gerechnete Stadt (`Stadtplan`, `Bauplan`, `Altfurtaufbau`, 2.019 core-Proben) ganz entfaellt oder als Vorstadt/zweite Welt bleibt. Die Bauhand selbst ist davon unabhaengig - ein fertiger Spawn braucht sie nicht, die Platzhalterbauten und die Feingriff-Naht aber schon.
+- **Das Kriterium ist PLATZ, nicht Schoenheit** [24.11., nach vierzehn gesichteten Kandidaten]: Vier wurden abgelehnt, und die Begruendungen zeigen alle auf dieselbe Sache. Zu "Medieval Port City" (gratis, MIT, 124k Downloads): *"zu klein bzw. verwinkelt, es fehlt platz fuer die portale usw. aber gefaellt mir vom design gut"*. Zu den Hanse-Nachbauten Tonxhaven und Luebeck: *"beide sind schoen, aber augenscheinlich nicht als server spawn / lobby zu gebrauchen"*. Ein Spawn ist ein Ankunfts- und Verteilort und braucht freie Flaechen fuer die vier Weltenportale; eine gewachsene Altstadt von 700 Bloecken hat sie nicht.
+- **Es gibt keine fertige Hansestadt zu kaufen.** "hanseatic" gibt auf CurseForge null Treffer; die Backsteingotik-Projekte liegen auf Planet Minecraft als Bildergalerie ohne Download. Was es gibt, ist die Gattung KOENIGREICH MIT UMLAND - Burg, Stadt, Doerfer, Hafen und Felder in einer Welt. Deren Weite kommt aus dem Umland, und genau das loest das Portalproblem.
+- Engste Wahl [24.11.]: **Epic Medieval Kingdom** (Pixelbiester, 21,50 EUR, 2000x2000, zwei Burgen, eine Hafenstadt, zwei Doerfer, *"Every single building has an interior!"*, Java-Welt + Schematic + Bedrock) und **Hub - Larinor Kingdom** (StormBlock, 13,50 GBP, 1000x1000, 100+ Haeuser mit Innenraum, Haefen mit Schiffen, Versionsliste ausdruecklich bis 26.3). Beide schweigen zur Lizenz fuer bezahlte Mitgliedschaften - vor dem Kauf zu klaeren. Suche nach weiteren laeuft.
+- GEMESSEN und fuer jede kuenftige Fremdwelt gueltig: Eine 1.21.4-Welt laeuft auf Paper 26.3 ohne Nacharbeit (`Done (38.3s)`, keine Fehlzeile), und **Paper baut den Weltordner beim ersten Start selbst in die neue `dimensions/`-Struktur um**. Der Innenausbau einer Fremdwelt laesst sich ohne Hineingehen an den POI-Daten pruefen: 996 KB bei Medieval Port City, und POI-Eintraege entstehen nur durch Betten, Oefen und Werkbaenke. FAWE 2.16.x traegt 26.3, Schematics gehen also auch.
+- ENTSCHIEDEN (Chat 24.11.): **Ein individueller Bauauftrag kommt erst, wenn der Server gut laeuft** - *"ok, das ist zu teuer"*. Bis dahin eine fertige Map. Die Preisklasse ist belegt und der Grund: Eine oeffentliche Preistafel, die 1000x1000 ueberhaupt erreicht (TimeCube), nennt 1.350 USD - ohne Hoehe, ohne Tiefe, ohne zugesagte Innenraeume. Varuna, ein Studio mit Vertrag, sagt *"custom orders start at 2000 USD however most custom orders are upwards of 5000 USD"*. Ueber Gebaeude gerechnet: 100 USD je Bau, also 1.400 USD fuer zehn Zweckgebaeude und vier Tore, ohne Gassen, Kaianlagen und Hafen. Fuer 1000x1000 landen beide Wege bei 1.500 bis 2.000 USD, und eine deutsche GmbH schlaegt 19 Prozent darauf.
+- Pixelbiester nennen **nirgends** einen Preis; ihr altes Auftragsformular hatte ein freies Pflichtfeld "Budget" und darunter *"Bitte beachte: Wir bauen nicht kostenlos."* Der Weg ist heute nur noch eine E-Mail an info@pixelbiester.net. Sie sind eine GmbH in Leipzig mit 1,1 Mio. EUR Bilanzsumme und Kunden wie ZDF, RTL und NVIDIA - wer gegen Werbebudgets kalkuliert, baut keine Einzelstadt dreistellig. Nebenfund: **chunkfactory.com ist ihr eigener Shop** (Impressum Pixelbiester UG), dort lagen schon zwei Funde aus der Liste.
+- Fuer den spaeteren Auftrag vorgemerkt: Zahl der BEGEHBAREN Gebaeude und die Kubatur vereinbaren, nicht die Grundflaeche - kein Anbieter weist Innenraeume getrennt aus, sonst kommt ein Preis fuer Fassaden. Nutzungsrecht fuer bezahlte Mitgliedschaften selbst hineinschreiben. Nie 100 Prozent vorab; 50/50 ist Marktnorm. Erst ein einzelnes Zweckgebaeude als Probe, dann die Stadt.
+
+### Was gesucht ist, ist ein SPAWN - nicht eine Stadt [24.11.2026]
+
+- Der Betreiber nach rund sechzig gesichteten Staedten: *"keine staedte, ich suche richtige server spawns. versuche es mal mit welchen aus der lumia zeit"*. Damit ist die Gattung gewechselt: ein ANKUNFTS- UND VERTEILORT, kein Wohnort. Enge ist dort keine Schwaeche, sondern Uebersichtlichkeit - die frueher als "zu klein" verworfenen Hubs sind wieder im Spiel.
+- **Der Lumia-Spawn, belegt aus `data/lumia-archiv/seiten/w22_welten.html`**, ist die Vorlage fuer den Aufbau: Ankunft mit `/gs`, die Portale liegen UNTERHALB (*"nur einfach geradeaus runter springen"*), die Drachenfluege *"oberhalb der Portale"*, die Minigame-Portale noch einmal *"oberhalb der anderen"* - **drei gestaffelte Ebenen**.
+- Am Spawn hingen: Stadthalle (Stadtgruendung, Teleportschilder zu allen Staedten in der 1. Etage), Einkaufszentrum mit Mietlaeden, Werbetafeln, Holz-/Tier-/Monsterfarmen, die Mine, die Tutorialstadt "Hamsterdamm" ueber einen eigens gestalteten Weg, ein **JnR-Abteil** (dort gehoert also der Parkour hin, Teil D) und ein verstecktes Casino.
+- **Die Portalzahl ist der Massstab, und sie ist groesser als gedacht**: Grundstueckswelt, Wildnis 1, Wildnis 2, Inselwildnis, Staedtewelt, Farmwelt, Farmwelt VIP, Nether, End, Mine, Farmen, Paintball, Skybridgewars - **ueber zwoelf**. Die bisherige Suche nach "vier Portalplaetzen" war zu bescheiden angesetzt.
+- **ENTSCHIEDEN (Chat 24.11.), die eine Abweichung von Lumia**: *"ich moechte schon in die richtung mittelalter / nordeuropa, passend zu meinem eigenen Hanse thema"*. Lumias Spawn war suedlaendisch - `bilder/spawn.png` zeigt eine Hafenpromenade in warmen Sandstein- und Terrakottatoenen mit Laternenreihen auf Pfosten und Arkadenbauten. Uebernommen wird der AUFBAU, nicht die Farbwelt.
 
 ## Schritt 12a: Dashboard im Manager
 
@@ -1025,7 +1534,21 @@ Offen: ein Weltname MIT Umlaut fällt auf "world" zurück (die Positivliste ist 
 - 24.11. **in der Welt gemessen**: 89 Proben per `execute if block` (Gassen auf Kopfhoehe frei, Haeuser stehen, Gefaelle traegt, Hoefe leer, Tuerme ragen auf und treten vor, Baeume und Brunnen stehen, Schornsteine ragen heraus, Decken tragen und die Leiter geht durch) - nur der Lockvogel meldet. 5307 Proben gruen (core 2013, daten 436, paper 2858).
 - Gegenproben: 5 von 5 Einspritzungen in die Schornsteinregel und 5 von 5 in Decke, Schacht und Leiterrichtung wurden gefangen.
 - OFFEN, kleiner: Der Treppenschacht liegt bei JEDEM Haus an derselben Ecke (`vonX+1 / vonZ+1`) - bewusst, damit man ihn beim Betreten nicht sucht. Moebel, Truhen und Licht im Haus fehlen ganz.
-- OFFEN, Stadt: Die Ost-West-Radialgasse endet am Zunfthaus und am Kaufmannskontor (beide z 13..19) - durch den Kern fuehrt nur die Luecke z 10..12. Der Kern ist gepflastert und begehbar, aber die Achse ist nicht durchgehend.
+- ~~Die Mitte Altfurts lag bei 72/13~~ 24.11.: **0/0**. Die Begruendung ist damit umgedreht - vorher folgte die Stadt der Handarbeit (72/13 war an Flankenhaeusern eingemessen), jetzt folgt die Handarbeit der Stadt. Alle 37 Quader der config.yml sind gewandert, die Truhen der Ladeneinheiten eingerechnet (die fielen beim ersten Durchgang durch). Nebenbei: Die Stadt liegt jetzt symmetrisch im Weltfenster, es passen **12** statt 9 Quartiere hinein - `HOECHSTENS_QUARTIERE` bleibt bei 9, denn das war immer die ARBEITSgrenze. Dass beide Grenzen zusammenfielen, war Zufall und hat verdeckt, dass es zwei sind.
+- ~~"die wege gehen nur diagonal in die ecken, besser waehre ein plus, sodass die wege direkt zu den toren fuehren"~~ 24.11. Ursache war doppelt und GEMESSEN: Von Ring 0 bis 51 gab es gar keinen Weg (Markt, Platzkante und Kern sind eine durchgehende Flaeche, die Radialgasse begann erst auf Ring 52), UND alle vier Achsen waren von einem eingetragenen Bau ueberspannt - Stadtkirche und Bundesratshaus quer in Nord und Sued, Zunfthaus und Kontor in Ost und West, je 88 bis 99 Bloecke. Man KONNTE nicht gerade hinaus.
+- Der **Kreuzarm**: Fahrbahn 7 (= `Torhausplan.DURCHGANG_BREITE`, man laeuft ohne Sprung ins Tor), je Seite ein Block BORDSTEIN. Eine Lage, eine Regel - `kreuzBei` fragt `min(|dx|,|dz|)`, und der Riegel steht in `lageBei` VOR den Plaetzen und dem Kern. Die alte Doppelfrage ("dx klein ODER dz klein") ist weg.
+- Die **LAUBE**: Ein Bau, der einen Arm GANZ ueberspannt, bekommt einen Durchgang mit Pfeilern auf dem Bordstein und Waenden, die die Strasse vom hohlen Hausinneren trennen. Gebaut, geprueft, aber nicht mehr im Einsatz: Der Betreiber sah es im Spiel ("nur geht die strasse einfach durch das rathaus und das andere haus hindurch"), und darum sind Kirche und Rathaus seitlich aus dem Arm getreten. Die Regel bleibt als Antwort fuer kuenftige Bauten - und wer einen Bau nur HALB in den Arm legt, bekommt beim Start eine Klage mit dem, was zu tun ist (Tafel 31ea haelt die Verdrahtung, BautenlisteTest 12 die andere Richtung).
+- ~~"das strassenmuster mit dem bordstein gefaellt mir, bitte genauso nur schmaler fuer die nebenstrassen und gassen"~~ 24.11.: Jede Ringgasse und die Abschlussgasse haben jetzt eine Kante. GASSE_BREITE bleibt 5, davon 2 Kante und 3 Fahrbahn - dasselbe Muster eine Stufe schmaler. Gerechnet aus EINER Regel: Ein Gassenblock, dessen Nachbarring keine Gasse mehr ist, ist die Kante. Das ist deshalb die richtige Form, weil die Gassen KRUMM sind - eine aus Bandgrenzen gerechnete Kante laege im Bogen mitten auf der Fahrbahn; so folgt sie den Hausfronten. `istWeg` ist die eine Stelle, die sagt, was ein Weg ist (drei Zusagen fragten vorher auf `== RINGGASSE` und wurden rot, obwohl die Stadt stimmte).
+- 24.11. **ein echter Fehler im Gelieferten**, gefunden beim adversarischen Gegenlesen der Entwuerfe: `dachzeigt` fragte nur die Tuerseite, `imGiebel` aber `traufstaendig`. Am Bundesratshaus lagen damit ALLE 179 Dachtreppen quer statt bergauf - keine einzige richtig. Giebelstaendige Haeuser waren zu 100 % korrekt, und alle 246 Zeilenhaeuser sind giebelstaendig; darum fiel es nie auf. Die fallende Achse steht jetzt an einer Stelle (`fallendIstX`), und zwei neue Proben schreiten JEDE Dachstelle von vier Bauten ab.
+- ~~"immernoch sehr gleichmaessig und die haeuser sind einfach nur in einer reihe, statt natuerlich gewachsen"~~ 24.11. Die Diagnose kam aus dem adversarischen Gegenlesen und war: **Was wie eine Reihe aussieht, ist die Firstrichtung.** Jedes Haus war breiter als tief, also giebelstaendig, also zeigte JEDER Giebel zur Gasse; und alle Fronten lagen auf einer Linie, denn die Welle bog die Gassenkante aus, aber die Haeuser folgten ihr gemeinsam. Eine krumme Linie, an der alle stehen, ist auch eine Reihe.
+- **Zwei Linien mit je einem Eigentuemer**: Die GASSENKANTE gehoert der Welle und bleibt, wo sie ist - sonst wuerde die Gasse bei jedem zurueckgesetzten Haus breiter, und das sieht nach Platzmangel aus statt nach Vorplatz. Die BAULINIE gehoert dem Haus (`sprungBei`, bis `SPRUNG_TIEFE` 3). Dazwischen liegt sein VORPLATZ als `ZEILE`. Der Platz kommt NICHT aus einem tieferen Band, sondern aus flacheren Haeusern: `TIEFEN` ist 7/9/11 statt 9/10/11, und ein flaches Haus hat Platz zurueckzutreten, ein elf Bloecke tiefes nicht.
+- Gemessen: **23 %** der Haeuser stehen traufstaendig (First PARALLEL zur Gasse), die Baulinien verteilen sich auf 0 bis 4 Bloecke, und nur **25 %** der Nachbarn teilen noch ihre Front - vorher waren es alle.
+- ~~"es soll ausserdem mehr variation bei den haeusern geben"~~ 24.11.: Die FORM wechselt jetzt je Haus, nicht nur die Masse. `sockelebenen(bau)` streut um `SOCKELEBENEN` (2 bis 4 Ebenen steinerner Fuss), `balkentakt(bau)` nur nach OBEN um `BALKENTAKT` (4 oder 5). Nach oben, weil ein engerer Takt MEHR Fenster gibt - bei drei saesse in jeder dritten Spalte eines, und die Zusage "ein Fensterband sieht nach Kaufhaus aus, nicht nach Hanse" hat genau das gefangen.
+- Gemessen: **213 verschiedene Hausformen bei 233 Haeusern** - praktisch jedes Haus ein Einzelstueck. Vorher koppelte das Nest Breite, Hoehe und Baustoff, und zwei Haeuser aus demselben Stein waren identisch.
+- Die Fensterzusage ist dabei von einem VERHAELTNIS auf eine STRUKTUR umgestellt: Als der Balkentakt zu streuen begann, verschob sich das Verhaeltnis von 1:4 auf 1:3,3 - und eine Schranke, die man dann senkt, hat nie etwas gehalten. Was ein Fensterband ausmacht, ist nicht die Zahl der Fenster, sondern dass zwei nebeneinander sitzen. Genau das wird jetzt gefragt.
+- 24.11. **in der Welt gemessen**: 305 Proben am Kreuzarm (jede Achse von der Mitte bis an die Mauer auf Kopfhoehe frei) und 76 an den Kanten (quer durch jede Gasse, Abschlussgasse, Kreuzarm, und keine Strasse durch ein Haus) - je nur der Lockvogel meldet. 5315 Proben gruen (core 2019, daten 436, paper 2860). Gegenproben: 5 von 5 auf die Dachrichtung, 7 von 7 auf Kreuz und Laube, 5 von 5 auf die Gassenkante, 5 von 5 auf Baulinie und Firstrichtung, 5 von 5 auf Sockel und Balkentakt.
+- Zwei Gegenproben liefen zuerst DURCH, und beide Male war die Einspritzung schuld, nicht die Probe: Ohne die 13 bei den `BREITEN` gibt es weiter traufstaendige Haeuser (9 breit auf 7 tief), und ein ueberall maximaler Sprung wird je Haustiefe verschieden gedeckelt. Erst die GESCHAERFTE Einspritzung stellte den verbotenen Zustand her - und wurde gefangen. Eine dritte deckte eine echte Luecke auf: Es fehlte die Zusage, dass die Sockelhoehe ueberhaupt streut.
+- ~~Die Ost-West-Radialgasse endet am Zunfthaus und am Kaufmannskontor - die Achse ist nicht durchgehend~~ 24.11. behoben: Beide sind in die Suedquadranten des Kerns gewandert, und alle vier Achsen sind von der Marktmitte bis an die Mauer durchgehend frei (in der Welt abgeschritten).
 - OFFEN, aelter als die Stadt: `bauten.baustoffe.boden`, `.wand` und `.dach` stehen in der ausgelieferten `config.yml`, aber `Baustoffe.ausKonfiguration` liest nur `tuer` und `schild` - drei Schluessel ohne Wirkung und ohne Klage (nachgesehen 23.11.). Entweder streichen und klagen wie bei `aussen` oder an die Paletten haengen.
 - OFFEN, aelter als die Stadt: Ein Haus aus einer gesicherten Datei wird bei JEDEM Start neu gesetzt, wenn seine Wandecke nicht zufaellig dem gerechneten Sockel entspricht - und `Strukturgriff.setze` nimmt Wesen mit. Bilder und Ruestungsstaender darin wuerden sich bei jedem Start verdoppeln.
 - OFFEN, Stadt: Dem Marktplatz selbst fehlt ein Muster; Bruecken, Hafen und groessere Bauten in den Zeilen fehlen. Baeume und Brunnen stehen seit 24.11. auf der Platzkante.

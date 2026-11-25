@@ -188,7 +188,28 @@ class HilfeplanTest {
                         Map.entry("regeln", RegelnBefehle.RECHT),
                         Map.entry("lotterie", LotterieBefehle.RECHT),
                         Map.entry("wettbewerb", WettbewerbBefehle.RECHT),
-                        Map.entry("freimarken", Hilfeplan.JEDER))),
+                        Map.entry("freimarken", Hilfeplan.JEDER),
+                        // Schritt 16a Teil A: /team traegt das LESE-Recht und
+                        // nicht freimarken.team.vergeben. Der Eintrag entscheidet,
+                        // wer die ZEILE sieht, und sehen darf sie, wer das Team
+                        // ansehen darf - vergeben ist ein zweiter Riegel am Zweig.
+                        Map.entry("team", TeamBefehle.RECHT),
+                        // /melden traegt JEDER und nicht MeldeBefehle.RECHT -
+                        // siehe die Begruendung am Eintrag selbst: Die Zeile soll
+                        // auch dann stehen, wenn ein Betreiber das Recht umhaengt.
+                        Map.entry("melden", Hilfeplan.JEDER),
+                        Map.entry("meldung", MeldungBefehle.RECHT),
+                        // Schritt 16a Teil B: /strafe traegt das Recht fuer die
+                        // SPERRE - das schwerste der drei Artrechte. Ein Eintrag
+                        // kann genau ein Recht nennen, und wer bannen darf, darf
+                        // auch stummschalten und hinauswerfen.
+                        Map.entry("strafe", StrafBefehle.RECHTE.bann()),
+                        // /bannliste traegt JEDER, wie /melden - Plan 12c.4 macht
+                        // sie ausdruecklich oeffentlich. Das Recht
+                        // freimarken.bannliste steht auf default true; ob die Liste
+                        // wirklich jedem offen ist, entscheidet zusaetzlich
+                        // moderation.strafen.bannliste-oeffentlich.
+                        Map.entry("bannliste", Hilfeplan.JEDER))),
                 gebaut, "Ein Eintrag traegt ein anderes Recht als sein Befehl.");
     }
 
@@ -218,7 +239,14 @@ class HilfeplanTest {
                 Map.entry("WolkeBefehle.java", "RECHT"),
                 Map.entry("MenueBefehle.java", "RECHT"),
                 Map.entry("HilfeBefehle.java", "RECHT"),
-                Map.entry("RegelnBefehle.java", "RECHT"));
+                Map.entry("RegelnBefehle.java", "RECHT"),
+                // Schritt 16a Teil B: /strafe fragt die Artrechte nicht einzeln an
+                // der Wurzel, sondern ueber darfUeberhaupt - dort steht
+                // RECHTE.fuer(art) in einer Schleife ueber Strafart.values(). Der
+                // Name, der im Quelltext steht, ist darum RECHTE.aufheben() als
+                // letzter Fang. Geprueft wird die GESTALT des Aufrufs; eine Zeile,
+                // die kein hasPermission mehr enthaelt, ist ein Befehl ohne Riegel.
+                Map.entry("StrafBefehle.java", "RECHT_BANNLISTE"));
 
         List<String> fehlt = new ArrayList<>();
         for (Map.Entry<String, String> paar : new TreeMap<>(wurzelrecht).entrySet()) {
@@ -249,6 +277,11 @@ class HilfeplanTest {
                 ohneRecht.add(eintrag.befehl());
             }
         }
-        assertEquals(new TreeSet<>(List.of("freimarken", "mark", "parzelle")), ohneRecht);
+        // VIER seit Teil C: /melden gehoert jedem, und zwar notwendig - wer einen
+        // Vorfall sieht, soll den Befehl in seiner Liste finden, ohne jemanden zu
+        // fragen. Die Ueberschrift sagt "drei" und ist damit ueberholt; was die Probe
+        // haelt, ist der Vergleich hier.
+        assertEquals(new TreeSet<>(List.of("bannliste", "freimarken", "mark", "melden", "parzelle")),
+                ohneRecht);
     }
 }

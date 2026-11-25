@@ -5,8 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.freimarken.kern.Bauplan;
+import de.freimarken.kern.Platzhalterbau;
 import de.freimarken.kern.Quader;
+import de.freimarken.kern.Stadtplan;
 import de.freimarken.kern.Richtung;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -377,4 +381,73 @@ class BautenlisteTest {
                     bau.schluessel() + " steht nicht auf y=-61");
         }
     }
+
+    @Test
+    @DisplayName("12 - kein Bau der ausgelieferten Datei sperrt einen Kreuzarm")
+    void keinSperrerImKreuzarm() {
+        // DIE ANDERE RICHTUNG ZU TAFEL 31ea [24.11.2026]: Jene haelt, dass die Klage
+        // ueber einen Sperrer gerufen wird. Diese haelt, dass sie bei der
+        // AUSGELIEFERTEN Datei schweigt - sonst feuerte sie bei jedem Start, und der
+        // Betreiber lernte, sie zu ueberlesen.
+        //
+        // Gemessen am 24.11.2026 in der Welt: Zunfthaus und Kaufmannskontor reichten bis
+        // z 3, der Arm braucht bis z 4. Ein Block, und zwei der vier Wege zum Tor waren
+        // versperrt. Beide sind darum in die Suedquadranten des Kerns gewandert.
+        var ausgeliefert = new YamlConfiguration();
+        try {
+            ausgeliefert.loadFromString(ausgelieferteDatei());
+        } catch (org.bukkit.configuration.InvalidConfigurationException kaputt) {
+            throw new IllegalStateException("Die ausgelieferte config.yml ist kein YAML",
+                    kaputt);
+        }
+        Bautenliste.Ergebnis raus = Bautenliste.ausKonfiguration(ausgeliefert,
+                Map.of("altfurt", 800), List.of());
+
+        List<String> sperrer = new ArrayList<>();
+        int mitLaube = 0;
+        int imArm = 0;
+        for (Platzhalterbau bau : raus.verzeichnis().alle()) {
+            Quader q = bau.bereich();
+            boolean beruehrt = false;
+            for (int x = q.vonX(); x <= q.bisX() && !beruehrt; x++) {
+                for (int z = q.vonZ(); z <= q.bisZ(); z++) {
+                    if (Stadtplan.imKreuzarm(x, z)) {
+                        beruehrt = true;
+                        break;
+                    }
+                }
+            }
+            if (!beruehrt) {
+                continue;
+            }
+            imArm++;
+            if (Bauplan.ueberspanntKreuzarm(bau)) {
+                mitLaube++;
+            } else {
+                sperrer.add(bau.schluessel() + " " + q.alsText());
+            }
+        }
+        assertEquals(List.of(), sperrer,
+                "kein Bau der ausgelieferten config.yml sperrt einen Kreuzarm");
+        // KEIN BAU BERUEHRT IHN UEBERHAUPT [24.11.2026]: Der Betreiber sah die Lauben
+        // im Spiel und sagte "nur geht die strasse einfach durch das rathaus und das
+        // andere haus hindurch" - also sind Stadtkirche und Bundesratshaus seitlich aus
+        // dem Arm getreten. Jetzt laeuft keine Strasse mehr durch ein Gebaeude.
+        assertEquals(0, imArm, "kein Bau der ausgelieferten Datei liegt im Kreuzarm");
+        assertEquals(0, mitLaube, "also braucht auch keiner eine Laube");
+
+        // DASS DIE LAUBENREGEL TROTZDEM GREIFT, wird an einem eigens gebauten Quader
+        // geprueft und nicht an der Datei: Eine Zusage, die an der ausgelieferten Lage
+        // haengt, ist beim naechsten Verschieben rot, ohne dass etwas kaputt ist -
+        // genau das ist dieser Probe eine Stunde nach ihrer Entstehung passiert.
+        Platzhalterbau ueberDemArm = new Platzhalterbau("probelaube",
+                new Quader(-16, -61, 41, 16, -46, 51), Richtung.NORD,
+                de.freimarken.kern.Baustil.BACKSTEIN,
+                de.freimarken.kern.Dachart.KUPFER);
+        assertTrue(Bauplan.ueberspanntKreuzarm(ueberDemArm),
+                "ein Bau ueber dem Arm bekommt eine Laube - die Regel lebt");
+        assertTrue(Bauplan.inDerLaube(ueberDemArm, 0, -60, 46),
+                "und mitten im Arm ist sie offen");
+    }
+
 }

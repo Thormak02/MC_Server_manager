@@ -21,11 +21,18 @@ import java.util.Map;
  * auf ueberlappende Bloecke pruefen. Gerechnet ist die Ueberschneidungsfreiheit eine
  * Zusage, die eine Probe halten kann.
  *
- * <p><b>Die Mitte ist der Markt, und die ist gemessen und nicht gewaehlt</b>: Die
- * Flankenhaeuser stehen bei x 48..58 und x 86..96, ihre inneren Wandflaechen also auf
- * x 58 und x 86. Im Norden steht die Torwand auf z 0, im Sueden das Bundesratshaus ab
- * z 26. Der freie Platz dazwischen ist x 59..85 und z 1..25 - seine Mitte ist
- * {@code 72 / 13}. Dort kommt auch an, wer die Welt betritt.
+ * <p><b>Die Mitte ist der Weltnullpunkt</b> [24.11.2026]: {@code 0 / 0}. Bis heute
+ * stand hier {@code 72 / 13}, und das war GEMESSEN - an den Flankenhaeusern des
+ * damaligen Marktes, der Torwand und dem Bundesratshaus. Damit folgte die Stadt der
+ * Handarbeit. Der Betreiber hat die Richtung umgedreht ("mittlepunkt und spawnpunklt
+ * moechte ich bei 0/0"): Jetzt folgt die Handarbeit der Stadt, und alle eingetragenen
+ * Quader der {@code config.yml} sind um {@code -72 / -13} gewandert.
+ *
+ * <p>Das ist auch die bessere Richtung. Eine gerechnete Stadt, deren Mitte aus
+ * gemessenen Hausecken folgt, laesst sich nicht verschieben, ohne dass die Begruendung
+ * ihrer Mitte falsch wird. Eine Stadt um {@code 0 / 0} ist dagegen ihr eigener
+ * Bezugspunkt - jede Koordinate in dieser Welt ist ab jetzt direkt ein Abstand von der
+ * Marktmitte. Dort kommt auch an, wer die Welt betritt.
  *
  * <p><b>Der Ringabstand ist der Schachabstand</b> ({@code max(|dx|, |dz|)}) und nicht der
  * Kreisradius: Ein Ring ist dann ein Quadrat, und eine Haeuserzeile an einer Seite
@@ -115,6 +122,16 @@ public final class Stadtplan {
         KERN,
         /** Eine Gasse rund um die Stadt. */
         RINGGASSE,
+        /**
+         * Die steinerne Kante eines Kreuzarms.
+         *
+         * <p><b>Warum eine Kante</b> [24.11.2026]: Der Arm laeuft ueber den Markt, die
+         * Platzkante, den Kirchplatz, den Rathausplatz und den Kern - fuenf Flaechen mit
+         * fuenf Mischungen. Eine Fahrbahn allein verschwindet darin, sobald der Grund
+         * ihr aehnlich sieht. Eine LINIE links und rechts verschwindet nicht: Das Auge
+         * liest sie auch dann als Weg, wenn Fahrbahn und Platz denselben Ton haben.
+         */
+        BORDSTEIN,
         /** Eine Gasse von der Mitte nach aussen, durch die Mauer hindurch. */
         RADIALGASSE,
         /** Der kleine Platz in einer Quartiersecke. */
@@ -128,10 +145,10 @@ public final class Stadtplan {
     }
 
     /** Die Mitte des Marktes - gemessen zwischen Flankenhaeusern, Torwand und Rathaus. */
-    public static final int MITTE_X = 72;
+    public static final int MITTE_X = 0;
 
     /** Die Mitte des Marktes auf der z-Achse. */
-    public static final int MITTE_Z = 13;
+    public static final int MITTE_Z = 0;
 
     /**
      * Der Boden Altfurts.
@@ -204,7 +221,26 @@ public final class Stadtplan {
     public static final int ECKE_FREI = 6;
 
     /** Die halbe Breite einer Radialgasse - fuenf Bloecke wie eine Ringgasse. */
-    public static final int RADIAL_HALB = 2;
+    public static final int RADIAL_HALB = 3;
+
+    /**
+     * Die Breite der steinernen Kante je Seite eines Kreuzarms.
+     *
+     * <p>Ein Block. Mehr braucht es nicht - die Wirkung kommt daher, dass es eine LINIE
+     * ist und keine Flaeche.
+     */
+    public static final int BORDSTEIN_BREITE = 1;
+
+    /**
+     * Die halbe Breite eines Kreuzarms samt Kante.
+     *
+     * <p><b>Die EINE Zahl, die jeder fragt</b>: {@link #kreuzBei} begrenzt damit den Arm,
+     * und {@link #legeZeile} laesst damit Haeuser weg. Stuenden zwei Zahlen fuer dieselbe
+     * Sache da, duerfte ein Haus auf dem Bordstein stehen - und die Zusage "jeder
+     * Hausblock liegt in einer Zeile" waere rot, ohne dass einer der beiden Werte falsch
+     * aussieht.
+     */
+    public static final int KREUZ_HALB = RADIAL_HALB + BORDSTEIN_BREITE;
 
     /** Die schmalste Hausbreite zur Gasse. */
     public static final int BREITE_KLEIN = 5;
@@ -217,10 +253,10 @@ public final class Stadtplan {
      * von zwei Bloecken statt einer Kante. Von der Gasse sieht das aus wie ein
      * abgesaegtes Dach.
      */
-    public static final List<Integer> BREITEN = List.of(5, 7, 9);
+    public static final List<Integer> BREITEN = List.of(5, 7, 9, 13);
 
     /** Die Haustiefen - hoechstens so tief wie die Zeile. */
-    public static final List<Integer> TIEFEN = List.of(9, 10, 11);
+    public static final List<Integer> TIEFEN = List.of(7, 9, 11);
 
     /**
      * Wie lang ein NEST ist, in Bloecken laengs der Gasse.
@@ -300,6 +336,31 @@ public final class Stadtplan {
      * sieht nicht nach gewachsen aus, sondern nach kaputt.
      */
     public static final int KRUMM_TIEFE = 2;
+
+    /**
+     * Wie weit ein Haus hoechstens HINTER die Gassenkante zurueckspringt.
+     *
+     * <p><b>Warum die Zeile sonst eine Reihe bleibt</b> [24.11.2026]: Der Betreiber sah
+     * die Stadt zum dritten Mal an und sagte "immernoch sehr gleichmaessig und die
+     * haeuser sind einfach nur in einer reihe, statt natuerlich gewachsen". Bis dahin
+     * stand JEDES Haus mit seiner Front genau auf der Gassenkante - die Welle bog die
+     * Kante aus, aber alle Haeuser folgten ihr gemeinsam. Eine Linie, an der alle
+     * stehen, ist eine Reihe, auch wenn die Linie krumm ist.
+     *
+     * <p><b>Die zwei Linien haben je einen Eigentuemer</b>: Die GASSENKANTE gehoert der
+     * Welle ({@link #versatzBei}) und bleibt, wo sie ist - sonst wuerde die Gasse bei
+     * jedem zurueckgesetzten Haus breiter, und das sieht nicht nach Vorplatz aus,
+     * sondern nach Platzmangel. Die BAULINIE gehoert dem Haus. Was dazwischen liegt,
+     * ist sein VORPLATZ und wird als {@link Lage#ZEILE} gepflastert - gestampfte Erde
+     * vor der Tuer, wie sie jede alte Stadt hat.
+     *
+     * <p><b>Woher der Platz kommt</b>: NICHT aus einem tieferen Band. {@link #TIEFEN}
+     * reicht seit heute bis 7 hinunter, und ein flaches Haus hat Platz, zurueckzutreten;
+     * ein elf Bloecke tiefes hat keinen und steht an der Kante. Damit springt nicht
+     * jedes Haus ein wenig, sondern manche weit und andere gar nicht - und genau das
+     * ist der Unterschied zwischen gewachsen und gleichmaessig.
+     */
+    public static final int SPRUNG_TIEFE = 3;
 
     /**
      * Wie weit ein Mauerturm VOR die Mauer tritt, in Bloecken.
@@ -407,8 +468,16 @@ public final class Stadtplan {
      * <p>Dort kommt an, wer die Welt betritt, und dort geht er nach Norden zur Kirche
      * und nach Sueden zum Rathaus. Eine Baumreihe ueber die ganzen 81 Bloecke waere eine
      * Hecke quer durch den Hauptweg.
+     *
+     * <p><b>Die Zahl FOLGT jetzt</b> [24.11.2026]: Sie stand als freie 5 daneben,
+     * begruendet mit dem Hauptweg - also war sie in Wahrheit eine Aussage UEBER den Weg.
+     * Seit der Weg ein gerechneter Kreuzarm ist, wird sie gerechnet: Der erste moegliche
+     * Stamm liegt bei {@code KANTE_FREI + 1}, seine Krone reicht
+     * {@link #KRONE_WEITE} Bloecke weit, und damit endet sie genau am Bordstein. Eine
+     * Krone darf ueber die KANTE haengen - das ist ein Strassenbaum -, nie ueber die
+     * Fahrbahn. Wird der Arm breiter, wandert die Baumreihe von selbst mit.
      */
-    public static final int KANTE_FREI = 5;
+    public static final int KANTE_FREI = RADIAL_HALB + KRONE_WEITE;
 
     /**
      * Jeder wievielte Standort ein Brunnen ist statt eines Baumes.
@@ -660,6 +729,28 @@ public final class Stadtplan {
     }
 
     /**
+     * Wie weit dieses Haus hinter die Gassenkante zurueckspringt - seine BAULINIE.
+     *
+     * <p>Gestreut je HAUS und nicht je Nest: Ein Nest teilt Breite, Hoehe und Baustoff,
+     * aber die Baulinie ist das, was den Einzelnen aus der Reihe treten laesst. Waere
+     * sie nestweise, ruecke ein ganzer Block Haeuser gemeinsam zurueck, und die Reihe
+     * waere nur versetzt statt aufgeloest.
+     *
+     * <p>Zwei Drittel der Haeuser bleiben an der Kante: Eine Zeile, in der jedes Haus
+     * zurueckspringt, hat wieder eine gemeinsame Linie - nur eine andere.
+     *
+     * @return 0 bis {@link #SPRUNG_TIEFE}; wie viel davon wirklich moeglich ist,
+     *         entscheidet {@link #legeZeile} an der Tiefe des Hauses
+     */
+    public static int sprungBei(int quartier, Richtung seite, int laengs) {
+        int gewuerfelt = streu(quartier, seite.ordinal(), laengs, 15);
+        if (gewuerfelt % 3 != 0) {
+            return 0;
+        }
+        return 1 + (gewuerfelt / 3) % SPRUNG_TIEFE;
+    }
+
+    /**
      * Wie weit die Gasse an dieser Stelle AUSBIEGT - der gemeinsame Versatz.
      *
      * <p><b>Die eine Stelle</b>: Diese Rechnung wird zweimal gebraucht, und darum steht
@@ -846,15 +937,128 @@ public final class Stadtplan {
         return Math.max(Math.abs(x - MITTE_X), Math.abs(z - MITTE_Z));
     }
 
-    /** Was an dieser Stelle der Ebene liegt. */
+    /**
+     * Ob und wie diese Stelle zu einem KREUZARM gehoert - oder {@code null}.
+     *
+     * <p><b>Warum es das Kreuz gibt</b> [24.11.2026]: Der Betreiber sah die Stadt an und
+     * sagte, die Wege fuehrten "nur diagonal in die ecken", er wolle "ein plus, sodass
+     * die wege direkt zu den toren fuehren". Gemessen war der Grund doppelt: Von Ring 0
+     * bis 51 gab es GAR KEINEN Weg - Markt, Platzkante und Kern sind eine durchgehende
+     * Pflasterflaeche -, und alle vier Achsen waren von einem eingetragenen Bau
+     * ueberspannt (Stadtkirche und Bundesratshaus quer in Nord und Sued, Zunfthaus und
+     * Kaufmannskontor in Ost und West, je 88 bis 99 Bloecke). Man KONNTE nicht gerade
+     * hinaus.
+     *
+     * <p><b>min statt zweimal oder</b>: Der kleinere der beiden Achsabstaende sagt
+     * dasselbe wie "auf der x-Achse ODER auf der z-Achse", laesst sich aber abstufen -
+     * und daraus wird die Kante. Am Kreuzungsplatz in der Mitte (beide Abstaende klein)
+     * faellt von selbst das Richtige heraus: Die Fahrbahnen oeffnen sich zueinander, und
+     * die Kante biegt in den vier Diagonalecken um.
+     *
+     * <p>Die Mauer wird NICHT durchstossen: {@link #lageBei} fragt sie vorher. Durch die
+     * Mauer fuehrt das Torhaus, und dessen Durchgang ist genau
+     * {@code 2 * RADIAL_HALB + 1} breit - eine Tafel in {@code TorhausplanTest} haelt die
+     * beiden Zahlen zusammen.
+     */
+    public static Lage kreuzBei(int x, int z) {
+        int quer = Math.min(Math.abs(x - MITTE_X), Math.abs(z - MITTE_Z));
+        if (quer > KREUZ_HALB) {
+            return null;
+        }
+        return quer <= RADIAL_HALB ? Lage.RADIALGASSE : Lage.BORDSTEIN;
+    }
+
+    /** Ob diese Stelle im Kreuzarm liegt - Fahrbahn oder Kante. */
+    public static boolean imKreuzarm(int x, int z) {
+        return kreuzBei(x, z) != null;
+    }
+
+    /**
+     * Was an dieser Stelle der Ebene liegt.
+     *
+     * <p><b>Die Kante der Gassen kommt zuletzt</b> [24.11.2026]: Der Betreiber sah den
+     * Bordstein des Kreuzarms im Spiel und sagte: "das strassenmuster mit dem bordstein
+     * gefaellt mir, bitte genauso nur schmaler fuer die nebenstrassen und gassen". Die
+     * Ringgassen sind {@link #GASSE_BREITE} Bloecke breit; mit einer Kante je Seite
+     * bleiben drei Bloecke Fahrbahn - dasselbe Muster eine Stufe schmaler.
+     *
+     * <p>Gerechnet wird die Kante NICHT aus den Bandgrenzen, sondern aus EINER Regel:
+     * Ein Gassenblock, dessen Nachbar einen Ring weiter keine Gasse mehr ist, ist die
+     * Kante. Das ist deshalb die richtige Form, weil die Gassen KRUMM sind - der Bogen
+     * aus {@link #versatzBei} verschiebt ihren Rand je Laengsstelle um bis zu
+     * {@link #KRUMM_TIEFE} Bloecke, und bei einer Gasse zwischen zwei Haeuserzeilen tut
+     * er das auf BEIDEN Seiten. Eine Kante, die aus Bandgrenzen gerechnet waere, laege
+     * dort mitten auf der Fahrbahn; so folgt sie den Hausfronten.
+     */
     public Lage lageBei(int x, int z) {
+        Lage rohe = lageOhneKante(x, z);
+        if (rohe != Lage.RINGGASSE) {
+            // Der Kreuzarm bringt seine Kante schon fertig mit - siehe kreuzBei.
+            return rohe;
+        }
+        return amGassenrand(x, z) ? Lage.BORDSTEIN : Lage.RINGGASSE;
+    }
+
+    /**
+     * Ob diese Lage ein WEG ist - etwas, worauf man geht.
+     *
+     * <p><b>Die eine Stelle dieser Frage</b> [24.11.2026]: Seit die Gassen eine Kante
+     * haben, ist "hier ist Weg" nicht mehr dasselbe wie
+     * {@code lage == Lage.RINGGASSE}. Drei Zusagen fragten genau so und wurden rot,
+     * obwohl die Stadt richtig gerechnet war - die Tuer eines Hauses oeffnet jetzt auf
+     * den BORDSTEIN, und das ist ein Trottoir und keine Hofmauer.
+     *
+     * <p>Dazu gehoeren die Ringgassen, die Kreuzarme und ihre Kanten. NICHT dazu
+     * gehoeren die drei Plaetze und der Eckplatz: Auf denen geht man auch, aber sie sind
+     * keine Wege - wer sie mitzaehlte, koennte eine Tuer nicht mehr von einer
+     * Platzfassade unterscheiden.
+     */
+    public static boolean istWeg(Lage lage) {
+        return lage == Lage.RINGGASSE || lage == Lage.RADIALGASSE
+                || lage == Lage.BORDSTEIN;
+    }
+
+    /**
+     * Ob dieser Gassenblock am RAND seiner Gasse liegt.
+     *
+     * <p>Gefragt werden die zwei Nachbarn einen Ring weiter innen und weiter aussen, auf
+     * derselben Laengsstelle. Ist einer davon keine Gasse, ist dies die Kante. Beide
+     * Fragen gehen an {@link #lageOhneKante} und nicht an {@link #lageBei} - sonst
+     * fragte die Kante nach der Kante.
+     */
+    private boolean amGassenrand(int x, int z) {
+        int[] innen = nachbarRing(x, z, -1);
+        int[] aussen = nachbarRing(x, z, 1);
+        return lageOhneKante(innen[0], innen[1]) != Lage.RINGGASSE
+                || lageOhneKante(aussen[0], aussen[1]) != Lage.RINGGASSE;
+    }
+
+    /**
+     * Die Stelle {@code schritt} Ringe weiter, auf derselben Laengsstelle.
+     *
+     * <p>Welche Achse den Ring aendert, haengt daran, welcher Abstand der groessere ist:
+     * Auf der Nord- und Suedseite ist es z, auf der Ost- und Westseite x. Auf der
+     * Diagonale sind beide gleich; dort nimmt diese Rechnung z, und das ist
+     * gleichgueltig - die Diagonale ist Eckplatz.
+     */
+    private static int[] nachbarRing(int x, int z, int schritt) {
+        int dx = x - MITTE_X;
+        int dz = z - MITTE_Z;
+        if (Math.abs(dz) >= Math.abs(dx)) {
+            return new int[] {x, z + (dz >= 0 ? schritt : -schritt)};
+        }
+        return new int[] {x + (dx >= 0 ? schritt : -schritt), z};
+    }
+
+    /**
+     * Was an dieser Stelle liegt, OHNE die Frage nach der Gassenkante.
+     *
+     * <p>Die ganze Bandrechnung der Stadt steht hier. {@link #lageBei} veredelt nur noch
+     * das Ergebnis - und weil diese Methode die Kante nicht kennt, kann sie von der
+     * Kantenfrage gerufen werden, ohne sich selbst zu fragen.
+     */
+    private Lage lageOhneKante(int x, int z) {
         int r = ring(x, z);
-        if (r <= MARKT_RING) {
-            return platzBei(z);
-        }
-        if (r <= KERN_RING) {
-            return Lage.KERN;
-        }
         // DER TURM TRITT VOR DIE MAUER [24.11.2026]: Seine vordersten Bloecke liegen
         // JENSEITS von aussenRing - also muss er GEFRAGT werden, bevor hier offenes Land
         // gemeldet wird. Stuende dieser Riegel vorher, waere der Turm unsichtbar: Der
@@ -867,11 +1071,27 @@ public final class Stadtplan {
         // anderen Welten stehen jetzt in den Torhaeusern, und ein Torhaus ist ein
         // BAU: Es wird nach dem Pflaster gesetzt und ersetzt das Stueck Mauer, auf
         // dem es steht.
+        //
+        // UND SIE STEHT VOR DEM KREUZARM [24.11.2026]: Der Arm laeuft von der
+        // Marktmitte bis an die Mauer und hoert dort auf. Durch die Mauer fuehrt das
+        // Torhaus.
         if (r >= mauerVon()) {
             return Lage.MAUER;
         }
-        if (Math.abs(x - MITTE_X) <= RADIAL_HALB || Math.abs(z - MITTE_Z) <= RADIAL_HALB) {
-            return Lage.RADIALGASSE;
+        // DER KREUZARM VOR ALLEM UEBRIGEN [24.11.2026]: Er muss die Plaetze und den Kern
+        // DURCHSCHNEIDEN, sonst ist er kein Weg zum Tor, sondern ein Stummel, der auf
+        // Ring 52 anfaengt. Genau das war der Befund: Von Ring 0 bis 51 gab es keinen
+        // Weg. Vorher stand der Riegel weiter unten und fragte zweimal dasselbe
+        // ("dx klein ODER dz klein"); jetzt fragt ihn EINE Stelle - siehe kreuzBei.
+        Lage amKreuz = kreuzBei(x, z);
+        if (amKreuz != null) {
+            return amKreuz;
+        }
+        if (r <= MARKT_RING) {
+            return platzBei(z);
+        }
+        if (r <= KERN_RING) {
+            return Lage.KERN;
         }
         if (r >= abschlussgasseVon()) {
             return Lage.RINGGASSE;
@@ -1080,11 +1300,14 @@ public final class Stadtplan {
             if (ende > laengsBis) {
                 return;
             }
-            // DIE RADIALGASSE BLEIBT FREI: Ein Haus, das sie beruehrt, wird nicht
-            // schmaler gemacht, sondern weggelassen - hinter der Gasse faengt die Zeile
-            // neu an, und genau das sieht man einer gewachsenen Stadt an.
-            if (ende >= laengsMitte - RADIAL_HALB && laengs <= laengsMitte + RADIAL_HALB) {
-                laengs = laengsMitte + RADIAL_HALB + 1;
+            // DER GANZE KREUZARM BLEIBT FREI, Kante eingerechnet: Ein Haus, das ihn
+            // beruehrt, wird nicht schmaler gemacht, sondern weggelassen - hinter dem
+            // Arm faengt die Zeile neu an, und genau das sieht man einer gewachsenen
+            // Stadt an. Gefragt wird KREUZ_HALB und nicht RADIAL_HALB: Sonst darf ein
+            // Haus auf dem Bordstein stehen, und "jeder Hausblock liegt in einer Zeile"
+            // wird rot, ohne dass eine der beiden Zahlen falsch aussieht.
+            if (ende >= laengsMitte - KREUZ_HALB && laengs <= laengsMitte + KREUZ_HALB) {
+                laengs = laengsMitte + KREUZ_HALB + 1;
                 continue;
             }
             // ERST DIE WELLE, DANN DIE TIEFE [24.11.2026]: Der Versatz ist KEIN
@@ -1103,13 +1326,23 @@ public final class Stadtplan {
             // Versatz neben ihr Platz hat, haelt passtInEineZeile frei.
             int tiefe = vorlage != null ? vorlage.tiefe()
                     : Math.min(waehle(TIEFEN, streuung), ZEILE_TIEFE - versatz);
+            // DIE BAULINIE DES HAUSES: so weit zurueck, wie seine Tiefe es erlaubt.
+            // Ein flaches Haus tritt zurueck, ein tiefes steht an der Kante - siehe
+            // SPRUNG_TIEFE. Eine Vorlage springt NICHT: Sie ist ein fester Grundriss,
+            // und ihr Vorplatz waere eine Luecke, die niemand eingetragen hat.
+            int sprung = vorlage != null ? 0
+                    : Math.min(sprungBei(quartier, seite, laengs),
+                            ZEILE_TIEFE - versatz - tiefe);
             // DIE HOEHE kommt aus dem Gefaelle, dem Nest und einem Block Spiel je
             // Haus: innen hoch, aussen niedrig, und innerhalb eines Nestes aehnlich.
             int hoehe = vorlage != null ? vorlage.hoehe()
                     : grundhoehe(von)
                             + streu(quartier, seite.ordinal(), nest, 3) % 3 - 1
                             + streu(quartier, seite.ordinal(), laengs, 8) % 2;
-            int querVon = innen ? von + versatz : bis - versatz - tiefe + 1;
+            // DER SPRUNG GEHT IN DEN QUADER, NICHT IN DIE GASSENKANTE: Die Kante
+            // bleibt bei versatz - was zwischen ihr und dem Haus liegt, ist Vorplatz.
+            int querVon = innen ? von + versatz + sprung
+                    : bis - versatz - sprung - tiefe + 1;
             int querBis = querVon + tiefe - 1;
 
             // JEDE NEUNTE PARZELLE BLEIBT EIN HOF: Eine Zeile ohne Luecke ist eine

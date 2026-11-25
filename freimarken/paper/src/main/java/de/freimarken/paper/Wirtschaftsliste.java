@@ -287,6 +287,29 @@ final class Wirtschaftsliste {
         klagen.addAll(wettbewerb.klagen());
         bericht.addAll(wettbewerb.bericht());
 
+        // Die Teamrollen (Plan 12c.2): welche es gibt und welche Rechte jede vergibt.
+        // Ihre Rechenprobe steht beim Start im Protokoll und nicht hier - sie nennt je
+        // Rolle eine Zahl, und das gehoert neben die der Raenge.
+        Teamliste.Ergebnis team = Teamliste.ausKonfiguration(wurzel);
+        klagen.addAll(team.klagen());
+        bericht.addAll(team.bericht());
+
+        // Das Meldewesen (Plan 12c.3): ein Schalter und drei Bremsen. Seine
+        // Rechenprobe steht beim Start im Protokoll und nennt BEIDE Bremsen in
+        // einem Satz - sie wirken nur zusammen.
+        Meldeliste.Ergebnis melden = Meldeliste.ausKonfiguration(wurzel);
+        klagen.addAll(melden.klagen());
+        bericht.addAll(melden.bericht());
+
+        // Die Strafen (Plan 12c.3): Hoechstdauer je Art, zwei Schalter, die
+        // Seitenlaenge und die Befehle, die eine Stummschaltung mitsperrt. Die
+        // Hoechstdauer ist die Grenze aus Plan 12c.2 zwischen Moderator und
+        // Verwalter; ihre Rechenprobe steht beim Start im Protokoll und nennt sie
+        // je Art.
+        Strafliste.Ergebnis strafen = Strafliste.ausKonfiguration(wurzel);
+        klagen.addAll(strafen.klagen());
+        bericht.addAll(strafen.bericht());
+
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
             bericht.add(Wirtschaftswerte.PFAD_GRUNDPREIS + " ist 0 - jede weitere Parzelle"
@@ -321,7 +344,8 @@ final class Wirtschaftsliste {
                 handel.werte(), truhe.werte(), freistaedte.werte(),
                 inseln.werte(), angeln.werte(), wolken.werte(),
                 raenge.werte(), wechsel.werte(), muenzhaus.werte(),
-                anmeldung.werte(), lotterie.werte(), wettbewerb.werte()), klagen,
+                anmeldung.werte(), lotterie.werte(), wettbewerb.werte(),
+                team.werte(), melden.werte(), strafen.werte()), klagen,
                 bericht);
     }
 

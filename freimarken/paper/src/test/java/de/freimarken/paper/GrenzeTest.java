@@ -371,7 +371,22 @@ class GrenzeTest {
             // Fenster aufgeht, und die Siegerliste am Ende gehen an alle, und sie
             // entstehen im Takt und nicht auf einen Befehl. Beide haben EINE
             // Sendestelle.
-            "WettbewerbBefehle.java", "Wettbewerbswache.java"));
+            "WettbewerbBefehle.java", "Wettbewerbswache.java",
+            // Schritt 16a Teil A: /team - EINE Sendestelle, wie /werder, /wolke und
+            // /lotterie. Jeder der fuenf Zweige geht durch sende(), auch die
+            // Absagen.
+            "TeamBefehle.java",
+            // Schritt 16a Teil C: /melden, /meldung und die Meldewache. DREI
+            // Dateien, und die dritte ist eine WACHE - sie liefert die Antworten
+            // beim Beitritt aus, denn eine Zeile an einen Abwesenden geht an
+            // niemanden. Alle drei haben EINE Sendestelle.
+            "MeldeBefehle.java", "MeldungBefehle.java", "Meldewache.java",
+            // Schritt 16a Teil B: /strafe samt /bannliste und die Strafwache. Die
+            // WACHE sendet an zwei Stellen - die Zeile an den Stummgeschalteten und
+            // die an den, dessen Fluesterbefehl gesperrt ist. Die Zeile an der TUER
+            // sendet sie nicht: Dort geht sie ueber disallow, denn der Spieler ist
+            // noch nicht im Spiel.
+            "StrafBefehle.java", "Strafwache.java"));
 
     /**
      * Wo ein Satz aus Text werden darf - zwei Dateien, und das ist der ganze Weg
@@ -506,7 +521,7 @@ class GrenzeTest {
             // [23.11.2026]: 6 fuer die Benutzung von /freimarken altfurt und 8
             // fuer die Antwort auf sichern - zwei Absagen, Kopf, unbekannter
             // Name, Gesichertes, je ein Schon-da, je eine Klage, "nichts zu tun".
-            Map.entry("FreimarkenPlugin.java", 64),
+            Map.entry("FreimarkenPlugin.java", 65),
             // EINE Sendestelle, und das BLEIBT so, obwohl Teil B drei Taten dazugebracht
             // hat: Alle vier Zweige von /laden laufen durch dasselbe sende(). Eine Zwei
             // hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat - und der waere
@@ -579,7 +594,16 @@ class GrenzeTest {
             Map.entry("WolkeBefehle.java", 1),
             Map.entry("LotterieBefehle.java", 1),
             Map.entry("WettbewerbBefehle.java", 1),
-            Map.entry("Wettbewerbswache.java", 1));
+            Map.entry("Wettbewerbswache.java", 1),
+            Map.entry("TeamBefehle.java", 1),
+            Map.entry("MeldeBefehle.java", 1),
+            Map.entry("MeldungBefehle.java", 1),
+            Map.entry("Meldewache.java", 1),
+            // /strafe sendet an DREI Stellen: die Antwort an den Absender, die
+            // Ansage an alle und die Ansage der Aufhebung. Die Strafwache an ZWEI:
+            // Chat und gesperrter Befehl.
+            Map.entry("StrafBefehle.java", 3),
+            Map.entry("Strafwache.java", 2));
 
     /**
      * Wie oft jede reine Zeilen-Methode von {@code ParzellenBefehle} AUFGERUFEN wird.
@@ -1176,6 +1200,10 @@ class GrenzeTest {
             "BEFEHL_HILFE -> WORT",
             "BEFEHL_LOTTERIE -> WORT",
             "BEFEHL_WETTBEWERB -> WORT",
+            "BEFEHL_TEAM -> WORT",
+            "BEFEHL_MELDEN -> WORT",
+            "BEFEHL_MELDUNG -> WORT", "BEFEHL_STRAFE -> WORT",
+            "BEFEHL_BANNLISTE -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",
@@ -5446,4 +5474,90 @@ class GrenzeTest {
                 "die Naht laesst ein reines BLOCKmaterial durch - ein Posten darauf"
                         + " bucht ab und liefert nichts");
     }
+
+    @Test
+    @DisplayName("31ea - die Klage ueber einen Sperrer im Kreuzarm ist verdrahtet")
+    void sperrerImKreuzarmWirdGeklagt() {
+        // DIE GESTALT, GEGEN DIE DIESE TAFEL GEBAUT IST [24.11.2026]: Ein Bau, der
+        // einen Kreuzarm beruehrt, ohne ihn ganz zu ueberspannen, SPERRT den Weg von
+        // der Marktmitte zum Tor - und zwar unsichtbar fuer jede Probe: Stadtplan und
+        // Bauplan rechnen beide richtig, nur die Stadt ist zu. Gemessen in der Welt am
+        // 24.11.2026: Zunfthaus und Kaufmannskontor reichten bis z 3, der Arm braucht
+        // bis z 4. EIN Block, und der Ost- und der Westarm waren versperrt.
+        //
+        // Die Meldung ist der einzige Weg, auf dem der Betreiber davon erfaehrt. Eine
+        // gebaute, gruen geprueefte Meldung ohne Aufruf ist unsichtbar wirkungslos -
+        // dieselbe Gestalt wie bei 31an, 31au, 31cr, 31de und 31dp.
+        String plugin = plugintext();
+        assertTrue(plugin.contains("private void meldeSperrerImKreuzarm()"),
+                "die Meldung ist nicht gebaut");
+        assertTrue(plugin.contains("meldeSperrerImKreuzarm();"),
+                "die Meldung wird nicht gerufen - dann bleibt ein versperrter Weg"
+                        + " stumm, und alle Proben bleiben gruen");
+        // SIE FRAGT BEIDE SEITEN: Ob der Bau den Arm beruehrt UND ob er ihn ueberspannt.
+        // Ohne die zweite Frage klagte sie auch ueber Kirche und Rathaus, die ihn zu
+        // Recht ueberspannen und dafuer eine Laube bekommen.
+        assertTrue(plugin.contains("Stadtplan.imKreuzarm("),
+                "sie fragt nicht, ob der Bau den Arm beruehrt");
+        assertTrue(plugin.contains("Bauplan.ueberspanntKreuzarm(bau)"),
+                "sie fragt nicht, ob er ihn ueberspannt - dann klagt sie auch ueber die"
+                        + " Stadtkirche und das Bundesratshaus");
+        // UND SIE IST EINE KLAGE, kein Hinweis: Ein versperrter Weg zum Tor ist ein
+        // Fehler in der Stadt und gehoert nach severe.
+        int stelle = plugin.indexOf("private void meldeSperrerImKreuzarm()");
+        int ende = plugin.indexOf("private void meldeSpawnImHaus", stelle);
+        assertTrue(ende > stelle, "die Meldung steht vor meldeSpawnImHaus");
+        assertTrue(plugin.substring(stelle, ende).contains("getLogger().severe("),
+                "ein versperrter Weg zum Tor gehoert nach severe, nicht nach info");
+    }
+
+    @Test
+    @DisplayName("31eb - die drei Ereigniszweige der Strafwache sind verdrahtet")
+    void strafwacheIstVerdrahtet() {
+        // DIE GESTALT, GEGEN DIE DIESE TAFEL GEBAUT IST [25.11.2026, Teil B]: Die drei
+        // Entscheidungen der Strafwache stehen in eigenen Methoden, weil zwei der drei
+        // Bukkit-Ereignisse sich ohne laufenden Server nicht bauen lassen (gemessen:
+        // AsyncPlayerPreLoginEvent braucht Server.createProfile,
+        // PlayerCommandPreprocessEvent braucht Player.getServer). StrafwacheTest
+        // prueft die Methoden - und genau darum kann der EREIGNISZWEIG stumm leer
+        // werden, ohne dass eine Probe rot wird.
+        //
+        // Dasselbe Fehlerbild wie bei 31an, 31au, 31cr, 31de, 31dp und 31ea: eine
+        // gebaute, gruen gepruefte Regel ohne Anschluss. Hier waere die Folge, dass
+        // jeder gebannte Spieler hereinkommt und jeder Stummgeschaltete weiterschreibt.
+        String wache = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("Strafwache.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Strafwache.java fehlt")));
+
+        // Je Ereignis: der Zuhoerer UND der Aufruf seiner Entscheidung.
+        for (String[] paar : new String[][] {
+                {"AsyncPlayerPreLoginEvent ereignis", "abweisungFuer("},
+                {"AsyncChatEvent ereignis", "absageFuerChat("},
+                {"PlayerCommandPreprocessEvent ereignis", "absageFuerBefehl("}}) {
+            assertTrue(wache.contains(paar[0]),
+                    "der Zuhoerer fuer " + paar[0] + " fehlt - dann wirkt diese"
+                            + " Strafart nicht");
+            assertTrue(wache.contains(paar[1]),
+                    paar[1] + " wird nicht gerufen - die Entscheidung ist gebaut und"
+                            + " gruen geprueft, und der Zweig tut nichts");
+        }
+
+        // UND SIE GREIFEN EIN: Ein Zuhoerer ohne disallow beziehungsweise
+        // setCancelled liest die Strafe nachweislich und laesst den Spieler trotzdem
+        // durch - das ist die Gestalt, die eine Methodenprobe niemals sieht.
+        assertTrue(wache.contains("ereignis.disallow("),
+                "die Tuer weist nicht ab");
+        assertEquals(2, wache.split("ereignis.setCancelled\\(true\\)", -1).length - 1,
+                "Chat und Befehl brechen ab - genau zweimal setCancelled(true)");
+
+        // UND SIE HOEREN FRUEH GENUG: Auf MONITOR ist die Zeile schon unterwegs, und
+        // disallow wirkt dort nicht mehr. Dieselbe Falle, aus der anderen Richtung als
+        // bei der Meldewache - jene MUSS auf MONITOR hoeren, weil sie nur ausliefert.
+        assertFalse(wache.contains("EventPriority.MONITOR"),
+                "eine Wache, die abbricht, darf nicht auf MONITOR hoeren - dort ist"
+                        + " nichts mehr zu verhindern");
+    }
+
 }

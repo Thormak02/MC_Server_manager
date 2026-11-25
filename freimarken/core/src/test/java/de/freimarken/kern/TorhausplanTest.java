@@ -70,38 +70,44 @@ class TorhausplanTest {
         // kleinerem - das Nordtorhaus liegt noerdlich der Mitte.
         int innen = b.bisZ();
 
-        // SIEBEN BREIT: x 69..75, und daneben steht Turm.
-        for (int x = 69; x <= 75; x++) {
+        // SIEBEN BREIT, und zwar MITTIG auf der Achse - gerechnet aus MITTE_X und
+        // nicht als feste Zahl [24.11.2026]: Hier standen x 69..75, gemessen an einer
+        // Mitte bei x 72. Seit die Mitte auf 0/0 liegt, waren sie alle falsch, und zwar
+        // still - eine Zahl sieht nicht falsch aus.
+        int halb = Torhausplan.DURCHGANG_BREITE / 2;
+        for (int x = Stadtplan.MITTE_X - halb; x <= Stadtplan.MITTE_X + halb; x++) {
             assertEquals(Torhausplan.Stueck.LUFT,
                     tor.stueckBei(x, Stadtplan.BODEN_Y + 1, innen),
                     "Durchgang bei x " + x);
         }
         assertNotEquals(Torhausplan.Stueck.LUFT,
-                tor.stueckBei(68, Stadtplan.BODEN_Y + 1, innen), "links Turm");
+                tor.stueckBei(Stadtplan.MITTE_X - halb - 1,
+                        Stadtplan.BODEN_Y + 1, innen), "links Turm");
         assertNotEquals(Torhausplan.Stueck.LUFT,
-                tor.stueckBei(76, Stadtplan.BODEN_Y + 1, innen), "rechts Turm");
+                tor.stueckBei(Stadtplan.MITTE_X + halb + 1,
+                        Stadtplan.BODEN_Y + 1, innen), "rechts Turm");
 
         // FUENF HOCH: Ebene 1 bis 5 ist Luft, Ebene 6 ist die Decke.
         for (int h = 1; h <= 5; h++) {
             assertEquals(Torhausplan.Stueck.LUFT,
-                    tor.stueckBei(72, Stadtplan.BODEN_Y + h, innen),
+                    tor.stueckBei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y + h, innen),
                     "Durchgang auf Ebene " + h);
         }
         assertEquals(Torhausplan.Stueck.MAUER,
-                tor.stueckBei(72, Stadtplan.BODEN_Y + 6, innen), "die Decke");
+                tor.stueckBei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y + 6, innen), "die Decke");
         assertEquals(Torhausplan.Stueck.BODEN,
-                tor.stueckBei(72, Stadtplan.BODEN_Y, innen), "der Boden");
+                tor.stueckBei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y, innen), "der Boden");
 
         // UND ER ENDET: Sechs Bloecke tief, dann Mauer. DAS ist der ganze Sinn - die
         // Stadtmauer bleibt geschlossen.
         for (int q = 0; q < 6; q++) {
             assertEquals(Torhausplan.Stueck.LUFT,
-                    tor.stueckBei(72, Stadtplan.BODEN_Y + 1, innen - q),
+                    tor.stueckBei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y + 1, innen - q),
                     "Durchgang in der Tiefe " + q);
         }
         for (int q = 6; q < 9; q++) {
             assertEquals(Torhausplan.Stueck.MAUER,
-                    tor.stueckBei(72, Stadtplan.BODEN_Y + 1, innen - q),
+                    tor.stueckBei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y + 1, innen - q),
                     "dahinter Mauer, Tiefe " + q);
         }
     }
@@ -200,7 +206,7 @@ class TorhausplanTest {
         int oben = Stadtplan.BODEN_Y + Torhausplan.HOEHE - 1;
 
         // AUF DER OBERSTEN EBENE steht NUR noch Turm - in der Mitte ist Luft.
-        assertEquals(Torhausplan.Stueck.LUFT, tor.stueckBei(72, oben, b.bisZ()),
+        assertEquals(Torhausplan.Stueck.LUFT, tor.stueckBei(Stadtplan.MITTE_X, oben, b.bisZ()),
                 "ueber dem First ist Luft");
         Set<Torhausplan.Stueck> aufDenTuermen = new HashSet<>();
         for (int x = b.vonX(); x < b.vonX() + Torhausplan.TURM_BREITE; x++) {
@@ -278,7 +284,7 @@ class TorhausplanTest {
                 "am Osttor zeigt die erste Kante nach Sueden");
 
         // WO KEIN DACH IST, IST AUCH KEINE RICHTUNG.
-        assertNull(tor.dachzeigt(72, Stadtplan.BODEN_Y + 1, innen), "im Durchgang");
+        assertNull(tor.dachzeigt(Stadtplan.MITTE_X, Stadtplan.BODEN_Y + 1, innen), "im Durchgang");
         assertNull(tor.dachzeigt(b.vonX(), Stadtplan.BODEN_Y + 1, innen), "im Turm");
         assertNull(tor.dachzeigt(0, 0, 0), "weit weg");
     }

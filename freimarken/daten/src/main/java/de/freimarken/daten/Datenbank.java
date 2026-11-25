@@ -1442,6 +1442,188 @@ public final class Datenbank implements AutoCloseable {
               teilnehmer    INT         NOT NULL,
               PRIMARY KEY (lauf)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // SCHRITT 39 - die Teamrollen (Plan 12c.2, Schritt 16a Teil A).
+            //
+            // EINE ZEILE JE SPIELER UND ROLLE, und der Hauptschluessel ist genau dieses
+            // Paar. Das ist der Unterschied zu raenge, wo der Spieler allein der
+            // Schluessel ist: Ein Rang wird erreicht und ersetzt den vorigen, eine Rolle
+            // wird gegeben und steht neben den anderen. Mit dem Spieler allein als
+            // Schluessel verdraengte jede neue Rolle die vorige, und zwei Verwalter, die
+            // im selben Augenblick zwei Rollen vergeben, haetten einer umsonst
+            // gearbeitet.
+            //
+            // rolle als VARCHAR(32) und nicht als ENUM: Welche Rollen es gibt, steht in
+            // der config.yml, und der Betreiber darf dort eine anlegen. Ein ENUM
+            // braeuchte fuer jede neue Rolle einen Schemaschritt - also einen Neustart
+            // mit Migration fuer eine Zeile in einer Textdatei. Die 32 sind
+            // Teamwerte.HOECHSTE_SCHLUESSELLAENGE; sie steht hier als Zahl, weil ein
+            // Textblock keine Konstante einsetzen kann, und SchemaTest haelt beide
+            // zusammen.
+            //
+            // vergeber NULL ERLAUBT, und das ist keine Nachlaessigkeit: Die Konsole hat
+            // keine UUID, und die erste Rolle eines frischen Servers wird von dort
+            // vergeben - es gibt ja noch niemanden, der es koennte. Eine erfundene
+            // Null-UUID stuende spaeter in der Auskunft als Spieler, den es nicht gibt,
+            // und jemand suchte ihn.
+            //
+            // KEIN FREMDSCHLUESSEL auf kassen, wie bei raenge und lotterie_lose: Ein
+            // Moderator soll seine Rolle behalten, auch wenn seine Kontoeroeffnung
+            // einmal fehlgeschlagen ist, und ein CASCADE naehme sie ihm still mit dem
+            // Konto. Die Rolle ist eine Vollmacht und kein Besitz.
+            //
+            // KEIN INDEX auf rolle allein: Gelesen wird nach Spieler (bei jedem
+            // Beitritt) oder die ganze Tabelle (fuer die Teamliste). Ein Team hat
+            // Dutzende Zeilen, nicht Millionen - ein zweiter Index waere Pflege ohne
+            // Gewinn.
+            """
+            CREATE TABLE IF NOT EXISTS team (
+              spieler     CHAR(36)    NOT NULL,
+              rolle       VARCHAR(32) NOT NULL,
+              vergeben_am DATETIME(3) NOT NULL,
+              vergeber    CHAR(36)    NULL,
+              PRIMARY KEY (spieler, rolle)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // SCHRITT 40 - die Meldungen (Plan 12c.3, Schritt 16a Teil C).
+            //
+            // AUTO_INCREMENT, und das ist hier anders als bei jeder anderen Tabelle
+            // dieses Schemas: Die Nummer ist die ANREDE. Ein Moderator tippt
+            // /meldung 7 annehmen, und ohne kurze Zahl muesste er eine UUID oder einen
+            // Zeitstempel abschreiben. Gelesen wird sie mit getGeneratedKeys.
+            //
+            // Die Nummer kommt nach einem Neustart WIEDER, wenn die hoechste Zeile
+            // geloescht wurde (InnoDB ermittelt AUTO_INCREMENT beim Start aus
+            // MAX(nummer)+1). Folgenlos, weil es kein Loeschen gibt - eine Meldung wird
+            // erledigt, nicht entfernt. Wer von Hand aufraeumt, soll das wissen.
+            //
+            // stand als VARCHAR(16) und nicht als ENUM: Meldestand hat heute vier Werte,
+            // und sein Javadoc nennt einen fuenften als benannte Luecke
+            // (zurueckgeben). Ein ENUM braeuchte dafuer einen Schemaschritt, also einen
+            // Neustart mit Migration fuer eine Zeile Java. Der Preis ist, dass eine von
+            // Hand verdorbene Zeile beim Lesen wirft - mit ihrer Nummer in der Meldung,
+            // damit sie zu finden ist.
+            //
+            // grund und vermerk als VARCHAR(256): dieselbe Zahl wie
+            // Meldung.LAENGSTER_GRUND. Sie steht hier, weil ein Textblock keine
+            // Konstante einsetzen kann, und Meldung prueft sie VOR dem Schreiben - ohne
+            // das bricht der strict mode mitten in einer Meldung ab, und der Melder
+            // glaubt, es sei nichts passiert.
+            //
+            // bearbeiter und erledigt_am NULL ERLAUBT: Eine offene Meldung hat beides
+            // nicht. Meldung prueft das Paar in beide Richtungen, damit nie "offen"
+            // dasteht, waehrend jemand daran arbeitet.
+            //
+            // gelesen ist die Spalte, ohne die die RUECKMELDUNG VERSCHWINDET: Ein
+            // Moderator erledigt eine Meldung, waehrend der Melder offline ist, und
+            // eine Chatzeile ginge an niemanden. Plan 12c.3 nennt die Rueckmeldung als
+            // den Grund, aus dem das Meldewesen ueberhaupt funktioniert.
+            //
+            // ZWEI INDIZES, und beide tragen eine Abfrage, die je Beitritt laeuft:
+            // (melder, stand) fuer die Zahl der offenen, die letzte Meldezeit und die
+            // ungelesenen Antworten; (stand, gemeldet_am) fuer die Liste der offenen,
+            // die aeltesten zuerst. Ohne sie liest jede dieser Abfragen die ganze
+            // Tabelle, und die waechst mit jedem Vorfall.
+            //
+            // KEIN FREMDSCHLUESSEL auf kassen, wie bei raenge, team und lotterie_lose:
+            // Eine Meldung ist ein Protokoll und haengt an keinem Konto. Ein CASCADE
+            // loeschte sie mit dem Konto des Melders - und damit die Spur des Vorfalls.
+            """
+            CREATE TABLE IF NOT EXISTS meldungen (
+              nummer      BIGINT       NOT NULL AUTO_INCREMENT,
+              melder      CHAR(36)     NOT NULL,
+              betroffener CHAR(36)     NOT NULL,
+              grund       VARCHAR(256) NOT NULL,
+              welt        VARCHAR(64)  NOT NULL,
+              x           INT          NOT NULL,
+              y           INT          NOT NULL,
+              z           INT          NOT NULL,
+              gemeldet_am DATETIME(3)  NOT NULL,
+              stand       VARCHAR(16)  NOT NULL,
+              bearbeiter  CHAR(36)     NULL,
+              vermerk     VARCHAR(256) NOT NULL,
+              erledigt_am DATETIME(3)  NULL,
+              gelesen     TINYINT(1)   NOT NULL,
+              PRIMARY KEY (nummer),
+              KEY idx_meldung_melder (melder, stand),
+              KEY idx_meldung_offen (stand, gemeldet_am)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // SCHRITT 41 - die Strafen (Plan 12c.3, Schritt 16a Teil B).
+            //
+            // AUTO_INCREMENT wie bei den Meldungen, und aus demselben Grund: Die Nummer
+            // ist die ANREDE. Ein Moderator tippt /strafe aufheben 7, und ohne kurze
+            // Zahl muesste er eine UUID abschreiben. Gelesen wird sie mit
+            // getGeneratedKeys.
+            //
+            // EIN ENDE UND KEINE DAUER, und das ist die tragende Entscheidung dieser
+            // Tabelle: Nur nach einem Ende laesst sich fragen, wer JETZT gesperrt ist
+            // (laeuft_ab_am IS NULL OR laeuft_ab_am > ?). Mit einer Spanne muesste jede
+            // Zeile gelesen und gerechnet werden - und diese Abfrage laeuft bei JEDEM
+            // Beitritt.
+            //
+            // laeuft_ab_am NULL ERLAUBT und heisst UNBEGRENZT. Das ist der Zustand, den
+            // Plan 12c.2 dem Verwalter vorbehaelt; der Riegel dafuer steht in
+            // Strafbuch.verhaenge und prueft BEIDE Faenger - das fehlende Ende und die
+            // zu lange Dauer. Ohne den zweiten tippt ein Moderator 3650d.
+            //
+            // Bei einem RAUSWURF steht das Ende gleich dem Anfang. Ein Rauswurf ist
+            // vorbei, sobald er geschieht, und er steht trotzdem in dieser Tabelle: Die
+            // Zeile, die zeigt, dass derselbe Spieler vor dem Bann dreimal
+            // rausgeworfen wurde, ist der eigentliche Fund.
+            //
+            // art als VARCHAR(16) und nicht als ENUM: Strafart hat heute drei Werte,
+            // und ihr Javadoc nennt die Verwarnung als benannte Luecke. Ein ENUM
+            // braeuchte dafuer einen Schemaschritt. Der Preis ist, dass eine von Hand
+            // verdorbene Zeile beim Lesen wirft - mit ihrer Nummer in der Meldung.
+            //
+            // grund und aufhebungsgrund als VARCHAR(256): dieselbe Zahl wie
+            // Strafe.LAENGSTER_GRUND. Der Grund ist PFLICHT (Plan 12c.3: "Eine Strafe,
+            // die niemand erklaert, erzeugt nur Wiederkehr") und wird dem Betroffenen
+            // gezeigt; Strafe prueft ihn VOR dem Schreiben, samt Abschnittszeichen -
+            // er steht in der oeffentlichen Bannliste.
+            //
+            // von_wem und aufgehoben_von NULL ERLAUBT: null heisst die KONSOLE. Ein
+            // erfundener Platzhalter waere eine Kennung, die in der Liste wie ein
+            // Spieler aussieht.
+            //
+            // aufgehoben_am ist die Spalte, in deren IS-NULL-Bedingung der Riegel gegen
+            // zwei gleichzeitige Aufhebungen steht (MariaStrafen.AUFHEBEN). Aufgehoben
+            // wird NICHT geloescht: Gerade die zurueckgenommene Strafe ist die, nach der
+            // ein zweiter Moderator fragt.
+            //
+            // ZWEI INDIZES, und beide tragen eine Abfrage, die oft laeuft:
+            // (betroffener, art, aufgehoben_am, laeuft_ab_am) fuer die Frage der Wache
+            // bei jedem Beitritt und bei jeder Chatzeile; (art, aufgehoben_am,
+            // laeuft_ab_am, verhaengt_am) fuer die oeffentliche Bannliste. Ohne sie
+            // liest jede dieser Abfragen die ganze Tabelle, und die waechst mit jedem
+            // Vorfall.
+            //
+            // KEIN FREMDSCHLUESSEL auf kassen, wie bei raenge, team und meldungen: Eine
+            // Strafe ist ein Protokoll und haengt an keinem Konto. Ein CASCADE loeschte
+            // sie mit dem Konto des Betroffenen - und ein gebannter Spieler, dessen
+            // Konto aufgeraeumt wird, waere damit entbannt.
+            """
+            CREATE TABLE IF NOT EXISTS strafen (
+              nummer          BIGINT       NOT NULL AUTO_INCREMENT,
+              betroffener     CHAR(36)     NOT NULL,
+              art             VARCHAR(16)  NOT NULL,
+              grund           VARCHAR(256) NOT NULL,
+              von_wem         CHAR(36)     NULL,
+              verhaengt_am    DATETIME(3)  NOT NULL,
+              laeuft_ab_am    DATETIME(3)  NULL,
+              aufgehoben_am   DATETIME(3)  NULL,
+              aufgehoben_von  CHAR(36)     NULL,
+              aufhebungsgrund VARCHAR(256) NOT NULL,
+              PRIMARY KEY (nummer),
+              KEY idx_strafe_geltend
+                  (betroffener, art, aufgehoben_am, laeuft_ab_am),
+              KEY idx_strafe_liste
+                  (art, aufgehoben_am, laeuft_ab_am, verhaengt_am)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -1767,6 +1949,31 @@ public final class Datenbank implements AutoCloseable {
             // Auszahlung waere gruen, ohne einen einzigen Preis zu sehen.
             anweisung.execute("DELETE FROM wettbewerb_punkte");
             anweisung.execute("DELETE FROM wettbewerb_lauf");
+            // Die Teamrollen haengen an keinem Fremdschluessel - mit Absicht, siehe den
+            // Schemaschritt -, ihre Stelle in dieser Liste ist also frei. Sie stehen
+            // hier, damit sie nicht uebersehen werden. Ohne diese Zeile wandert eine
+            // Rolle von einer Probe in die naechste, und das trifft gerade die Proben
+            // des Teamvertrags: "Wer keine Rolle hat, ist nicht im Team" faende eine
+            // vorgefundene vor. Die Proben nehmen zufaellige UUIDs, also wuerde es nur
+            // alle() treffen - und genau dort ist es am schlimmsten, weil die Zeile
+            // eines FREMDEN Spielers die eigene Zaehlung verschiebt.
+            anweisung.execute("DELETE FROM team");
+            // Die Meldungen haengen an keinem Fremdschluessel - mit Absicht, siehe den
+            // Schemaschritt -, ihre Stelle in dieser Liste ist also frei. Sie stehen
+            // hier, damit sie nicht uebersehen werden. Ohne diese Zeile wandert eine
+            // Meldung von einer Probe in die naechste, und das trifft gerade die Proben
+            // des Meldevertrags: "die offenen Meldungen kommen mit der aeltesten zuerst"
+            // faende eine fremde, aeltere vor. Die Proben nehmen zufaellige UUIDs, also
+            // bliebe offeneVon richtig - und genau offene() waere falsch.
+            //
+            // KEIN TRUNCATE, obwohl das den AUTO_INCREMENT-Zaehler zuruecksetzen wuerde:
+            // leereAlles() benutzt ueberall DELETE, und ein einzelnes TRUNCATE waere
+            // eine Ausnahme, die man beim naechsten Mal vergisst. Die Folge ist, dass
+            // die Nummern ueber eine Probenreihe hinweg weiterzaehlen - darum prueft
+            // keine Probe eine bestimmte Nummer, sondern nur, DASS sie vergeben wird
+            // und dass sie steigt.
+            anweisung.execute("DELETE FROM meldungen");
+            anweisung.execute("DELETE FROM strafen");
             // DIE GOLDMARK, und zwar das Buch VOR den Konten: fk_goldbuchung_kasse steht
             // auf RESTRICT, genau wie bei der Mark. Beide Zeilen sind Pflicht - ohne sie
             // wandern Goldmarkstaende von einer Probe in die naechste, und weil "ein

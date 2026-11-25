@@ -338,7 +338,11 @@ class VorlageTest {
                 // FENSTER steht und nicht im Chat - und der erste mit einem Satz, der
                 // ausdruecklich mehrzeilig sein darf.
                 "MenueSatz", "RegelnSatz", "HilfeSatz", "AnmeldeSatz",
-                "RundgangSatz", "LotterieSatz", "WettbewerbSatz"));
+                "RundgangSatz", "LotterieSatz", "WettbewerbSatz",
+                // Schritt 16a Teil A: die Saetze von /team.
+                "TeamSatz",
+                // Schritt 16a Teil C: die Saetze von /melden und /meldung.
+                "MeldeSatz", "StrafSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));

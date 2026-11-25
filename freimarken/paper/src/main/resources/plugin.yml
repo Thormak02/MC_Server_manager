@@ -265,6 +265,108 @@ permissions:
     # und das ist die Vorarbeit fuer einen Einbruch, nicht seine Aufklaerung.
     description: Darf das Blockbuch lesen - wer wann wo was getan hat
     default: op
+  # DIE TEAMROLLEN [Schritt 16a Teil A]: /team, /team rollen, /team zeigen.
+  #
+  # ZWEI Rechte und nicht eines: Das Ansehen ist eine Auskunft, das Vergeben ein
+  # Eingriff - dieselbe Trennung wie bei freimarken.laden und freimarken.laden.mieten.
+  # Ein Helfer soll nachsehen koennen, wen er ansprechen kann, ohne selbst Rollen
+  # verteilen zu duerfen.
+  #
+  # default: op, weil die Liste nennt, wer wen befoerdert hat. Das ist eine
+  # Verwaltungsauskunft; die Teamliste FUER SPIELER kommt nach Plan 12c.4 auf die
+  # Spielerseite, und dort steht sie ohne Vergabezeiten und ohne Vergeber.
+  freimarken.team:
+    description: Darf das Team und die Rollen dieses Servers ansehen
+    default: op
+  freimarken.team.vergeben:
+    # NICHT der einzige Riegel: Das Teambuch laesst eine Rolle nur von jemandem
+    # vergeben, der JEDES ihrer Rechte selbst hat. Ohne diese zweite Pruefung
+    # braeuchte ein Moderator mit diesem Recht nur einen Komplizen zum Verwalter zu
+    # machen und haette ueber ihn freimarken.besitz. Dieses Recht entscheidet also, WER
+    # ueberhaupt vergeben darf; WAS er vergeben darf, entscheiden seine eigenen Rechte.
+    description: Darf Teamrollen vergeben und entziehen - nur solche, deren Rechte er selbst hat
+    default: op
+  # DAS MELDEWESEN [Schritt 16a Teil C]: /melden und /meldung.
+  #
+  # default: true fuer /melden, und das ist der Sinn der Einrichtung: Wer einen Vorfall
+  # sieht, soll ihn melden koennen, ohne jemanden zu suchen. Die Bremsen gegen Missbrauch
+  # sind KEINE Rechtefrage, sondern Zahlen in der config.yml (Abklingzeit und Hoechstzahl
+  # offener Meldungen je Melder) - ein Recht waere alles oder nichts, und "nichts" heisst
+  # hier, dass ein Vorfall nicht gemeldet wird.
+  freimarken.melden:
+    description: Darf einen Spieler mit Grund melden
+    default: true
+  freimarken.meldungen:
+    # Ein eigenes Recht und NICHT freimarken.verwalten - dieselbe Begruendung wie bei
+    # freimarken.blockbuch: Meldungen zu bearbeiten ist Moderation und keine Verwaltung.
+    # Wer sie bekommen soll, soll nicht gleichzeitig Welten anlegen koennen.
+    #
+    # Es ist EIN Recht fuer Sehen und Bearbeiten, nicht zwei - anders als bei
+    # freimarken.team und freimarken.team.vergeben. Der Grund ist der Inhalt: Eine
+    # Meldung NENNT den Vorfall samt Namen und Ort. Wer sie lesen darf, hat schon alles
+    # gesehen, was es zu sehen gibt; ein zweites Recht fuers Bearbeiten waere eine
+    # Unterscheidung ohne Schutzwirkung.
+    #
+    # default: op, weil die Liste nennt, wer wen gemeldet hat. Das ist unter Spielern
+    # Zuendstoff; der eigene Meldungsstand kommt nach Plan 12c.4 auf die Spielerseite,
+    # und dort sieht jeder nur seine eigenen.
+    description: Darf Meldungen sehen, annehmen, abschliessen und abweisen
+    default: op
+  # DIE STRAFEN [Schritt 16a Teil B]: /strafe und /bannliste.
+  #
+  # SECHS Rechte fuer drei Arten, und die drei zusaetzlichen sind der eigentliche
+  # Inhalt dieses Teils. Plan 12c.2 trennt den Moderator vom Verwalter genau hier: Der
+  # eine bannt ZEITLICH, der andere DAUERHAFT. Ohne eigene Rechte waere das eine Zeile
+  # Papier.
+  #
+  # Je ART ein Recht und nicht eines fuer alle: Getrennte Rollen fuer Strafen sind nach
+  # Plan 12c.2 Absicht, und ein Helfer soll kicken koennen, ohne bannen zu duerfen.
+  freimarken.strafen.stumm:
+    description: Darf einen Spieler stummschalten - mit Dauer und Grund
+    default: op
+  freimarken.strafen.rauswurf:
+    description: Darf einen Spieler hinauswerfen - mit Grund
+    default: op
+  freimarken.strafen.bann:
+    description: Darf einen Spieler sperren - mit Dauer und Grund
+    default: op
+  freimarken.strafen.dauerhaft:
+    # DER TRAGENDE RIEGEL dieses Teils. Er greift auf ZWEI Weisen, und beide sind
+    # noetig: bei einer Strafe OHNE Ende und bei einer, deren Dauer ueber
+    # moderation.strafen.hoechste-stunden.<art> liegt. Wer nur das fehlende Ende
+    # pruefte, haette einen Moderator, der 3650d tippt - formal befristet und
+    # praktisch endgueltig.
+    #
+    # Es gilt auch beim AUFHEBEN einer unbegrenzten Strafe. Sonst nimmt ein Moderator
+    # den dauerhaften Bann zurueck, den ein Verwalter verhaengt hat, und die
+    # Unterscheidung waere in der einen Richtung gesichert und in der anderen offen.
+    description: Darf dauerhaft oder laenger als die eingestellte Hoechstdauer strafen
+    default: op
+  freimarken.strafen.aufheben:
+    # Ein eigenes Recht und nicht bei den Artrechten: Wer seine eigene Strafe
+    # zurueckholen kann, kann sie auch zur Drohung machen. Fuer eine UNBEGRENZTE
+    # braucht es zusaetzlich freimarken.strafen.dauerhaft.
+    description: Darf eine Strafe zuruecknehmen - mit Grund
+    default: op
+  freimarken.strafen.team:
+    # Der Riegel gegen zwei Moderatoren im Streit: Wer im Team ist, wird nur von
+    # jemandem mit diesem Recht gestraft. Ohne ihn bannen sie einander, und wer
+    # schneller tippt, hat gewonnen. Das ist die Entsprechung zu dem Riegel aus Teil A,
+    # der verhindert, dass ein Moderator sich einen Komplizen zum Verwalter macht -
+    # dieselbe Gefahr aus der anderen Richtung.
+    #
+    # Ob der Betroffene im Team ist, sagt die Teamtabelle und nicht Bukkit: Er kann
+    # offline sein, und offline hat niemand Rechte.
+    description: Darf jemanden strafen, der selbst im Team ist
+    default: op
+  freimarken.bannliste:
+    # default: true - Plan 12c.4 macht die Bannliste ausdruecklich oeffentlich: "Sie
+    # zwingt zu Begruendungen, die standhalten, und genau deshalb gehoert sie dazu."
+    # Ob sie es wirklich ist, entscheidet zusaetzlich
+    # moderation.strafen.bannliste-oeffentlich; steht die auf false, liest sie nur, wer
+    # selbst bannen darf.
+    description: Darf die oeffentliche Bannliste mit Grund und Dauer lesen
+    default: true
   # FUENF Obergrenzen kommen ueber ein Recht mit Zahl: freimarken.parzellen.8 erlaubt
   # acht Parzellen, freimarken.gruppe.4 vier Felder je zusammengelegter Gruppe,
   # freimarken.inseln.2 zwei Meerinseln, freimarken.wolken.2 zwei Wolkeninseln,

@@ -90,14 +90,28 @@ class StadtlisteTest {
         assertEquals(Stadtliste.QUARTIERE_AB_WERK, zuGross.quartiere(),
                 "es gilt das Werk");
 
-        // DIE ARBEITSGRENZE PASST GERADE NOCH IN DIE WELT, und das ist kein Zufall,
-        // sondern nachgerechnet: Neun Quartiere reichen bis x 374, zehn bis 401 -
-        // und die ausgelieferte Welt endet bei 400. Beide Grenzen fallen also
-        // zusammen; die eine sagt "zu viel Arbeit", die andere "kein Platz".
+        // ZWEI GRENZEN, DIE NICHT MEHR ZUSAMMENFALLEN [24.11.2026]: Bis heute passte
+        // die Arbeitsgrenze gerade noch in die Welt - neun Quartiere bis x 374 bei einer
+        // Kante bis 400 -, und das sah nach Absicht aus. Es war ein Zufall: Die
+        // Stadtmitte lag bei 72/13, die Stadt also schief im Weltfenster. Seit sie auf
+        // 0/0 liegt, ist sie symmetrisch, und es passen ZWOELF Quartiere.
+        //
+        // Dass die beiden zusammenfielen, hat verdeckt, dass es zwei sind. Jetzt sagt
+        // HOECHSTENS_QUARTIERE "zu viel Arbeit" und passtInDieWelt "kein Platz", und
+        // beide werden einzeln geprueft.
         assertTrue(Stadtliste.passtInDieWelt(Stadtliste.HOECHSTENS_QUARTIERE, KANTE),
-                "die Hoechstzahl passt in die ausgelieferte Welt");
-        assertFalse(
-                Stadtliste.passtInDieWelt(Stadtliste.HOECHSTENS_QUARTIERE + 1, KANTE),
+                "die Arbeitsgrenze passt in die ausgelieferte Welt");
+        int platzgrenze = Stadtliste.HOECHSTENS_QUARTIERE;
+        while (Stadtliste.passtInDieWelt(platzgrenze + 1, KANTE)) {
+            platzgrenze++;
+            assertTrue(platzgrenze < 100, "die Platzgrenze muss irgendwo liegen");
+        }
+        assertEquals(12, platzgrenze, "in kante 800 passen zwoelf Quartiere");
+        assertTrue(platzgrenze > Stadtliste.HOECHSTENS_QUARTIERE,
+                "die Arbeit ist die engere der beiden Grenzen: " + platzgrenze
+                        + " passen, " + Stadtliste.HOECHSTENS_QUARTIERE
+                        + " werden gebaut");
+        assertFalse(Stadtliste.passtInDieWelt(platzgrenze + 1, KANTE),
                 "eine mehr passt nicht");
         Stadtplan gerade = new Stadtplan(Stadtliste.HOECHSTENS_QUARTIERE);
         assertTrue(gerade.umriss().bisX() < KANTE / 2, "x " + gerade.umriss().bisX());
@@ -181,19 +195,35 @@ class StadtlisteTest {
         YamlConfiguration datei = new YamlConfiguration();
         datei.set(Stadtliste.PFAD + "." + Stadtliste.SCHLUESSEL_QUARTIERE, 4);
 
-        // GERECHNET: Vier Quartiere reichen bis x 241. Eine Welt mit Kante 400 reicht
-        // von -200 bis 200 - es muessen also Quartiere wegfallen, bis es passt.
+        // GERECHNET: Vier Quartiere reichen bis x 169. In eine zu enge Welt muessen
+        // Quartiere wegfallen, bis es passt.
         //
-        // 239 WAREN ES BIS ZUM 24.11.2026, als die Mauer Tuerme bekam: Sie treten
-        // TURM_VOR Bloecke vor die Mauerflucht, und der Umriss ist die Flaeche, die
-        // abgegangen wird - also waechst er mit.
-        assertEquals(241, new Stadtplan(4).umriss().bisX(), "vier Quartiere reichen weit");
-        Stadtliste klein = Stadtliste.ausKonfiguration(datei, 400, klagen);
+        // DREI FASSUNGEN AN EINEM TAG [24.11.2026]: 239 vor den Mauertuermen, dann 241
+        // mit ihnen (sie treten TURM_VOR Bloecke vor die Mauerflucht, und der Umriss ist
+        // die Flaeche, die abgegangen wird), und jetzt 169 - denn die Stadtmitte ist von
+        // 72/13 auf 0/0 gewandert. Die Zahl ist damit zum ersten Mal die reine WEITE der
+        // Stadt und nicht Weite plus Mittenversatz.
+        assertEquals(169, new Stadtplan(4).umriss().bisX(), "vier Quartiere reichen weit");
+        // UND SIE IST SYMMETRISCH, seit die Mitte der Nullpunkt ist - vorher war sie es
+        // nicht, und daran haette man den Versatz sehen koennen.
+        assertEquals(-169, new Stadtplan(4).umriss().vonX(),
+                "und genauso weit nach Westen");
+        // DIE WELTKANTE WIRD GERECHNET und nicht geraten [24.11.2026]: Hier stand 400,
+        // und das passte, solange vier Quartiere bis x 241 reichten. Seit die Stadtmitte
+        // auf 0/0 liegt, reichen sie nur bis 169 - und in eine Welt mit Kante 400 passen
+        // sie bequem. Die Probe prueefte damit nichts mehr. Aus der gemessenen Weite
+        // abgeleitet, bleibt sie richtig, wie weit die Stadt auch einmal reicht.
+        int weite = new Stadtplan(4).umriss().bisX();
+        int enge = 2 * weite - 20;
+        assertFalse(Stadtliste.passtInDieWelt(4, enge),
+                "in diese Welt passen vier Quartiere wirklich nicht: Kante " + enge
+                        + " gegen Weite " + weite);
+        Stadtliste klein = Stadtliste.ausKonfiguration(datei, enge, klagen);
 
         assertTrue(klein.quartiere() < 4, "es wurde verkleinert: " + klein.quartiere());
-        assertTrue(Stadtliste.passtInDieWelt(klein.quartiere(), 400),
+        assertTrue(Stadtliste.passtInDieWelt(klein.quartiere(), enge),
                 "und was bleibt, passt");
-        assertFalse(Stadtliste.passtInDieWelt(klein.quartiere() + 1, 400),
+        assertFalse(Stadtliste.passtInDieWelt(klein.quartiere() + 1, enge),
                 "eines mehr passte nicht - es wurde nicht zu viel weggenommen");
         assertFalse(klagen.isEmpty(), "und es wurde gesagt");
         assertTrue(klagen.get(0).contains("Weltgrenze"), klagen.get(0));
@@ -203,9 +233,10 @@ class StadtlisteTest {
     @DisplayName("Passt nicht einmal ein Quartier, entsteht keine Stadt")
     void winzigeWelt() {
         List<String> klagen = new ArrayList<>();
-        // Ein Quartier reicht bis x 160 - 158 waren es vor den Mauertuermen. Eine
-        // Welt mit Kante 64 reicht von -32 bis 32.
-        assertEquals(160, new Stadtplan(1).umriss().bisX(), "ein Quartier reicht bis 160");
+        // Ein Quartier reicht bis x 88. Eine Welt mit Kante 64 reicht von -32 bis 32.
+        // Vorher 158, dann 160 mit den Mauertuermen; die 88 ist die reine Weite, seit
+        // die Stadtmitte am 24.11.2026 auf 0/0 gewandert ist.
+        assertEquals(88, new Stadtplan(1).umriss().bisX(), "ein Quartier reicht bis 88");
 
         Stadtliste nichts = Stadtliste.ausKonfiguration(new YamlConfiguration(), 64,
                 klagen);

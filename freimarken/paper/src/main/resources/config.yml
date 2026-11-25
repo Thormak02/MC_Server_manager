@@ -574,34 +574,34 @@ bauten:
     # WEST UND OST, giebelstaendig: elf breit zur Gasse, elf tief, vierzehn hoch. Ihre
     # Tueren zeigen auf den Platz - die westlichen nach OST, die oestlichen nach WEST.
     buergeramt:
-      von: [21, -61, -10]
-      bis: [31, -48, 0]
+      von: [-51, -61, -23]
+      bis: [-41, -48, -13]
       tuer: ost
       stil: backstein
       dach: ziegel
     zunfthaus:
-      von: [21, -61, 6]
-      bis: [31, -48, 16]
+      von: [-51, -61, 13]
+      bis: [-41, -48, 23]
       tuer: ost
       stil: fachwerk
       dach: ziegel
     muenzhaus:
-      von: [113, -61, -10]
-      bis: [123, -48, 0]
+      von: [41, -61, -23]
+      bis: [51, -48, -13]
       tuer: west
       stil: gold
       dach: kupfer
     kaufmannskontor:
-      von: [113, -61, 6]
-      bis: [123, -48, 16]
+      von: [41, -61, 13]
+      bis: [51, -48, 23]
       tuer: west
       stil: backstein
       dach: ziegel
     # DAS RATHAUS ist traufstaendig und breit - sein First laeuft parallel zum Platz.
     # Es schliesst den Rathausplatz im Sueden ab, mittig auf der Achse.
     bundesratshaus:
-      von: [56, -61, 54]
-      bis: [88, -46, 64]
+      von: [7, -61, 41]
+      bis: [39, -46, 51]
       tuer: nord
       stil: backstein
       dach: kupfer
@@ -609,8 +609,8 @@ bauten:
     # sechsundzwanzig Ebenen, der hoechste Bau der Stadt. Damit hat der Kirchplatz,
     # was ihm den Namen gibt.
     stadtkirche:
-      von: [66, -61, -38]
-      bis: [78, -36, -28]
+      von: [-19, -61, -51]
+      bis: [-7, -36, -41]
       tuer: sued
       stil: schiefer
       dach: kupfer
@@ -948,7 +948,10 @@ bauten:
       - stone
       - gravel
       - mossy_cobblestone
-    # Die Gassen von der Mitte nach aussen.
+    # Die Gassen von der Mitte nach aussen - die VIER KREUZARME. Sie laufen von der
+    # Marktmitte bis an die Mauer und sind so breit wie der Torhausdurchgang, man geht
+    # also ohne Sprung ins Tor. Wo ein eingetragener Bau einen Arm ueberspannt, fuehrt er
+    # als LAUBE durch ihn hindurch.
     radialgasse:
       - cobblestone
       - cobblestone
@@ -956,6 +959,20 @@ bauten:
       - stone
       - andesite
       - gravel
+    # DIE KANTE DES KREUZARMS - ein Block je Seite, und zwar UNGEMISCHT [24.11.2026].
+    #
+    # Sie ist das einzige Pflaster Altfurts ohne Mischung, und das ist Absicht: Eine
+    # Kante soll eine LINIE sein. Der Arm laeuft ueber fuenf verschiedene Gruende -
+    # Markt, Kirchplatz, Rathausplatz, Platzkante und Kern -, und ohne diese Linie
+    # verschwindet er dort, wo der Grund ihm aehnlich sieht. Eine gemischte Linie liest
+    # das Auge nicht als Linie.
+    #
+    # Nimm hier einen Stoff, der auf keinem der fuenf Plaetze vorkommt. Ab Werk ist das
+    # geschliffener Diorit - der helle, der sonst nirgends in der Stadt liegt.
+    #
+    # Mehrere Eintraege sind erlaubt, machen die Kante aber wieder zu einer Flaeche.
+    bordstein:
+      - polished_diorite
     # Die Ecke eines Quartiers - dort geht niemand, zwischen den Steinen waechst etwas.
     eckplatz:
       - mossy_cobblestone
@@ -3237,24 +3254,25 @@ laeden:
   # Absicht: So deckt der Ladenschutz auch den Boden, und niemand hackt dem Mieter den
   # Block unter seiner Truhe weg. Die Truhe steht darum eine Ebene hoeher, auf y=-60.
   einheiten:
-    # Westreihe, sechs Bloecke hinter der Torreihe bei z=0.
+    # Westreihe auf dem Markt, westlich der Mitte. Die Koordinaten sind am 24.11.2026
+    # mit der Stadtmitte von 72/13 auf 0/0 gewandert.
     stand-1:
-      von: [60, -61, 6]
-      bis: [64, -57, 10]
-      truhe: [62, -60, 8]
+      von: [-12, -61, -7]
+      bis: [-8, -57, -3]
+      truhe: [-10, -60, -5]
     # Dieselbe Reihe, mit einer LUECKE von fuenf Bloecken zu stand-1 (z 11..15).
     # Die Luecke ist die eigentliche Probe fuer den Ladenschutz: Dort darf jeder
     # bauen, in den beiden Quadern nur der Mieter.
     stand-2:
-      von: [60, -61, 16]
-      bis: [64, -57, 20]
-      truhe: [62, -60, 18]
+      von: [-12, -61, 3]
+      bis: [-8, -57, 7]
+      truhe: [-10, -60, 5]
     # Ostseite, gegenueber von stand-2. Die Mittelachse x 65..79 zwischen Torreihe
     # und Spawn (72/-60/12) bleibt damit frei - dort laeuft jeder Ankommende durch.
     stand-3:
-      von: [80, -61, 16]
-      bis: [84, -57, 20]
-      truhe: [82, -60, 18]
+      von: [8, -61, 3]
+      bis: [12, -57, 7]
+      truhe: [10, -60, 5]
 # Der Handel an Kistenshops (Plan 7.4). Ein Kistenshop ist eine Kiste mit einem Schild
 # daran: erste Zeile der Besitzer, zweite die Menge je Handel, dritte die Preise in der
 # Form "B 100 : S 80", vierte die Ware oder ein Fragezeichen. Rechtsklick kauft,
@@ -3719,8 +3737,8 @@ welten:
     # ohne Bauwerk sind.
     tor:
       # Osttorhaus, nordliche Nische - gerechnet von Torhausplan.
-      von: [178, -60, 9]
-      bis: [180, -58, 9]
+      von: [106, -60, -4]
+      bis: [108, -58, -4]
     # Wunschkante der Weltgrenze in Bloecken; Plan Abschnitt 4 nennt 3.000.
     #
     # Gerechnet wird daraus ABGERUNDET auf ganze Rasterzellen (64 Parzelle + 7 Weg = 71)
@@ -3818,8 +3836,8 @@ welten:
     kante: 6000
     tor:
       # Osttorhaus, suedliche Nische - gerechnet von Torhausplan.
-      von: [178, -60, 17]
-      bis: [180, -58, 17]
+      von: [106, -60, 4]
+      bis: [108, -58, 4]
 
   # Archipel mit eigenem Angelgut (Plan 4.1), eine Insel je Feld.
   hafenwerder:
@@ -3851,8 +3869,8 @@ welten:
     # Plan 2.1: "Hafen von Altfurt - Tor nach Hafenwerder".
     tor:
       # Suedtorhaus, westliche Nische - gerechnet von Torhausplan.
-      von: [68, -60, 119]
-      bis: [68, -58, 121]
+      von: [-4, -60, 106]
+      bis: [-4, -58, 108]
 
   wolkenwerder:
     # WOLKEN [18.11.2026, Plan 4.1 und 6.2]: die Skyblockwelt. Leere mit einem Raster
@@ -3882,8 +3900,8 @@ welten:
     # gebaut werden muss die Oeffnung aber, wie die sieben anderen auch.
     tor:
       # Suedtorhaus, oestliche Nische - gerechnet von Torhausplan.
-      von: [76, -60, 119]
-      bis: [76, -58, 121]
+      von: [4, -60, 106]
+      bis: [4, -58, 108]
 
   # Freibau; eine Sicherung kostet 5.000 Mark.
   hochwald:
@@ -3893,8 +3911,8 @@ welten:
     # Plan 2.1: "Forsttor - Tor zum Hochwald".
     tor:
       # Nordtorhaus, westliche Nische - gerechnet von Torhausplan.
-      von: [68, -60, -95]
-      bis: [68, -58, -93]
+      von: [-4, -60, -108]
+      bis: [-4, -58, -106]
 
   # Farmwelt. Wird bei jeder neuen Minecraft-Version zurueckgesetzt und neu
   # vorgeneriert - deshalb haengt an ihr kein Besitz (Plan 4.2).
@@ -3905,8 +3923,8 @@ welten:
     # Plan 2.1: "Kornpforte - Tor nach Kornmark".
     tor:
       # Nordtorhaus, oestliche Nische - gerechnet von Torhausplan.
-      von: [76, -60, -95]
-      bis: [76, -58, -93]
+      von: [4, -60, -108]
+      bis: [4, -58, -106]
 
   nether:
     art: gewoehnlich
@@ -3915,8 +3933,8 @@ welten:
     kante: 2000
     tor:
       # Westtorhaus, nordliche Nische - gerechnet von Torhausplan.
-      von: [-36, -60, 9]
-      bis: [-34, -58, 9]
+      von: [-108, -60, -4]
+      bis: [-106, -58, -4]
 
   # "end" und nicht "ende": Der Schluessel ist der Weltname, und den fuehrt Plan
   # Abschnitt 4 so. Weltnamen sind nach Plan 12a.6 nur lesbar - an ihnen haengen
@@ -3928,5 +3946,279 @@ welten:
     kante: 2000
     tor:
       # Westtorhaus, suedliche Nische - gerechnet von Torhausplan.
-      von: [-36, -60, 17]
-      bis: [-34, -58, 17]
+      von: [-108, -60, 4]
+      bis: [-106, -58, 4]
+
+# ============================================================================
+# DIE TEAMROLLEN (Plan 12c.2, Schritt 16a Teil A)
+#
+# Je Rolle ein Name und darunter die Liste ihrer RECHTE - ohne die Vorsilbe
+# freimarken.; die setzt das Programm. Wer sie hier mitschreibt, bekommt sie
+# am Ende ZWEIMAL, und ein solches Recht meldet niemand an - es wirkt also
+# nicht. Der Leser weist eine Zeile mit Vorsilbe darum ab und sagt es.
+#
+# WAS EINE ROLLE VON EINEM RANG UNTERSCHEIDET: Ein Rang wird ERREICHT, eine
+# Rolle wird GEGEBEN (/team gib <spieler> <rolle>). Darum hat eine Rolle keine
+# Bedingungen und keine Zahlen, und darum ist die Reihenfolge hier
+# bedeutungslos - sie bestimmt nur, wie die Rollen in /team rollen stehen.
+#
+# Helfer, Moderator und Verwalter sehen wie eine Leiter aus. Das sind SIE
+# NICHT: Das Programm kennt kein oben und unten, und wer die Listen anders
+# schneidet, bekommt andere Rollen. Was sie zusammenhaelt, ist allein der
+# Riegel in /team gib - eine Rolle vergibt nur, wer jedes ihrer Rechte selbst
+# hat. Damit kann kein Moderator einen Verwalter machen, auch wenn er
+# freimarken.team.vergeben hat.
+#
+# EIN SPIELER KANN MEHRERE ROLLEN HABEN; seine Rechte sind die Vereinigung.
+#
+# WER SIE VERGIBT: Ab Werk nur ein Operator oder die Konsole
+# (freimarken.team.vergeben steht auf op). Die Rolle verwalter unten vergibt
+# es weiter - damit kann der erste Verwalter, den die Konsole einsetzt, die
+# uebrigen selbst ernennen.
+#
+# EINE ROLLE, DIE HIER WEGFAELLT, bleibt in der Datenbank stehen und gibt
+# keine Rechte mehr. Beim Start und in /team zeigen steht eine Zeile dazu;
+# abnehmen laesst sie sich mit /team nimm, auch wenn sie hier nicht mehr steht.
+#
+# KEIN TEAM: Wer die Zeile rollen: leer laesst oder ganz weglaesst, aber das
+# team: darueber stehen hat, bekommt KEINE Rollen - dieser Server hat dann kein
+# Team. Fehlt dagegen das team: selbst, gelten die fuenf Rollen des Programms.
+# Das ist der Unterschied zwischen "ich will keine" und "ich habe nicht daran
+# gedacht", und er haengt genau an dieser einen Zeile.
+#
+# JEDE ROLLE BRAUCHT EINE SPRACHZEILE unter team.rolle.<name> in der
+# sprache.yml. Fehlt sie, steht in /team ihr Pfad statt ihres Namens - der
+# Server startet trotzdem, denn es ist ein Verwaltungstext.
+#
+# NUR RECHTE, DIE ES SCHON GIBT: Teil A von Schritt 16a hat noch keine
+# Strafbefehle und keine Meldungen. Die Rechte dafuer kommen mit ihren Teilen
+# dazu; bis dahin duerfen Helfer und Eventleiter dasselbe, und der Startbericht
+# sagt es. Ein Recht, das es nicht gibt, wird beim Start als Fehler gemeldet.
+# ============================================================================
+team:
+  rollen:
+    # Zu Spielern springen und MELDUNGEN BEARBEITEN - das ist, was Plan 12c.2
+    # dem Helfer zuschreibt: "Meldungen annehmen und weiterreichen, Fragen
+    # beantworten, zu Spielern springen". Seit Teil C gibt es das Werkzeug.
+    helfer:
+      rechte:
+        - tpa
+        - sofort
+        - meldungen
+
+    # Dazu die zwei Auskuenfte, die Plan 12c.3 ausdruecklich der Moderation
+    # zuordnet und nicht der Verwaltung: das Blockbuch (wer war das) und die
+    # Spielzeit anderer.
+    moderator:
+      rechte:
+        - tpa
+        - sofort
+        - meldungen
+        - blockbuch
+        - spielzeit.andere
+        # Die STRAFEN aus Plan 12c.2: "zusaetzlich stummschalten, kicken,
+        # zeitlich bannen". Das Wort ZEITLICH ist der Grund, aus dem
+        # strafen.dauerhaft hier NICHT steht - jenes gehoert dem Verwalter.
+        #
+        # strafen.aufheben ist dabei: Wer befristet sperren darf, soll einen
+        # Irrtum zuruecknehmen koennen. Eine UNBEGRENZTE Strafe aufzuheben
+        # braucht trotzdem strafen.dauerhaft, sonst nimmt ein Moderator den
+        # dauerhaften Bann eines Verwalters zurueck.
+        - strafen.stumm
+        - strafen.rauswurf
+        - strafen.bann
+        - strafen.aufheben
+
+    # Dazu die Eingriffe aus Plan 12c.2: Besitz uebertragen, Freistaedte
+    # aufloesen, die Welt nachsehen - und das Recht, Rollen weiterzugeben.
+    #
+    # ABSICHTLICH NICHT DABEI: freimarken.geld. Geldkorrekturen sind nach Plan
+    # 12a Sache des Super-Admins im Dashboard und keine Moderation; eine
+    # falsche Buchung heilt eine Gegenbuchung, aber eine Vollmacht, die einmal
+    # vergeben ist, holt man nicht zurueck.
+    verwalter:
+      rechte:
+        - tpa
+        - sofort
+        - meldungen
+        - blockbuch
+        - spielzeit.andere
+        - verwalten
+        - besitz
+        - freistadt.raeumen
+        - team
+        - team.vergeben
+        - strafen.stumm
+        - strafen.rauswurf
+        - strafen.bann
+        - strafen.aufheben
+        # DIE ZWEI RECHTE, DIE DEN VERWALTER VOM MODERATOR TRENNEN (Plan
+        # 12c.2): dauerhaft bannen und jemanden strafen, der selbst im Team
+        # ist. Beide sind seine Sache allein.
+        #
+        # strafen.team ist der Riegel gegen zwei Moderatoren im Streit: Ohne
+        # ihn bannen sie einander, und wer schneller tippt, hat gewonnen.
+        - strafen.dauerhaft
+        - strafen.team
+
+    # Events anlegen und Preise ausschuetten - die Werkzeuge dafuer kommen mit
+    # Plan 15. Bis dahin darf diese Rolle zu Spielern springen und sonst nichts;
+    # seit Teil C ist sie damit vom Helfer unterschieden, der Meldungen bearbeitet.
+    # Sie steht schon hier: Wer sie heute vergibt, muss sie spaeter nicht
+    # nachtragen.
+    eventleiter:
+      rechte:
+        - tpa
+        - sofort
+
+    # Baurecht ueberall und sonst nichts. Getrennte Rollen fuer Strafen und
+    # Bauen sind nach Plan 12c.2 Absicht: Die beiden Aufgaben ziehen
+    # unterschiedliche Leute an, und niemand braucht beides.
+    baumeister:
+      rechte:
+        - tpa
+        - sofort
+        - bauen.ueberall
+
+# ============================================================================
+# DIE MODERATION (Plan 12c, Schritt 16a)
+#
+# Teil A sind die Teamrollen oben unter team:. Hier steht, was am MELDEWESEN
+# einstellbar ist.
+#
+# WAS NICHT EINSTELLBAR IST: ob der Melder eine Rueckmeldung bekommt. Plan 12c.3
+# nennt sie als den Grund, aus dem das Meldewesen ueberhaupt funktioniert -
+# "sonst meldet beim zweiten Mal niemand mehr". Ein Schalter dafuer waere die
+# Einstellung, mit der ein Betreiber sein eigenes Meldewesen stilllegt, ohne es
+# zu merken.
+#
+# WER MELDEN DARF, ist eine Rechtefrage (freimarken.melden, ab Werk jeder) und
+# steht nicht hier. Die drei Zahlen unten sind die Bremsen gegen Missbrauch -
+# und sie gelten dem STREITFALL, nicht dem Angreifer: Zwei Leute im Streit
+# schreiben von selbst zwanzig Meldungen gegeneinander, und dann ist die Liste
+# unlesbar und die echte Meldung unsichtbar.
+#
+# ALLE DREI WIRKEN NUR ZUSAMMEN. Eine Abklingzeit ohne Hoechstzahl laesst
+# beliebig viele Meldungen zu, nur langsamer; eine Hoechstzahl ohne Abklingzeit
+# laesst drei auf einmal zu. Der Startbericht nennt darum beide in einem Satz.
+#
+# NEULADBAR: Ja, alle vier Zeilen - anders als die Blockbuchwerte. Der Grund ist
+# die Gattung: Es sind Bremsen gegen Missbrauch, und Missbrauch kommt
+# unangekuendigt. Wer die Abklingzeit hochsetzt, weil gerade jemand spammt,
+# braucht die Wirkung jetzt und nicht nach dem naechsten Neustart.
+# ============================================================================
+moderation:
+  melden:
+    # Ob ueberhaupt gemeldet werden kann. Aus heisst: /melden erscheint nicht,
+    # und eine Meldung laesst sich nicht abgeben. Was schon in der Datenbank
+    # steht, bleibt stehen und ist ueber /meldung weiter zu bearbeiten.
+    #
+    # ACHTUNG: Hier gilt true oder false und NICHT ja/nein. Bukkit liest jedes
+    # andere Wort stumm als false - aus einem "an: ja" waere ein abgeschaltetes
+    # Meldewesen ohne eine Zeile Klage geworden. Der Leser prueft den Rohwert
+    # und klagt, wenn dort etwas anderes steht.
+    an: true
+
+    # Wie lange ein Spieler nach einer Meldung warten muss, in Sekunden.
+    # 0 heisst: keine Wartezeit, dann bremst allein die Zahl darunter.
+    # Hoechstens 3600 (eine Stunde) - eine hoehere Zahl waere ein Meldewesen,
+    # das einmal in 41 Tagen eine Meldung annimmt, waehrend an: true dasteht.
+    #
+    # 60 ab Werk: Wer wirklich drei verschiedene Leute zu melden hat, kommt
+    # damit durch; wer im Streit dieselbe Person bombardiert, haengt.
+    abklingzeit-sekunden: 60
+
+    # Wie viele UNERLEDIGTE Meldungen ein Spieler gleichzeitig haben darf.
+    # Die vierte wird nicht verweigert, sondern VERSCHOBEN: Sie geht, sobald
+    # eine der drei bearbeitet ist - und genau das liest der Melder.
+    #
+    # Gezaehlt werden die unerledigten, nicht alle je abgegebenen. Sonst waere
+    # das Meldewesen fuer einen fleissigen Melder nach drei Meldungen fuer
+    # immer zu. Eine 0 ist nicht erlaubt - wer kein Meldewesen will, nimmt den
+    # Schalter oben.
+    hoechste-offene-je-melder: 3
+
+    # Wie viele Meldungen /meldung auf einmal zeigt, die aeltesten zuerst.
+    # Hoechstens 50; der Chat hat zwanzig Zeilen, und eine Liste, die darueber
+    # hinausgeht, schiebt ihren eigenen Kopf weg.
+    zeilen-je-seite: 10
+
+  strafen:
+    # Wie lange ein Moderator OHNE das Recht freimarken.strafen.dauerhaft
+    # hoechstens sperren darf, je Art, in Stunden.
+    #
+    # DAS IST DIE GRENZE AUS PLAN 12c.2 zwischen Moderator und Verwalter: Der
+    # eine bannt zeitlich, der andere dauerhaft. Ohne eine Zahl waere die
+    # Unterscheidung wertlos - ein Moderator tippt 3650d, und das ist formal
+    # befristet und praktisch endgueltig.
+    #
+    # 0 heisst: JEDE Dauer dieser Art braucht das Recht. Dann kann ein
+    # Moderator ohne dieses Recht diese Art gar nicht verhaengen; der
+    # Startbericht sagt es.
+    #
+    # Je Art ein Schluessel, weil die Zahl eine andere ist: Sieben Tage stumm
+    # ist eine harte Strafe, sieben Tage gebannt eine gewoehnliche. Hoechstens
+    # 87600 Stunden (3650 Tage) - was darueber liegt, waere eine Grenze, die
+    # keine Dauer mehr erreichen kann, und der Riegel waere stumm offen.
+    #
+    # Ein Rauswurf steht hier NICHT: Er hat keine Dauer. Eine Zahl dafuer waere
+    # eine Einstellung, die nie gefragt wird.
+    hoechste-stunden:
+      # Sieben Tage. Wer eine Woche nicht schreiben darf, hat die Botschaft
+      # verstanden.
+      stumm: 168
+      # Dreissig Tage: eine schwere Strafe, von der ein Spieler zurueckkommt.
+      # Was darueber liegt, ist ein Abschied - und dafuer soll ein zweites Paar
+      # Augen zustimmen.
+      bann: 720
+
+    # Ob /bannliste fuer jeden lesbar ist.
+    #
+    # Plan 12c.4 macht sie ausdruecklich oeffentlich: Sie zwingt zu
+    # Begruendungen, die standhalten, und genau deshalb gehoert sie dazu. Steht
+    # hier false, liest sie nur, wer selbst bannen darf - der Startbericht sagt
+    # dann, was damit wegfaellt.
+    #
+    # ACHTUNG: Hier gilt true oder false und NICHT ja/nein. Bukkit liest jedes
+    # andere Wort stumm als false. Der Leser prueft den Rohwert und klagt.
+    bannliste-oeffentlich: true
+
+    # Ob eine Strafe im Chat angesagt wird - fuer ALLE, nicht nur fuer das Team.
+    #
+    # An ab Werk: Wer zusieht, wie jemand grieft, und nichts geschieht, meldet
+    # beim naechsten Mal nicht. Die Ansage ist die Antwort an alle, die
+    # zugesehen haben. Sie nennt Spieler, Art, Dauer und GRUND.
+    #
+    # Zweiter Weg, sie abzuschalten: den Wortlaut strafe.ansage in der
+    # Sprachdatei leeren. Dieser Schalter ist der ausdrueckliche Weg.
+    ansagen: true
+
+    # Wie viele Zeilen /strafe verlauf und /bannliste auf einmal zeigen.
+    # Hoechstens 50 - dieselbe Begruendung wie beim Meldewesen.
+    zeilen-je-seite: 10
+
+    # Welche BEFEHLE eine Stummschaltung mitsperrt.
+    #
+    # DAS IST DIE ZEILE, DIE EINE STUMMSCHALTUNG WIRKSAM MACHT. Wer nur den
+    # Chat sperrt, hat einen stummgeschalteten Spieler, der weiter
+    # "/msg jeder Beleidigung" tippt - und der Moderator haelt ihn fuer still.
+    #
+    # Eine LISTE von Namen und kein Schalter: Jedes Nachbarplugin bringt eigene
+    # Fluesterbefehle mit, und die traegt nur der Betreiber nach. Ohne
+    # Schraegstrich; ein Namensraum wird mitgefangen, /minecraft:msg also auch.
+    #
+    # Wer KEINEN Befehl sperren will, schreibt eine leere Liste: []. Eine
+    # geloeschte Zeile ist etwas anderes - dann gelten die sieben des Programms,
+    # und der Startbericht sagt es.
+    #
+    # /melden steht ausdruecklich NICHT darin: Ein stummgeschalteter Spieler
+    # darf melden. Wer gerade bestraft wurde, ist nicht derjenige, dem man den
+    # Meldeweg nimmt - gerade er braeuchte ihn gegen einen Moderator.
+    stumm-sperrt-befehle:
+      - msg
+      - tell
+      - w
+      - teammsg
+      - tm
+      - me
+      - say

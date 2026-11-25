@@ -140,6 +140,12 @@ record Pflasterstoffe(Map<Stadtplan.Lage, List<Material>> boden) {
                 Material.DEEPSLATE_BRICKS, Material.DEEPSLATE_BRICKS,
                 Material.CRACKED_DEEPSLATE_BRICKS, Material.COBBLED_DEEPSLATE,
                 Material.DEEPSLATE_TILES));
+        // DER BORDSTEIN ist die steinerne Kante des Kreuzarms. Er ist das EINZIGE
+        // Pflaster Altfurts, das nicht gemischt ist: Eine Kante soll eine LINIE sein,
+        // und eine gemischte Linie liest das Auge nicht als Linie. Ein Stoff, der auf
+        // keinem der fuenf Gruende vorkommt, durch die der Arm laeuft - Markt,
+        // Kirchplatz, Rathausplatz, Platzkante, Kern.
+        tafel.put(Stadtplan.Lage.BORDSTEIN, List.of(Material.POLISHED_DIORITE));
         // AUSSEN BEKOMMT KEINEN EINTRAG - siehe Klassenkopf: Dort wird nicht gepflastert.
         return new Pflasterstoffe(tafel);
     }

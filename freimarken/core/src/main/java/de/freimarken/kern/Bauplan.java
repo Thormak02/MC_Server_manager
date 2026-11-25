@@ -44,6 +44,37 @@ public final class Bauplan {
     public static final int BALKENTAKT = 4;
 
     /**
+     * Um wie viel WEITER der Balkentakt eines Hauses sein kann als {@link #BALKENTAKT}.
+     *
+     * <p><b>Nur nach oben</b> [24.11.2026]: Ein engerer Takt gibt MEHR Fenster, denn ein
+     * Fenster sitzt in der Mitte jedes Wandfelds ({@code laengs % takt == 2}). Bei einem
+     * Takt von drei saesse in jeder dritten Spalte eines - gemessen 24 Fenster gegen 72
+     * Gefachbloecke, und die Probe "Jede Stelle des Quaders hat genau ein Stueck" hat es
+     * gefangen: "ein Fensterband sieht nach Kaufhaus aus, nicht nach Hanse". Die
+     * Begruendung steht dort seit dem 23.11.2026 und ist richtig.
+     *
+     * <p>Also vier oder fuenf: vier ein dichtes, altes Fachwerk, fuenf ein weites,
+     * neueres. Sechs waere ein Feld, in dem das Fenster keinen Rahmen mehr hat.
+     */
+    public static final int BALKEN_SPIEL = 1;
+
+    /**
+     * Welchen Balkentakt DIESES Haus hat.
+     *
+     * <p>Gestreut aus seiner Ecke, mit ANDEREN Argumenten als der Sockel: Mit denselben
+     * haette jedes Haus mit flachem Sockel auch dichtes Fachwerk, und aus zwei Zuegen
+     * wuerde einer.
+     */
+    public static int balkentakt(Platzhalterbau bau) {
+        if (bau == null) {
+            throw new IllegalArgumentException("Ohne Bau kein Balkentakt");
+        }
+        Quader q = bau.bereich();
+        return BALKENTAKT
+                + Stadtplan.mischung(q.bisX(), q.bisZ(), BALKEN_SPIEL + 1);
+    }
+
+    /**
      * Wie viele Ebenen das Dach steigt, bis es sich einen Block eingezogen hat.
      *
      * <p><b>EINS, also 45 Grad</b> [berichtigt 24.11.2026] - und das ist an ZWEI
@@ -92,6 +123,38 @@ public final class Bauplan {
      * Holz vor Spritzwasser, und genau so sehen die Haeuser aus, die als Vorbild dienen.
      */
     public static final int SOCKELEBENEN = 3;
+
+    /**
+     * Um wie viel die Sockelhoehe eines Hauses von {@link #SOCKELEBENEN} abweichen kann.
+     *
+     * <p><b>Warum die Haeuser sonst gleich aussehen</b> [24.11.2026]: Der Betreiber
+     * sagte "es soll ausserdem mehr variation bei den haeusern geben". Breite, Tiefe,
+     * Hoehe, Baustoff und seit heute Firstrichtung und Baulinie wechseln schon - die
+     * FORM aber nicht: Jedes Haus hatte genau drei Ebenen steinernen Sockel und seine
+     * Balken genau jede vierte Spalte. Zwei Haeuser aus demselben Stein sahen darum
+     * identisch aus, auch wenn ihre Masse verschieden waren.
+     *
+     * <p>Eins: Zwei Ebenen Sockel sind ein Kaufmannshaus mit flachem Laden, vier ein
+     * Speicher auf hohem Fundament. Null waere ein Haus ohne steinernen Fuss, und das
+     * gibt es an einer hansischen Gasse nicht.
+     */
+    public static final int SOCKEL_SPIEL = 1;
+
+    /**
+     * Wie viele Ebenen steinernen Sockel DIESES Haus hat.
+     *
+     * <p>Gestreut aus seiner Ecke, damit ein zweites Aufsetzen dieselbe Stadt legt -
+     * und je HAUS und nicht nestweise: Der Sockel ist das, was man als Erstes sieht,
+     * wenn man die Gasse hinabgeht.
+     */
+    public static int sockelebenen(Platzhalterbau bau) {
+        if (bau == null) {
+            throw new IllegalArgumentException("Ohne Bau kein Sockel");
+        }
+        Quader q = bau.bereich();
+        return SOCKELEBENEN - SOCKEL_SPIEL
+                + Stadtplan.mischung(q.vonX(), q.vonZ(), 2 * SOCKEL_SPIEL + 1);
+    }
 
     /** Was an einer Stelle des Baus steht. */
     public enum Stueck {
@@ -344,6 +407,23 @@ public final class Bauplan {
     public static final int SCHORNSTEIN_TAKT = 3;
 
     /**
+     * Wie hoch der Durchgang ist, mit dem ein Kreuzarm durch einen Bau hindurchgeht.
+     *
+     * <p><b>Warum es die Laube gibt</b> [24.11.2026]: Der Betreiber wollte Wege, die
+     * "direkt zu den toren fuehren". Gemessen war jede der vier Achsen von einem
+     * eingetragenen Bau ueberspannt - die Stadtkirche quer im Nordarm, das
+     * Bundesratshaus im Suedarm, Zunfthaus und Kaufmannskontor in Ost und West. Zwei
+     * Antworten waren moeglich: die Bauten wegschieben, oder den Weg durch sie
+     * hindurchfuehren. Fuer die Kirche und das Rathaus ist das Zweite das Richtige: Sie
+     * stehen MITTIG auf ihrem Platz, und ein Weg, der um sie herum knickt, ist kein
+     * Weg zum Tor. Eine Laube, durch die die Strasse laeuft, hat jede Hansestadt.
+     *
+     * <p>Fuenf Ebenen - dasselbe Mass wie der Torhausdurchgang. Ein Durchgang, durch den
+     * man sich buecken muss, ist eine Tuer und keine Strasse.
+     */
+    public static final int LAUBE_HOEHE = 5;
+
+    /**
      * Wie weit der Treppenschacht von der Hausecke entfernt liegt, in Bloecken.
      *
      * <p>Eins: Die Leiter braucht eine Wand im Ruecken, und die innerste Spalte neben
@@ -385,6 +465,88 @@ public final class Bauplan {
      * Rand auf jeder Seite und einen fuer ihn selbst.
      */
     public static final int FIRST_WENIGSTENS = 3;
+
+    /**
+     * Ob dieser Bau einen Kreuzarm GANZ ueberspannt.
+     *
+     * <p>Nur dann bekommt er eine Laube. Ein Bau, der nur zur HAELFTE in den Arm
+     * hineinreicht, wuerde von einem Durchgang abgeschnitten - bei ihm ist die richtige
+     * Antwort, ihn zu verschieben, und das sagt der Start dem Betreiber. Diese Frage ist
+     * damit auch der Riegel, der eine Laube an der falschen Stelle verhindert.
+     *
+     * <p>Gefragt wird gegen {@link Stadtplan#KREUZ_HALB}, also samt Kante: Ein Bau, der
+     * nur die Fahrbahn ueberspannt, haette keine Pfeiler - siehe {@link #inDerLaube}.
+     */
+    public static boolean ueberspanntKreuzarm(Platzhalterbau bau) {
+        if (bau == null) {
+            throw new IllegalArgumentException("Ohne Bau keine Laube");
+        }
+        Quader q = bau.bereich();
+        boolean inX = q.vonX() <= Stadtplan.MITTE_X - Stadtplan.KREUZ_HALB
+                && q.bisX() >= Stadtplan.MITTE_X + Stadtplan.KREUZ_HALB;
+        boolean inZ = q.vonZ() <= Stadtplan.MITTE_Z - Stadtplan.KREUZ_HALB
+                && q.bisZ() >= Stadtplan.MITTE_Z + Stadtplan.KREUZ_HALB;
+        return inX || inZ;
+    }
+
+    /**
+     * Ob diese Stelle in der Laube liegt - dem Durchgang des Kreuzarms durch den Bau.
+     *
+     * <p>Durchgang ist nur die FAHRBAHN, nicht der ganze Arm: Die beiden Kantenspalten
+     * bleiben Mauerwerk und sind damit die PFEILER der Laube. Eine neun Bloecke weite
+     * Oeffnung ohne Pfeiler waere ein Loch in der Wand, kein Bogen.
+     *
+     * <p>Der FUSSBODEN bleibt: Man laeuft durch die Laube ueber den Boden des Baus, und
+     * ein Durchgang ohne Boden waere ein Graben. Darueber beginnt der Bau wieder - samt
+     * seiner Geschossdecke, die dann die Decke der Laube ist.
+     */
+    public static boolean inDerLaube(Platzhalterbau bau, int x, int y, int z) {
+        if (bau == null) {
+            throw new IllegalArgumentException("Ohne Bau keine Laube");
+        }
+        if (!ueberspanntKreuzarm(bau)) {
+            return false;
+        }
+        if (Stadtplan.kreuzBei(x, z) != Stadtplan.Lage.RADIALGASSE) {
+            return false;
+        }
+        int vonY = bau.bereich().vonY();
+        return y > vonY && y <= vonY + LAUBE_HOEHE;
+    }
+
+    /**
+     * Ob diese Stelle die WAND der Laube ist.
+     *
+     * <p><b>Warum die Laube Waende braucht</b> [24.11.2026]: Ein Bau ist innen HOHL.
+     * Ohne diese Regel oeffnet sich der Durchgang nach beiden Seiten in den leeren
+     * Innenraum - man laeuft durch die Laube und steht im Gebaeude, ohne eine Tuer
+     * genommen zu haben. Gefunden hat es die Laubenprobe selbst: Sie verlangte an der
+     * Kante des Arms einen Pfeiler und fand Luft.
+     *
+     * <p>Die Wand steht auf der KANTE des Arms, also auf den beiden Spalten, die
+     * {@link Stadtplan#kreuzBei} {@link Stadtplan.Lage#BORDSTEIN} nennt - je eine links
+     * und rechts. Damit ist der Bordstein draussen die Kante der Strasse und drinnen der
+     * Pfeiler der Laube: EINE Linie, zwei Bedeutungen, und beide aus derselben Rechnung.
+     *
+     * <p><b>Diese Frage sagt nur SPALTE und HOEHE</b>, nicht "hier steht wirklich
+     * Mauerwerk": Dass die AUSSENWAND des Baus vorgeht - mit ihren Fenstern und ihrer
+     * Tuer -, entscheidet {@link #stueckBei}, und zwar daran, dass die Laubenwand erst
+     * im Innenraum gefragt wird. Eine Laubenwand, die ein Fenster verdraengt, waere eine
+     * zweite Wand vor der ersten.
+     */
+    public static boolean anDerLaube(Platzhalterbau bau, int x, int y, int z) {
+        if (bau == null) {
+            throw new IllegalArgumentException("Ohne Bau keine Laubenwand");
+        }
+        if (!ueberspanntKreuzarm(bau)) {
+            return false;
+        }
+        if (Stadtplan.kreuzBei(x, z) != Stadtplan.Lage.BORDSTEIN) {
+            return false;
+        }
+        int vonY = bau.bereich().vonY();
+        return y > vonY && y <= vonY + LAUBE_HOEHE;
+    }
 
     /**
      * Der Schornstein dieses Baus - ein Quader von einem Block Grundflaeche, oder
@@ -496,7 +658,7 @@ public final class Bauplan {
      */
     public static int giebelstufen(Platzhalterbau bau) {
         int haelfte = (dachbreite(bau) - 1) / 2;
-        int hoechstens = bau.hoehe() - 1 - SOCKELEBENEN - 1;
+        int hoechstens = bau.hoehe() - 1 - sockelebenen(bau) - 1;
         // Das PLUS EINS ist die Firstreihe: Die Einzuege brauchen je DACHNEIGUNG Ebenen,
         // und darauf sitzt die eine Reihe, in der sich beide Seiten treffen. Ohne sie
         // haette die unterste Dachstufe nur eine Ebene und alle anderen zwei - von der
@@ -685,11 +847,14 @@ public final class Bauplan {
             return null;
         }
         int einzug = dacheinzug(bau, y - dachansatz(bau));
-        boolean ersteSeite = quer(bau, x, z) == querVon(bau) + einzug;
-        return switch (bau.tuer()) {
-            case NORD, SUED -> ersteSeite ? Richtung.OST : Richtung.WEST;
-            case OST, WEST -> ersteSeite ? Richtung.SUED : Richtung.NORD;
-        };
+        // BERGAUF heisst: von der Traufe zum First, also in Richtung der WACHSENDEN
+        // Koordinate auf der fallenden Achse - und von der oberen Kante dagegen.
+        // Gefragt wird fallendIstX und nicht die Tuerseite: siehe dort.
+        boolean ersteSeite = fallend(bau, x, z) == fallendVon(bau) + einzug;
+        if (fallendIstX(bau)) {
+            return ersteSeite ? Richtung.OST : Richtung.WEST;
+        }
+        return ersteSeite ? Richtung.SUED : Richtung.NORD;
     }
 
     /**
@@ -776,6 +941,12 @@ public final class Bauplan {
         if (y == bereich.vonY()) {
             return Stueck.BODEN;
         }
+        // DIE LAUBE VOR ALLEM UEBRIGEN: Durch sie laeuft die Strasse, und was dort
+        // sonst stuende - Wand, Fenster, Geschossdecke, Leiter - stuende ihr im Weg.
+        // Nach dem BODEN, denn man laeuft darauf.
+        if (inDerLaube(bau, x, y, z)) {
+            return Stueck.LUFT;
+        }
         // DER SCHORNSTEIN VOR DEM DACH: Er stoesst durch die Dachflaeche, seine Stellen
         // waeren sonst Dachtreppe und Luft. Vor dem Boden steht er nicht - ein
         // Schornstein, der den Fussboden ersetzt, waere ein Loch im Zimmer.
@@ -799,19 +970,20 @@ public final class Bauplan {
      */
     private static Stueck imGiebel(Platzhalterbau bau, int x, int y, int z) {
         int einzug = dacheinzug(bau, y - dachansatz(bau));
-        // DIE FALLENDE ACHSE ist die kuerzere, und die andere traegt den First.
-        // Bei einem giebelstaendigen Haus faellt das Dach ueber die Front; bei einem
-        // traufstaendigen (breiter als tief) ueber die Tiefe.
-        boolean trauf = traufstaendig(bau);
-        int quer = trauf ? tief(bau, x, z) : quer(bau, x, z);
-        int querVon = (trauf ? tiefVon(bau) : querVon(bau)) + einzug;
-        int querBis = (trauf ? tiefBis(bau) : querBis(bau)) - einzug;
+        // DIE FALLENDE ACHSE ist die kuerzere, und die andere traegt den First - die
+        // Wahl steht in fallendIstX und NICHT hier, weil dachzeigt sie auch braucht.
+        int quer = fallend(bau, x, z) ;
+        int querVon = fallendVon(bau) + einzug;
+        int querBis = fallendBis(bau) - einzug;
         if (quer < querVon || quer > querBis) {
             return Stueck.LUFT;
         }
-        boolean amGiebel = trauf
-                ? quer(bau, x, z) == querVon(bau) || quer(bau, x, z) == querBis(bau)
-                : tief(bau, x, z) == tiefVon(bau) || tief(bau, x, z) == tiefBis(bau);
+        // AM GIEBEL steht man, wenn man am Ende der FIRSTachse ist - also der anderen.
+        int laengs = fallendIstX(bau) ? z : x;
+        Quader b = bau.bereich();
+        boolean amGiebel = fallendIstX(bau)
+                ? laengs == b.vonZ() || laengs == b.bisZ()
+                : laengs == b.vonX() || laengs == b.bisX();
         if (querVon == querBis) {
             // Oben ist EIN Block uebrig - und der ist First, auch an der Giebelwand: Ein
             // Firstbalken, der an zwei Stellen abbricht, saehe aus wie ein Loch.
@@ -842,6 +1014,11 @@ public final class Bauplan {
         boolean aussen = x == bereich.vonX() || x == bereich.bisX()
                 || z == bereich.vonZ() || z == bereich.bisZ();
         if (!aussen) {
+            // DIE WAND DER LAUBE ZUERST: Sie trennt die Strasse vom Haus. Ohne sie
+            // oeffnet sich der Durchgang in den hohlen Innenraum - siehe anDerLaube.
+            if (anDerLaube(bau, x, y, z)) {
+                return Stueck.GEFACH;
+            }
             // IM TREPPENSCHACHT HAENGT DIE LEITER, und die Decken lassen ihn offen -
             // sonst fuehrte die Leiter gegen einen Fussboden.
             if (imSchacht(bau, x, z)) {
@@ -872,7 +1049,7 @@ public final class Bauplan {
         }
         // DER SOCKEL VOR DEN STEHENDEN BALKEN: Ein steinernes Erdgeschoss hat keine
         // hoelzernen Ecksaeulen.
-        if (y <= bereich.vonY() + SOCKELEBENEN) {
+        if (y <= bereich.vonY() + sockelebenen(bau)) {
             return Stueck.SOCKEL;
         }
         if (istStehenderBalken(bau, x, z)) {
@@ -943,7 +1120,7 @@ public final class Bauplan {
         if (y == dachansatz(bau)) {
             return true;
         }
-        int ueberSockel = y - (bau.bereich().vonY() + SOCKELEBENEN);
+        int ueberSockel = y - (bau.bereich().vonY() + sockelebenen(bau));
         return ueberSockel > 0 && ueberSockel % GESCHOSSHOEHE == 0;
     }
 
@@ -958,7 +1135,7 @@ public final class Bauplan {
         Quader bereich = bau.bereich();
         boolean ecke = (x == bereich.vonX() || x == bereich.bisX())
                 && (z == bereich.vonZ() || z == bereich.bisZ());
-        return ecke || laengs(bau, x, z) % BALKENTAKT == 0;
+        return ecke || laengs(bau, x, z) % balkentakt(bau) == 0;
     }
 
     /**
@@ -977,14 +1154,14 @@ public final class Bauplan {
      * Tuer. Ein Erdgeschoss ohne Fenster saehe aus wie ein Speicher.
      */
     private static boolean istFenster(Platzhalterbau bau, int x, int y, int z) {
-        if (laengs(bau, x, z) % BALKENTAKT != 2) {
+        if (laengs(bau, x, z) % balkentakt(bau) != 2) {
             return false;
         }
         Quader bereich = bau.bereich();
         if (y == bereich.vonY() + 2) {
             return true;
         }
-        int ueberSockel = y - (bereich.vonY() + SOCKELEBENEN);
+        int ueberSockel = y - (bereich.vonY() + sockelebenen(bau));
         if (ueberSockel <= 0) {
             return false;
         }
@@ -1023,6 +1200,40 @@ public final class Bauplan {
             case WEST -> x == bereich.vonX();
             case OST -> x == bereich.bisX();
         };
+    }
+
+    /**
+     * Ob die Achse, ueber die das Dach FAELLT, die x-Achse ist.
+     *
+     * <p><b>Die eine Stelle</b> [24.11.2026]: Diese Frage wird zweimal gebraucht -
+     * {@link #imGiebel} baut daraus die Dachflaeche, {@link #dachzeigt} die Richtung
+     * ihrer Treppen. Sie stand zweimal da, und zwar VERSCHIEDEN: imGiebel fragte
+     * {@link #traufstaendig}, dachzeigt nur die Tuerseite. Bei einem traufstaendigen Bau
+     * liefen sie darum auseinander, und gemessen am Bundesratshaus (17 breit, 13 tief)
+     * lagen ALLE 179 Dachtreppen quer statt bergauf - keine einzige richtig. Ein
+     * giebelstaendiges Zeilenhaus war zu hundert Prozent richtig, darum fiel es nie auf:
+     * Alle 265 Zeilenhaeuser sind giebelstaendig.
+     */
+    private static boolean fallendIstX(Platzhalterbau bau) {
+        boolean querIstX = bau.tuer() == Richtung.NORD || bau.tuer() == Richtung.SUED;
+        return traufstaendig(bau) ? !querIstX : querIstX;
+    }
+
+    /** Die Koordinate entlang der Achse, ueber die das Dach faellt. */
+    private static int fallend(Platzhalterbau bau, int x, int z) {
+        return fallendIstX(bau) ? x : z;
+    }
+
+    /** Die untere Kante der fallenden Achse - dort setzt die Traufe an. */
+    private static int fallendVon(Platzhalterbau bau) {
+        Quader b = bau.bereich();
+        return fallendIstX(bau) ? b.vonX() : b.vonZ();
+    }
+
+    /** Die obere Kante der fallenden Achse. */
+    private static int fallendBis(Platzhalterbau bau) {
+        Quader b = bau.bereich();
+        return fallendIstX(bau) ? b.bisX() : b.bisZ();
     }
 
     /** Die Koordinate QUER zur Tiefe - also entlang der Front. */

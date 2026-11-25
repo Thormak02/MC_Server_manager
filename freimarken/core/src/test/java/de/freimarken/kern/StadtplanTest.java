@@ -143,7 +143,18 @@ class StadtplanTest {
         // Dass der Bogen wirklich ausschlaegt, prueft "Die Gassen biegen aus".
         for (Map.Entry<Integer, Stadtplan.Lage> zeile : tafel.entrySet()) {
             int gerade = tafelstelle(plan, zeile.getKey());
-            assertEquals(zeile.getValue(), aufRing(plan, zeile.getKey(), gerade),
+            Stadtplan.Lage gemessen = aufRing(plan, zeile.getKey(), gerade);
+            // EINE GASSE HAT SEIT DEM 24.11.2026 EINE KANTE: Ihr erster und ihr letzter
+            // Ring sind BORDSTEIN. Die Tafel nennt das Band, nicht die Kante - sie
+            // nimmt darum beides als Gasse, und dass die Kante wirklich liegt, haelt
+            // "Jede Gasse hat eine Kante".
+            if (zeile.getValue() == Stadtplan.Lage.RINGGASSE) {
+                assertTrue(Stadtplan.istWeg(gemessen), "Ring " + zeile.getKey()
+                        + " an der Laengsstelle " + gerade + " ist Weg, nicht "
+                        + gemessen);
+                continue;
+            }
+            assertEquals(zeile.getValue(), gemessen,
                     "Ring " + zeile.getKey() + " an der Laengsstelle " + gerade);
         }
         // UND DIE ZAHL der gepruefeten Ringe, damit eine geschrumpfte Tafel auffaellt.
@@ -163,26 +174,100 @@ class StadtplanTest {
                         + Stadtplan.MARKT_TIEFE + Stadtplan.RATHAUSPLATZ_TIEFE,
                 "die drei Plaetze und die zwei Kanten fuellen den Platz genau");
 
-        // Von Norden nach Sueden abgeschritten, auf der Mittelachse.
-        assertEquals(Stadtplan.Lage.KIRCHPLATZ, plan.lageBei(72, -27), "Nordrand");
-        assertEquals(Stadtplan.Lage.KIRCHPLATZ, plan.lageBei(72, -10), "Kirchplatz bis");
-        assertEquals(Stadtplan.Lage.PLATZKANTE, plan.lageBei(72, -9), "Kante ab");
-        assertEquals(Stadtplan.Lage.PLATZKANTE, plan.lageBei(72, -7), "Kante bis");
-        assertEquals(Stadtplan.Lage.MARKT, plan.lageBei(72, -6), "Markt ab");
-        assertEquals(Stadtplan.Lage.MARKT, plan.lageBei(72, 12), "die Ankunft");
-        assertEquals(Stadtplan.Lage.MARKT, plan.lageBei(72, 26), "Markt bis");
-        assertEquals(Stadtplan.Lage.PLATZKANTE, plan.lageBei(72, 27), "zweite Kante ab");
-        assertEquals(Stadtplan.Lage.PLATZKANTE, plan.lageBei(72, 29), "bis");
-        assertEquals(Stadtplan.Lage.RATHAUSPLATZ, plan.lageBei(72, 30), "Rathausplatz ab");
-        assertEquals(Stadtplan.Lage.RATHAUSPLATZ, plan.lageBei(72, 53), "Suedrand");
+        // VON NORDEN NACH SUEDEN ABGESCHRITTEN, aber NEBEN der Mittelachse
+        // [24.11.2026]: Auf der Achse liegt seit heute der KREUZARM - der Weg, der von
+        // der Marktmitte zu den vier Toren fuehrt. Er durchschneidet die drei Plaetze,
+        // und genau das ist seine Aufgabe. Die Tiefen der Plaetze misst man darum ein
+        // Stueck daneben; dass der Arm wirklich durchschneidet, haelt
+        // "Der Kreuzarm fuehrt von der Mitte bis an die Mauer".
+        int neben = Stadtplan.MITTE_X + NEBEN_DER_ACHSE;
+        assertTrue(NEBEN_DER_ACHSE > Stadtplan.KREUZ_HALB,
+                "die Messlinie muss NEBEN dem Arm liegen: " + NEBEN_DER_ACHSE
+                        + " gegen " + Stadtplan.KREUZ_HALB);
+        // GERECHNET AUS DEN TIEFEN, nicht als absolute z-Werte [24.11.2026]: Bis
+        // heute standen hier die Zahlen -27 bis 53, gemessen an einer Mitte bei
+        // z 13. Mit der Mitte auf 0/0 waren sie alle falsch - und zwar still, denn
+        // eine Zahl sieht nicht falsch aus. Jetzt wandert die Probe mit.
+        int ab = Stadtplan.MITTE_Z - Stadtplan.MARKT_RING;
+        int kirchplatzBis = ab + Stadtplan.KIRCHPLATZ_TIEFE - 1;
+        int ersteKanteAb = kirchplatzBis + 1;
+        int ersteKanteBis = ersteKanteAb + Stadtplan.PLATZKANTE_BREITE - 1;
+        int marktAb = ersteKanteBis + 1;
+        int marktBis = marktAb + Stadtplan.MARKT_TIEFE - 1;
+        int zweiteKanteAb = marktBis + 1;
+        int zweiteKanteBis = zweiteKanteAb + Stadtplan.PLATZKANTE_BREITE - 1;
+        int rathausAb = zweiteKanteBis + 1;
+        int rathausBis = rathausAb + Stadtplan.RATHAUSPLATZ_TIEFE - 1;
+        assertEquals(Stadtplan.MITTE_Z + Stadtplan.MARKT_RING, rathausBis,
+                "die fuenf Streifen fuellen den Platz bis zum Suedrand");
 
-        // UND IN DER BREITE: 81 Bloecke von x 32 bis 112, dahinter der Rahmen.
-        assertEquals(Stadtplan.Lage.MARKT, plan.lageBei(32, 13), "Westrand des Platzes");
-        assertEquals(Stadtplan.Lage.MARKT, plan.lageBei(112, 13), "Ostrand");
-        assertEquals(Stadtplan.Lage.KERN, plan.lageBei(31, 13), "dahinter der Rahmen");
-        assertEquals(Stadtplan.Lage.KERN, plan.lageBei(113, 13), "und gegenueber");
-        assertEquals(Stadtplan.Lage.KERN, plan.lageBei(72, 54), "vor dem Bundesratshaus");
-        assertEquals(Stadtplan.Lage.KERN, plan.lageBei(72, -28), "vor der Stadtkirche");
+        assertEquals(Stadtplan.Lage.KIRCHPLATZ, plan.lageBei(neben, ab), "Nordrand");
+        assertEquals(Stadtplan.Lage.KIRCHPLATZ, plan.lageBei(neben, kirchplatzBis),
+                "Kirchplatz bis");
+        assertEquals(Stadtplan.Lage.PLATZKANTE, plan.lageBei(neben, ersteKanteAb),
+                "Kante ab");
+        assertEquals(Stadtplan.Lage.PLATZKANTE, plan.lageBei(neben, ersteKanteBis),
+                "Kante bis");
+        assertEquals(Stadtplan.Lage.MARKT, plan.lageBei(neben, marktAb), "Markt ab");
+        // EIN STUECK NEBEN DER MITTE und nicht auf ihr: Auf der Mittelhoehe liegt der
+        // OSTWEST-Arm, und der gilt dort, wie weit man in x auch ausweicht.
+        assertEquals(Stadtplan.Lage.MARKT,
+                plan.lageBei(neben, Stadtplan.MITTE_Z + NEBEN_DER_ACHSE),
+                "mitten auf dem Markt");
+        assertEquals(Stadtplan.Lage.MARKT, plan.lageBei(neben, marktBis), "Markt bis");
+        assertEquals(Stadtplan.Lage.PLATZKANTE, plan.lageBei(neben, zweiteKanteAb),
+                "zweite Kante ab");
+        assertEquals(Stadtplan.Lage.PLATZKANTE, plan.lageBei(neben, zweiteKanteBis),
+                "bis");
+        assertEquals(Stadtplan.Lage.RATHAUSPLATZ, plan.lageBei(neben, rathausAb),
+                "Rathausplatz ab");
+        assertEquals(Stadtplan.Lage.RATHAUSPLATZ, plan.lageBei(neben, rathausBis),
+                "Suedrand");
+        // DER ANKUNFTSPUNKT IST DER KREUZUNGSPLATZ: Dort treffen sich alle vier Arme,
+        // und wer die Welt betritt, steht auf der Fahrbahn und sieht sie in alle vier
+        // Richtungen weglaufen. Genau das hat der Betreiber verlangt.
+        assertEquals(Stadtplan.Lage.RADIALGASSE,
+                plan.lageBei(Stadtplan.MITTE_X, Stadtplan.MITTE_Z), "die Ankunft");
+        // UND AUF DER ACHSE SELBST liegt ueber all diese Tiefen hinweg der Arm.
+        for (int z : new int[] {ab, kirchplatzBis, ersteKanteAb, marktAb, marktBis,
+                zweiteKanteAb, rathausAb, rathausBis}) {
+            assertEquals(Stadtplan.Lage.RADIALGASSE,
+                    plan.lageBei(Stadtplan.MITTE_X, z),
+                    "auf der Achse bei z " + z + " laeuft die Fahrbahn");
+        }
+
+        // UND IN DER BREITE: 81 Bloecke, also MARKT_RING nach jeder Seite. Gemessen
+        // auf einer z-Linie NEBEN der Mittelachse, denn auf ihr laeuft der Ostwest-Arm.
+        int nebenZ = Stadtplan.MITTE_Z + NEBEN_DER_ACHSE;
+        assertEquals(Stadtplan.Lage.MARKT,
+                plan.lageBei(Stadtplan.MITTE_X - Stadtplan.MARKT_RING, nebenZ),
+                "Westrand des Platzes");
+        assertEquals(Stadtplan.Lage.MARKT,
+                plan.lageBei(Stadtplan.MITTE_X + Stadtplan.MARKT_RING, nebenZ),
+                "Ostrand");
+        // DAHINTER DER RAHMEN - gemessen neben dem Arm, denn auf z 13 und auf x 72
+        // laeuft er durch den Kern hindurch zum Tor.
+        assertEquals(Stadtplan.Lage.KERN,
+                plan.lageBei(Stadtplan.MITTE_X - Stadtplan.MARKT_RING - 1, nebenZ),
+                "dahinter der Rahmen");
+        assertEquals(Stadtplan.Lage.KERN,
+                plan.lageBei(Stadtplan.MITTE_X + Stadtplan.MARKT_RING + 1, nebenZ),
+                "und gegenueber");
+        int imKern = Stadtplan.MITTE_Z + Stadtplan.MARKT_RING + 1;
+        assertEquals(Stadtplan.Lage.KERN, plan.lageBei(neben, imKern),
+                "neben dem Bundesratshaus");
+        assertEquals(Stadtplan.Lage.KERN,
+                plan.lageBei(neben, Stadtplan.MITTE_Z - Stadtplan.MARKT_RING - 1),
+                "neben der Stadtkirche");
+        // UND DURCH DIE BEIDEN HINDURCH der Arm: Kirche und Rathaus ueberspannen ihn,
+        // also geht er als LAUBE durch sie - das haelt die Laubenprobe in BauplanTest.
+        assertEquals(Stadtplan.Lage.RADIALGASSE,
+                plan.lageBei(Stadtplan.MITTE_X, imKern),
+                "im Bundesratshaus laeuft die Fahrbahn");
+        assertEquals(Stadtplan.Lage.RADIALGASSE,
+                plan.lageBei(Stadtplan.MITTE_X,
+                        Stadtplan.MITTE_Z - Stadtplan.MARKT_RING - 1),
+                "und in der Stadtkirche auch");
 
         // JEDER PLATZ KOMMT WIRKLICH VOR, und zwar in der Flaeche, die seine Tiefe
         // verspricht - eine Lage, die nur auf der Achse auftaucht, waere ein Streifen.
@@ -195,16 +280,38 @@ class StadtplanTest {
             }
         }
         int breite = 2 * Stadtplan.MARKT_RING + 1;
-        assertEquals(breite * Stadtplan.KIRCHPLATZ_TIEFE,
-                flaeche.get(Stadtplan.Lage.KIRCHPLATZ), "Kirchplatz");
-        assertEquals(breite * Stadtplan.MARKT_TIEFE,
-                flaeche.get(Stadtplan.Lage.MARKT), "Marktplatz");
-        assertEquals(breite * Stadtplan.RATHAUSPLATZ_TIEFE,
-                flaeche.get(Stadtplan.Lage.RATHAUSPLATZ), "Rathausplatz");
-        assertEquals(breite * 2 * Stadtplan.PLATZKANTE_BREITE,
+        // DER KREUZARM SCHNEIDET DURCH [24.11.2026]: Er laeuft in Nord-Sued ueber alle
+        // drei Plaetze und beide Kanten, also fehlt jedem Streifen die Armbreite.
+        // GERECHNET und nicht neu festgenagelt: Eine Zahl, die ich hier eintrage,
+        // stimmt beim naechsten Mal nicht mehr, und dann dreht man sie hoch statt
+        // nachzusehen.
+        int arm = 2 * Stadtplan.KREUZ_HALB + 1;
+        assertEquals((breite - arm) * Stadtplan.KIRCHPLATZ_TIEFE,
+                flaeche.get(Stadtplan.Lage.KIRCHPLATZ), "Kirchplatz ohne den Nordarm");
+        assertEquals((breite - arm) * Stadtplan.RATHAUSPLATZ_TIEFE,
+                flaeche.get(Stadtplan.Lage.RATHAUSPLATZ),
+                "Rathausplatz ohne den Suedarm");
+        assertEquals((breite - arm) * 2 * Stadtplan.PLATZKANTE_BREITE,
                 flaeche.get(Stadtplan.Lage.PLATZKANTE), "die zwei Kanten");
-        assertEquals(4, flaeche.size(), "und nichts anderes liegt auf dem Platz: "
-                + flaeche.keySet());
+        // DEM MARKT FEHLT MEHR: Durch ihn laeuft AUCH der Ostwest-Arm, und zwar quer
+        // ueber seine ganze Breite. Der Kreuzungsplatz in der Mitte gehoert beiden
+        // Armen - er darf nur EINMAL abgezogen werden.
+        int marktOhneNord = (breite - arm) * Stadtplan.MARKT_TIEFE;
+        int ostwestImMarkt = (breite - arm) * arm;
+        assertEquals(marktOhneNord - ostwestImMarkt,
+                flaeche.get(Stadtplan.Lage.MARKT), "Marktplatz ohne beide Arme");
+
+        // DER ARM SELBST liegt als Fahrbahn und Kante auf dem Platz, und seine Flaeche
+        // muss die der Plaetze genau ergaenzen - sonst hat eine Lage einen Streifen
+        // verloren, den keine andere bekommen hat.
+        int platzflaeche = breite * breite;
+        int gezaehlt = flaeche.values().stream().mapToInt(Integer::intValue).sum();
+        assertEquals(platzflaeche, gezaehlt,
+                "jeder Block des Platzes hat genau eine Lage");
+        assertTrue(flaeche.get(Stadtplan.Lage.RADIALGASSE) > 0, "die Fahrbahn liegt da");
+        assertTrue(flaeche.get(Stadtplan.Lage.BORDSTEIN) > 0, "und ihre Kante auch");
+        assertEquals(6, flaeche.size(), "auf dem Platz liegen die drei Plaetze, die"
+                + " Kante, die Fahrbahn und ihr Bordstein: " + flaeche.keySet());
     }
 
     @Test
@@ -253,9 +360,20 @@ class StadtplanTest {
             }
         }
         assertEquals(0, luecken, "die Mauer hat kein Loch");
-        // Und im Kern gilt die Gasse nicht: Dort steht Handarbeit.
+        // UND IM KERN GILT DIE GASSE SEHR WOHL [24.11.2026]: Bis heute hiess es hier
+        // "Und im Kern gilt die Gasse nicht: Dort steht Handarbeit." Genau das war der
+        // Befund des Betreibers - der Weg zum Tor begann erst auf Ring 52, und von der
+        // Marktmitte kam man in keine Himmelsrichtung gerade hinaus. Der Kreuzarm
+        // durchschneidet den Kern jetzt; wo ein eingetragener Bau ihn ueberspannt, geht
+        // er als LAUBE hindurch.
+        assertEquals(Stadtplan.Lage.RADIALGASSE,
+                plan.lageBei(Stadtplan.MITTE_X, Stadtplan.MITTE_Z - 45),
+                "der Arm laeuft durch den Kern");
+        // NEBEN dem Arm ist der Kern unveraendert Kern.
         assertEquals(Stadtplan.Lage.KERN,
-                plan.lageBei(Stadtplan.MITTE_X, Stadtplan.MITTE_Z - 45), "im Kern");
+                plan.lageBei(Stadtplan.MITTE_X + NEBEN_DER_ACHSE,
+                        Stadtplan.MITTE_Z - 45),
+                "neben dem Arm steht Handarbeit");
     }
 
     @Test
@@ -283,11 +401,17 @@ class StadtplanTest {
                 "genau auf der Reichweite");
         // DAS AEUSSERE BAND hat seine eigene, GROESSERE Reichweite - 68 - 6 = 62.
         assertEquals(62, Stadtplan.zeilenreichweite(68), "das aeussere Band");
+        // GEMESSEN IN DER MITTE DES BANDES und nicht an seinem Rand [24.11.2026]:
+        // Am Rand frisst der Gassenbogen bis KRUMM_TIEFE Bloecke in das Band hinein -
+        // dort ist die Lage von der Welle abhaengig und nicht von der Eckregel. Ring 73
+        // liegt fuenf Bloecke tief im Band 68..78, also weit jenseits des Bogens.
+        int bandmitte = plan.zeileAussenVon(0) + Stadtplan.ZEILE_TIEFE / 2;
+        assertEquals(73, bandmitte, "die Mitte des aeusseren Bandes");
         assertEquals(Stadtplan.Lage.ZEILE,
-                plan.lageBei(Stadtplan.MITTE_X + 78, Stadtplan.MITTE_Z + 62),
+                plan.lageBei(Stadtplan.MITTE_X + bandmitte, Stadtplan.MITTE_Z + 62),
                 "dort reicht die Zeile weiter");
         assertEquals(Stadtplan.Lage.ECKPLATZ,
-                plan.lageBei(Stadtplan.MITTE_X + 78, Stadtplan.MITTE_Z + 63),
+                plan.lageBei(Stadtplan.MITTE_X + bandmitte, Stadtplan.MITTE_Z + 63),
                 "und einen Block weiter nicht mehr");
         // Eine GASSE bekommt keinen Eckplatz - sie laeuft um die Ecke herum.
         assertEquals(Stadtplan.Lage.RINGGASSE,
@@ -377,7 +501,11 @@ class StadtplanTest {
             // ZEILE ist erlaubt, wenn das Haus zurueckgesetzt steht - dann liegt sein
             // Vorgarten davor. Gasse, Eckplatz oder Vorgarten: nur kein fremdes Haus,
             // keine Mauer und kein Kern.
-            assertTrue(davor == Stadtplan.Lage.RINGGASSE || davor == Stadtplan.Lage.ZEILE
+            // SEIT DEM 24.11.2026 IST DAS MEIST DER BORDSTEIN: Die Kante der Gasse
+            // liegt genau vor den Hausfronten, also oeffnet die Tuer auf ein Trottoir.
+            // Gefragt wird darum istWeg und nicht RINGGASSE - die EINE Stelle, die
+            // sagt, was ein Weg ist.
+            assertTrue(Stadtplan.istWeg(davor) || davor == Stadtplan.Lage.ZEILE
                             || davor == Stadtplan.Lage.ECKPLATZ,
                     bau.schluessel() + " oeffnet auf " + davor + " bei " + x + "/" + z);
 
@@ -517,7 +645,24 @@ class StadtplanTest {
         }
         // JEDE angebotene Moeglichkeit kommt vor - sonst waehlt die Streuung nicht.
         assertEquals(new HashSet<>(Stadtplan.BREITEN), breiten, "alle Breiten");
-        assertEquals(new HashSet<>(Stadtplan.TIEFEN), tiefen, "alle Tiefen");
+        // DIE TIEFEN KOENNEN GEDECKELT SEIN [24.11.2026]: Wo die Gassenwelle ausbiegt,
+        // wird ein Haus flacher, damit es ihr folgen kann - aus einer 11 wird dann eine
+        // 10, obwohl die 10 in TIEFEN nicht steht. Die Zusage ist darum: jede
+        // angebotene Tiefe kommt vor, und alles Vorkommende liegt in der Spanne.
+        assertTrue(tiefen.containsAll(Stadtplan.TIEFEN),
+                "jede angebotene Tiefe kommt vor: " + tiefen);
+        int flachste = Stadtplan.TIEFEN.get(0);
+        int tiefste = Stadtplan.TIEFEN.get(Stadtplan.TIEFEN.size() - 1);
+        for (int tiefe : tiefen) {
+            assertTrue(tiefe >= flachste && tiefe <= tiefste,
+                    "die Tiefe " + tiefe + " liegt ausserhalb von " + flachste + ".."
+                            + tiefste);
+        }
+        // UND DIE FLACHSTE IST WIRKLICH FLACH: Aus ihr kommt der Platz fuer die
+        // Baulinie - ohne sie koennte kein Haus zurueckspringen.
+        assertTrue(tiefste - flachste >= Stadtplan.SPRUNG_TIEFE,
+                "zwischen der flachsten und der tiefsten Tiefe liegt mindestens ein"
+                        + " ganzer Sprung: " + flachste + ".." + tiefste);
         // DIE HOEHEN KOMMEN AUS DEM GEFAELLE [24.11.2026]: innen hoch, aussen
         // niedrig, dazu ein Nest- und ein Hausspiel. Eine feste Liste gibt es nicht
         // mehr - sie machte jede Zeile so hoch wie jede andere.
@@ -1046,9 +1191,12 @@ class StadtplanTest {
         Set<Integer> kanten = new HashSet<>();
         for (int laengs = Stadtplan.MITTE_Z + NEBEN_DER_ACHSE; laengs <= bisLaengs;
                 laengs++) {
+            // GEZAEHLT WIRD DER WEG, Fahrbahn und Kante: Der aeusserste Gassenblock
+            // ist seit dem 24.11.2026 BORDSTEIN, und wer nur RINGGASSE zaehlt, misst
+            // den Bogen um einen Block zu kurz.
             int tief = 0;
             while (tief < Stadtplan.ZEILE_TIEFE
-                    && aufRing(plan, bandVon + tief, laengs) == Stadtplan.Lage.RINGGASSE) {
+                    && Stadtplan.istWeg(aufRing(plan, bandVon + tief, laengs))) {
                 tief++;
             }
             kanten.add(tief);
@@ -1340,6 +1488,415 @@ class StadtplanTest {
                 Stadtplan.kantenbauBei(Stadtplan.MITTE_X + 20,
                         Stadtplan.MITTE_Z + plan.aussenRing()),
                 "auf der Mauer");
+    }
+
+
+    @Test
+    @DisplayName("Der Kreuzarm fuehrt von der Mitte bis an die Mauer - in allen vier")
+    void derKreuzarmFuehrtZumTor() {
+        Stadtplan plan = Stadtplan.altfurt();
+
+        // WARUM [24.11.2026]: Der Betreiber sah die Stadt an und sagte, die Wege
+        // fuehrten "nur diagonal in die ecken", er wolle "ein plus, sodass die wege
+        // direkt zu den toren fuehren". Gemessen war der Grund doppelt: Von Ring 0 bis
+        // 51 gab es GAR KEINEN Weg - Markt, Platzkante und Kern waren eine durchgehende
+        // Pflasterflaeche -, und alle vier Achsen waren von einem eingetragenen Bau
+        // ueberspannt. Man KONNTE nicht gerade hinaus.
+
+        // 1. DURCHGEHEND, BLOCK FUER BLOCK. Abgeschritten wird jede der vier Achsen von
+        //    der Marktmitte bis an die Mauer; jeder einzelne Block muss Fahrbahn sein.
+        //    Eine Stichprobe haette die Luecke im Kern nicht gefunden - sie lag
+        //    zwischen Ring 41 und 51.
+        for (int[] richtung : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            int bloecke = 0;
+            for (int r = 0; r < plan.mauerVon(); r++) {
+                int x = Stadtplan.MITTE_X + richtung[0] * r;
+                int z = Stadtplan.MITTE_Z + richtung[1] * r;
+                assertEquals(Stadtplan.Lage.RADIALGASSE, plan.lageBei(x, z),
+                        "auf der Achse " + richtung[0] + "/" + richtung[1]
+                                + " muss Ring " + r + " Fahrbahn sein");
+                bloecke++;
+            }
+            assertEquals(plan.mauerVon(), bloecke,
+                    "von der Mitte bis an die Mauer abgeschritten");
+        }
+
+        // 2. UND ER HOERT AN DER MAUER AUF: Durch sie fuehrt das Torhaus.
+        for (int[] richtung : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            assertEquals(Stadtplan.Lage.MAUER,
+                    plan.lageBei(Stadtplan.MITTE_X + richtung[0] * plan.mauerVon(),
+                            Stadtplan.MITTE_Z + richtung[1] * plan.mauerVon()),
+                    "der Arm durchstoesst die Mauer nicht");
+        }
+
+        // 3. DIE FAHRBAHN IST SO BREIT WIE DAS TOR, und die Kante liegt daneben.
+        //    Gemessen quer ueber den Nordarm, auf halbem Weg zur Mauer.
+        int quer = plan.mauerVon() / 2;
+        int fahrbahn = 0;
+        int kante = 0;
+        for (int d = -2 * Stadtplan.KREUZ_HALB; d <= 2 * Stadtplan.KREUZ_HALB; d++) {
+            Stadtplan.Lage lage = plan.lageBei(Stadtplan.MITTE_X + d,
+                    Stadtplan.MITTE_Z - quer);
+            if (lage == Stadtplan.Lage.RADIALGASSE) {
+                fahrbahn++;
+            } else if (lage == Stadtplan.Lage.BORDSTEIN) {
+                kante++;
+            }
+        }
+        assertEquals(2 * Stadtplan.RADIAL_HALB + 1, fahrbahn,
+                "die Fahrbahn ist so breit wie der Torhausdurchgang");
+        assertEquals(2 * Stadtplan.BORDSTEIN_BREITE, kante,
+                "und links und rechts liegt genau eine Kante");
+
+        // 4. DIE KANTE LIEGT AUSSEN, nicht in der Fahrbahn. Abgeschritten von der Achse
+        //    nach aussen: zuerst nur Fahrbahn, dann nur Kante, dann etwas anderes.
+        for (int d = 0; d <= Stadtplan.RADIAL_HALB; d++) {
+            assertEquals(Stadtplan.Lage.RADIALGASSE,
+                    plan.lageBei(Stadtplan.MITTE_X + d, Stadtplan.MITTE_Z - quer),
+                    "bis RADIAL_HALB ist Fahrbahn, bei " + d);
+        }
+        for (int d = Stadtplan.RADIAL_HALB + 1; d <= Stadtplan.KREUZ_HALB; d++) {
+            assertEquals(Stadtplan.Lage.BORDSTEIN,
+                    plan.lageBei(Stadtplan.MITTE_X + d, Stadtplan.MITTE_Z - quer),
+                    "dahinter die Kante, bei " + d);
+        }
+        assertNotEquals(Stadtplan.Lage.BORDSTEIN,
+                plan.lageBei(Stadtplan.MITTE_X + Stadtplan.KREUZ_HALB + 1,
+                        Stadtplan.MITTE_Z - quer),
+                "und dahinter hoert der Arm auf");
+
+        // 5. KEIN HAUS STEHT IM ARM, Kante eingerechnet. Das ist die Zusage, die den
+        //    Weg von einer Verengung unterscheidet - und sie muss fuer den GANZEN Arm
+        //    gelten, nicht nur fuer die Fahrbahn: Ein Haus auf dem Bordstein waere ein
+        //    Haus mitten auf der Strasse.
+        for (Platzhalterbau bau : plan.haeuser()) {
+            Quader q = bau.bereich();
+            for (int x = q.vonX(); x <= q.bisX(); x++) {
+                for (int z = q.vonZ(); z <= q.bisZ(); z++) {
+                    assertFalse(Stadtplan.imKreuzarm(x, z), bau.schluessel()
+                            + " steht bei " + x + "/" + z + " im Kreuzarm");
+                }
+            }
+        }
+
+        // 6. UND DIE DIAGONALE IST KEIN ARM - sonst waere das Kreuz ein Stern.
+        for (int d = Stadtplan.KREUZ_HALB + 1; d < plan.mauerVon(); d++) {
+            assertFalse(Stadtplan.imKreuzarm(Stadtplan.MITTE_X + d,
+                            Stadtplan.MITTE_Z + d),
+                    "auf der Diagonale bei " + d + " liegt kein Arm");
+        }
+    }
+
+
+    @Test
+    @DisplayName("Jede Gasse hat eine Kante - und die Kante folgt den Hausfronten")
+    void jedeGasseHatEineKante() {
+        Stadtplan plan = Stadtplan.altfurt();
+
+        // WARUM [24.11.2026]: Der Betreiber sah den Bordstein des Kreuzarms und sagte
+        // "das strassenmuster mit dem bordstein gefaellt mir, bitte genauso nur schmaler
+        // fuer die nebenstrassen und gassen". Die Ringgassen sind GASSE_BREITE breit;
+        // mit einer Kante je Seite bleiben drei Bloecke Fahrbahn.
+
+        // 1. QUER DURCH JEDE GASSE: zuerst eine Kante, dann Fahrbahn, dann wieder eine
+        //    Kante. Abgeschritten wird die Ostseite auf einer Laengsstelle ohne Bogen,
+        //    damit die Nennbreite gemessen wird.
+        for (int q = 0; q < plan.quartiere(); q++) {
+            int gassenVon = plan.quartierAnfang(q);
+            int laengs = ohneBogen(plan, plan.zeileInnenVon(q));
+            List<Stadtplan.Lage> quer = new ArrayList<>();
+            for (int r = gassenVon; r < plan.zeileInnenVon(q); r++) {
+                quer.add(aufRing(plan, r, laengs));
+            }
+            assertEquals(Stadtplan.GASSE_BREITE, quer.size(),
+                    "die Gasse des Quartiers " + q + " ist GASSE_BREITE breit");
+            assertEquals(Stadtplan.Lage.BORDSTEIN, quer.get(0),
+                    "innen eine Kante: " + quer);
+            assertEquals(Stadtplan.Lage.BORDSTEIN, quer.get(quer.size() - 1),
+                    "aussen eine Kante: " + quer);
+            for (int i = 1; i < quer.size() - 1; i++) {
+                assertEquals(Stadtplan.Lage.RINGGASSE, quer.get(i),
+                        "dazwischen Fahrbahn, bei " + i + ": " + quer);
+            }
+        }
+
+        // 2. DIE FAHRBAHN IST SCHMALER ALS DER KREUZARM - "genauso nur schmaler".
+        int gassenfahrbahn = Stadtplan.GASSE_BREITE - 2 * Stadtplan.BORDSTEIN_BREITE;
+        int armfahrbahn = 2 * Stadtplan.RADIAL_HALB + 1;
+        assertEquals(3, gassenfahrbahn, "drei Bloecke Fahrbahn in der Nebenstrasse");
+        assertTrue(gassenfahrbahn < armfahrbahn,
+                "die Nebenstrasse ist schmaler als der Kreuzarm: " + gassenfahrbahn
+                        + " gegen " + armfahrbahn);
+
+        // 3. DIE KANTE FOLGT DEM BOGEN. Wo die Gasse ausbiegt, wandert ihre aeussere
+        //    Kante mit - sonst laege sie mitten auf der Fahrbahn. Gemessen wird, auf
+        //    welcher Bandtiefe die Kante liegt, ueber eine ganze Wellenlaenge.
+        int bandVon = plan.zeileInnenVon(0);
+        Set<Integer> kantentiefen = new HashSet<>();
+        int bisLaengs = Stadtplan.MITTE_Z + Stadtplan.zeilenreichweite(bandVon);
+        for (int laengs = Stadtplan.MITTE_Z + NEBEN_DER_ACHSE; laengs <= bisLaengs;
+                laengs++) {
+            boolean gefunden = false;
+            int tiefe = 0;
+            for (int t = 0; t < Stadtplan.ZEILE_TIEFE; t++) {
+                if (aufRing(plan, bandVon + t, laengs) == Stadtplan.Lage.BORDSTEIN) {
+                    tiefe = t;
+                    gefunden = true;
+                    break;
+                }
+            }
+            if (gefunden) {
+                kantentiefen.add(tiefe);
+            }
+        }
+        assertTrue(kantentiefen.size() >= 2,
+                "die aeussere Kante liegt nicht immer auf derselben Bandtiefe: "
+                        + kantentiefen);
+        for (int tiefe : kantentiefen) {
+            assertTrue(tiefe <= Stadtplan.KRUMM_TIEFE,
+                    "sie wandert hoechstens um KRUMM_TIEFE: " + tiefe);
+        }
+
+        // 4. DIE KANTE LIEGT VOR DEN HAUSFRONTEN. Fuer jedes Haus der inneren Zeile:
+        //    der Block unmittelbar vor seiner Front ist Bordstein oder - wo das Haus
+        //    weiter zurueckstehen musste - Hofboden. Niemals Fahrbahn: Dann laege die
+        //    Kante hinter der Front, also im Haus.
+        int gepruefte = 0;
+        for (Platzhalterbau bau : plan.haeuser()) {
+            if (bau.schluessel().charAt(7) != 'i' || bau.schluessel().charAt(6) != '0') {
+                continue;
+            }
+            // Die NORDzeile: ihre Front zeigt nach Sueden, also zur Mitte.
+            if (bau.tuer() != Richtung.SUED) {
+                continue;
+            }
+            Quader b = bau.bereich();
+            int vorDerFront = b.bisZ() + 1;
+            for (int x = b.vonX(); x <= b.bisX(); x++) {
+                Stadtplan.Lage davor = plan.lageBei(x, vorDerFront);
+                assertNotEquals(Stadtplan.Lage.RINGGASSE, davor,
+                        bau.schluessel() + ": bei " + x + "/" + vorDerFront + " liegt"
+                                + " Fahrbahn direkt an der Hausfront - dann ist die"
+                                + " Kante hinter der Front, also im Haus");
+                gepruefte++;
+            }
+        }
+        assertTrue(gepruefte > 40, "so viele Frontbloecke geprueft: " + gepruefte);
+
+        // 5. DER ECKPLATZ IST KEIN WEG - sonst bekaeme er ringsum eine Kante und saehe
+        //    aus wie eine Kreuzung.
+        assertFalse(Stadtplan.istWeg(Stadtplan.Lage.ECKPLATZ), "der Eckplatz");
+        assertFalse(Stadtplan.istWeg(Stadtplan.Lage.MARKT), "der Markt");
+        assertFalse(Stadtplan.istWeg(Stadtplan.Lage.ZEILE), "der Hof");
+        assertTrue(Stadtplan.istWeg(Stadtplan.Lage.RINGGASSE), "die Ringgasse");
+        assertTrue(Stadtplan.istWeg(Stadtplan.Lage.RADIALGASSE), "der Kreuzarm");
+        assertTrue(Stadtplan.istWeg(Stadtplan.Lage.BORDSTEIN), "und seine Kante");
+    }
+
+
+    @Test
+    @DisplayName("Die Zeile ist KEINE Reihe: Firstrichtung und Baulinie wechseln")
+    void dieZeileIstKeineReihe() {
+        Stadtplan plan = Stadtplan.altfurt();
+
+        // WARUM [24.11.2026]: Der Betreiber sah die Stadt zum dritten Mal an und sagte
+        // "immernoch sehr gleichmaessig und die haeuser sind einfach nur in einer reihe,
+        // statt natuerlich gewachsen". Nester, Hoefe, Hoehengefaelle und krumme Gassen
+        // standen da schon - es fehlten die zwei Dinge, die eine REIHE ausmachen:
+        //
+        //   1. ALLE Firste liefen parallel. Jedes Haus war breiter als tief, also
+        //      giebelstaendig, also zeigte jeder Giebel zur Gasse.
+        //   2. ALLE Fronten lagen auf einer Linie. Die Welle bog die Gassenkante aus,
+        //      aber die Haeuser folgten ihr GEMEINSAM - eine krumme Linie, an der alle
+        //      stehen, ist auch eine Reihe.
+
+        List<Platzhalterbau> haeuser = new ArrayList<>();
+        for (Platzhalterbau bau : plan.haeuser()) {
+            if (bau.schluessel().startsWith("haus-")) {
+                haeuser.add(bau);
+            }
+        }
+        assertTrue(haeuser.size() > 200, "eine Stadt: " + haeuser.size());
+
+        // 1. BEIDE FIRSTRICHTUNGEN KOMMEN VOR. Ein Haus, das breiter als tief ist,
+        //    laesst sein Dach ueber die TIEFE fallen - sein First laeuft dann PARALLEL
+        //    zur Gasse, und das ist ein ganz anderes Bild. Moeglich wurde das erst, als
+        //    am 24.11.2026 der Fehler in dachzeigt behoben war: Vorher lagen bei einem
+        //    traufstaendigen Bau alle Dachtreppen quer.
+        int trauf = 0;
+        for (Platzhalterbau bau : haeuser) {
+            if (Bauplan.traufstaendig(bau)) {
+                trauf++;
+            }
+        }
+        assertTrue(trauf > haeuser.size() / 10,
+                "mehr als jedes zehnte Haus steht traufstaendig: " + trauf + " von "
+                        + haeuser.size());
+        assertTrue(trauf < haeuser.size() / 2,
+                "aber die Mehrheit bleibt giebelstaendig - das ist das hansische Bild: "
+                        + trauf + " von " + haeuser.size());
+
+        // 2. DIE BAULINIE WECHSELT VON HAUS ZU HAUS. Gezaehlt wird, wie viele Nachbarn
+        //    ihre Front teilen; gemessen waren es nach diesem Zug 55 von 217 Paaren.
+        //    Vorher waren es ALLE - darum ist diese Zahl die eigentliche Antwort auf
+        //    den Befund.
+        Map<String, List<Platzhalterbau>> zeilen = new HashMap<>();
+        for (Platzhalterbau bau : haeuser) {
+            zeilen.computeIfAbsent(bau.schluessel().substring(0, 8),
+                    unbenutzt -> new ArrayList<>()).add(bau);
+        }
+        int paare = 0;
+        int gleicheFront = 0;
+        Set<Integer> baulinien = new HashSet<>();
+        for (Map.Entry<String, List<Platzhalterbau>> zeile : zeilen.entrySet()) {
+            boolean laengsIstX = zeile.getKey().charAt(5) == 'n'
+                    || zeile.getKey().charAt(5) == 's';
+            List<Platzhalterbau> reihe = new ArrayList<>(zeile.getValue());
+            reihe.sort(Comparator.comparingInt(
+                    bau -> laengsIstX ? bau.bereich().vonX() : bau.bereich().vonZ()));
+            for (Platzhalterbau bau : reihe) {
+                baulinien.add(baulinie(plan, bau));
+            }
+            for (int i = 1; i < reihe.size(); i++) {
+                paare++;
+                if (baulinie(plan, reihe.get(i)) == baulinie(plan, reihe.get(i - 1))) {
+                    gleicheFront++;
+                }
+            }
+        }
+        assertTrue(paare > 150, "so viele Nachbarpaare: " + paare);
+        assertTrue(gleicheFront * 2 < paare,
+                "weniger als die Haelfte der Nachbarn teilt die Front - sonst stehen"
+                        + " sie wieder in einer Reihe: " + gleicheFront + " von "
+                        + paare);
+        // UND ES GIBT MEHR ALS ZWEI LINIEN: Zwei waeren zwei Reihen.
+        assertTrue(baulinien.size() >= 4,
+                "so viele verschiedene Baulinien: " + baulinien);
+        assertTrue(baulinien.contains(0),
+                "manche Haeuser stehen DIREKT an der Kante: " + baulinien);
+
+        // 2b. DER SPRUNG IST GESTREUT UND NICHT GEDECKELT. Diese Zusage fehlte, und
+        //     eine Gegenprobe hat es gezeigt: Ein sprungBei, das immer SPRUNG_TIEFE
+        //     gibt, lief durch - weil die Deckelung an der Haustiefe trotzdem
+        //     verschiedene Baulinien erzeugt. Dann waere der Sprung aber keine
+        //     Entscheidung des Hauses mehr, sondern eine Folge seiner Tiefe, und ein
+        //     flaches Haus stuende IMMER hinten. Gefragt wird darum die Rechnung selbst.
+        Set<Integer> roheSpruenge = new HashSet<>();
+        for (int laengs = 0; laengs < 200; laengs++) {
+            roheSpruenge.add(Stadtplan.sprungBei(0, Richtung.NORD, laengs));
+        }
+        assertTrue(roheSpruenge.contains(0),
+                "die meisten Haeuser springen gar nicht: " + roheSpruenge);
+        assertTrue(roheSpruenge.size() >= 3,
+                "und die uebrigen verschieden weit: " + roheSpruenge);
+        for (int sprung : roheSpruenge) {
+            assertTrue(sprung >= 0 && sprung <= Stadtplan.SPRUNG_TIEFE,
+                    "jeder Sprung liegt in der Spanne: " + sprung);
+        }
+        // UND DIE MEHRHEIT BLEIBT AN DER KANTE: Eine Zeile, in der jedes Haus springt,
+        // hat wieder eine gemeinsame Linie - nur eine andere.
+        int ohneSprung = 0;
+        for (int laengs = 0; laengs < 300; laengs++) {
+            if (Stadtplan.sprungBei(0, Richtung.NORD, laengs) == 0) {
+                ohneSprung++;
+            }
+        }
+        assertTrue(ohneSprung * 2 > 300,
+                "mehr als die Haelfte springt nicht: " + ohneSprung + " von 300");
+
+        // 3. DIE GASSE BEHAELT TROTZDEM IHRE BREITE. Das ist die tragende Zusage dieses
+        //    Zuges: Der Sprung geht in den HAUSQUADER und nicht in die Gassenkante -
+        //    sonst wuerde die Gasse bei jedem zurueckgesetzten Haus breiter, und das
+        //    sieht nicht nach Vorplatz aus, sondern nach Platzmangel. Gemessen wird die
+        //    Fahrbahn quer durch die erste Ringgasse, ueber die ganze Zeilenlaenge.
+        int bandVon = plan.zeileInnenVon(0);
+        Set<Integer> breiten = new HashSet<>();
+        int bisLaengs = Stadtplan.MITTE_Z + Stadtplan.zeilenreichweite(bandVon);
+        for (int laengs = Stadtplan.MITTE_Z + NEBEN_DER_ACHSE; laengs <= bisLaengs;
+                laengs++) {
+            int weg = 0;
+            for (int r = plan.quartierAnfang(0); r < bandVon + Stadtplan.ZEILE_TIEFE;
+                    r++) {
+                if (Stadtplan.istWeg(aufRing(plan, r, laengs))) {
+                    weg++;
+                } else if (weg > 0) {
+                    break;
+                }
+            }
+            breiten.add(weg);
+        }
+        for (int breite : breiten) {
+            assertTrue(breite >= Stadtplan.GASSE_BREITE,
+                    "die Gasse wird nie schmaler als ihre Nennbreite: " + breite);
+            assertTrue(breite <= Stadtplan.GASSE_BREITE + Stadtplan.KRUMM_TIEFE,
+                    "und nie weiter als der Bogen erlaubt - ein zurueckgesetztes Haus"
+                            + " weitet sie NICHT: " + breite + " bei einer Nennbreite"
+                            + " von " + Stadtplan.GASSE_BREITE + " und einem Bogen von "
+                            + Stadtplan.KRUMM_TIEFE);
+        }
+
+        // 4. VOR EINEM GESPRUNGENEN HAUS LIEGT SEIN VORPLATZ - Hofboden, keine Gasse.
+        //    Daran sieht man, dass es zuruecksteht, und nicht daran, dass die Gasse
+        //    dort breiter ist.
+        //
+        //    BAULINIE IST NICHT SPRUNG, und das hat diese Probe mich gelehrt: Die
+        //    Baulinie ist der ganze Abstand der Front von der Bandkante, also
+        //    Wellenversatz PLUS Sprung. Ein Haus kann weit hinten stehen, nur weil die
+        //    Gasse dort ausbiegt - dann ist vor seiner Tuer Fahrbahn und kein Vorplatz.
+        //    Von den 175 Haeusern mit einer Baulinie ueber null haben darum gemessen 50
+        //    einen Vorplatz; das sind die mit einem echten Sprung.
+        int mitVorplatz = 0;
+        for (Platzhalterbau bau : haeuser) {
+            if (baulinie(plan, bau) == 0) {
+                continue;
+            }
+            Bauplan.Stelle tuer = Bauplan.tuer(bau);
+            if (tuer == null) {
+                continue;
+            }
+            int vorX = tuer.x() + (tuer.zeigt() == Richtung.OST ? 1
+                    : tuer.zeigt() == Richtung.WEST ? -1 : 0);
+            int vorZ = tuer.z() + (tuer.zeigt() == Richtung.SUED ? 1
+                    : tuer.zeigt() == Richtung.NORD ? -1 : 0);
+            if (plan.lageBei(vorX, vorZ) == Stadtplan.Lage.ZEILE) {
+                mitVorplatz++;
+            }
+        }
+        assertTrue(mitVorplatz >= 40,
+                "so viele gesprungene Haeuser haben einen Vorplatz vor der Tuer"
+                        + " (gemessen 50 am 24.11.2026): " + mitVorplatz);
+    }
+
+    /**
+     * Die Bandtiefe der Hausfront - 0 heisst "direkt an der Gassenkante".
+     *
+     * <p>Gemessen und nicht aus dem Plan geholt: Die Zusage ist, dass die FRONTEN
+     * auseinanderliegen, und eine Erwartung, die aus derselben Rechnung kommt wie das
+     * Gepruefte, haelt nur, dass eine Zahl sich selbst gleicht.
+     */
+    private static int baulinie(Stadtplan plan, Platzhalterbau bau) {
+        Quader q = bau.bereich();
+        int innerster = Integer.MAX_VALUE;
+        int aeusserster = 0;
+        for (int x = q.vonX(); x <= q.bisX(); x++) {
+            for (int z = q.vonZ(); z <= q.bisZ(); z++) {
+                int r = Stadtplan.ring(x, z);
+                innerster = Math.min(innerster, r);
+                aeusserster = Math.max(aeusserster, r);
+            }
+        }
+        for (int quartier = 0; quartier < plan.quartiere(); quartier++) {
+            int innen = plan.zeileInnenVon(quartier);
+            if (innerster >= innen && aeusserster < innen + Stadtplan.ZEILE_TIEFE) {
+                return innerster - innen;
+            }
+            int aussen = plan.zeileAussenVon(quartier);
+            if (innerster >= aussen && aeusserster < aussen + Stadtplan.ZEILE_TIEFE) {
+                return aussen + Stadtplan.ZEILE_TIEFE - 1 - aeusserster;
+            }
+        }
+        throw new AssertionError(bau.schluessel() + " liegt in keinem Zeilenband: "
+                + q.alsText());
     }
 
 }

@@ -2708,7 +2708,256 @@ class BildGleichTest {
                 new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_RUNDGANG, 2L, Einsatz.von("zahl", 2L),
                         "&#a5b4bf- 2 abgeschlossene Rundgaenge"),
                 new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_RUNDGANG, 0L, Einsatz.von("zahl", 0L),
-                        "&#a5b4bf- 0 abgeschlossene Rundgaenge"));
+                        "&#a5b4bf- 0 abgeschlossene Rundgaenge"),
+
+                // ------------------------------------------------------------
+                // SCHRITT 16a TEIL A: DIE TEAMROLLEN
+                //
+                // Betreibertexte, und darum ist diese Tafel hier besonders wichtig:
+                // Ein Spieler meldet eine verrutschte Spalte, ein Betreiber sieht sie
+                // einmal und tippt weiter.
+                // ------------------------------------------------------------
+                new Zeile(TeamSatz.KOPF, 1L, Einsatz.keine(), "&#c6a15bDas Team des Freimarkenbunds"),
+                new Zeile(TeamSatz.ZEILE, 1L, Einsatz.von("spieler", "Anna")
+                        .mit("rollen", "Moderator, Baumeister"), "&#a5b4bf  Anna - &#edf1f3Moderator, Baumeister"),
+                new Zeile(TeamSatz.LEER, 1L, Einsatz.keine(), "&#6e7a82Niemand hat eine Teamrolle. Vergeben wird eine mit /team gib - welche es gibt, zeigt /team rollen."),
+                new Zeile(TeamSatz.ROLLEN_KOPF, 1L, Einsatz.keine(), "&#c6a15bDie Teamrollen dieses Servers"),
+                // GEZAEHLT: ein Recht ist nicht zwei. Die Null steht mit dabei, wie
+                // ueberall in dieser Tafel - eine Rolle ohne Rechte ist erlaubt, und
+                // Teamwerte.ungereimtheiten meldet sie, statt sie zu verbieten.
+                new Zeile(TeamSatz.ROLLEN_ZEILE, 1L, Einsatz.von("rolle", "Helfer")
+                        .mit("rechte", 1L), "&#a5b4bf  &#edf1f3Helfer&#a5b4bf &#6e7a82- 1 Recht"),
+                new Zeile(TeamSatz.ROLLEN_ZEILE, 2L, Einsatz.von("rolle", "Moderator")
+                        .mit("rechte", 4L), "&#a5b4bf  &#edf1f3Moderator&#a5b4bf &#6e7a82- 4 Rechte"),
+                new Zeile(TeamSatz.ROLLEN_ZEILE, 0L, Einsatz.von("rolle", "Pfoertner")
+                        .mit("rechte", 0L), "&#a5b4bf  &#edf1f3Pfoertner&#a5b4bf &#6e7a82- 0 Rechte"),
+                new Zeile(TeamSatz.ROLLEN_LEER, 1L, Einsatz.keine(), "&#e3c57eDieser Server hat keine Teamrollen eingetragen. Sie stehen in der config.yml unter team.rollen."),
+                new Zeile(TeamSatz.ZEIGEN_KOPF, 1L, Einsatz.von("spieler", "Anna"),
+                        "&#c6a15bDie Teamrollen von Anna"),
+                new Zeile(TeamSatz.ZEIGEN_ZEILE, 1L, Einsatz.von("rolle", "Moderator")
+                        .mit("seit", "24.11.2026 12:00").mit("von", "Bert"), "&#a5b4bf  &#edf1f3Moderator&#a5b4bf &#6e7a82- seit 24.11.2026 12:00, von Bert"),
+                // Die Zeile, die den Befehl rechtfertigt: Die Rolle steht in der
+                // Datenbank, aber nicht mehr in der config.yml - sie gibt KEINE Rechte.
+                new Zeile(TeamSatz.ZEIGEN_UNBEKANNT, 1L,
+                        Einsatz.von("rolle", "hausmeister"), "&#d9564d    Die config.yml kennt \"hausmeister\" nicht mehr - diese Rolle gibt KEINE Rechte. Entweder wieder eintragen oder mit /team nimm abnehmen."),
+                new Zeile(TeamSatz.ZEIGEN_LEER, 1L, Einsatz.von("spieler", "Anna"),
+                        "&#6e7a82Anna hat keine Teamrolle."),
+                new Zeile(TeamSatz.VERGEBEN, 1L, Einsatz.von("spieler", "Anna")
+                        .mit("rolle", "Moderator"), "&#73bf96Anna ist jetzt Moderator."),
+                new Zeile(TeamSatz.HATTE_SCHON, 1L, Einsatz.von("spieler", "Anna")
+                        .mit("rolle", "Moderator"), "&#e3c57eAnna ist schon Moderator - es ist nichts passiert."),
+                new Zeile(TeamSatz.GENOMMEN, 1L, Einsatz.von("spieler", "Anna")
+                        .mit("rolle", "Moderator"), "&#73bf96Anna ist nicht mehr Moderator."),
+                new Zeile(TeamSatz.HATTE_NICHT, 1L, Einsatz.von("spieler", "Anna")
+                        .mit("rolle", "Moderator"), "&#e3c57eAnna ist nicht Moderator - es ist nichts passiert."),
+                new Zeile(TeamSatz.GENOMMEN_UNBEKANNT, 1L, Einsatz.von("spieler", "Anna")
+                        .mit("rolle", "hausmeister"), "&#73bf96Anna ist nicht mehr hausmeister. &#6e7a82Diese Rolle stand nur noch in der Datenbank."),
+                new Zeile(TeamSatz.UNBEKANNTE_ROLLE, 1L,
+                        Einsatz.von("rolle", "moderaator")
+                                .mit("rollen", "Helfer, Moderator, Verwalter"), "&#d9564dDie Rolle \"moderaator\" gibt es nicht. &#6e7a82Es gibt: Helfer, Moderator, Verwalter"),
+                // DER RIEGEL: Die Absage nennt die fehlenden Rechte VOLLSTAENDIG - wer
+                // eine Vollmacht weitergeben will, die er nicht hat, soll lesen, welche
+                // das ist.
+                new Zeile(TeamSatz.ZU_WENIG_RECHTE, 1L, Einsatz.von("rolle", "Verwalter")
+                        .mit("fehlende", "freimarken.besitz, freimarken.verwalten"),
+                        "&#d9564dDu kannst \"Verwalter\" nicht vergeben oder entziehen - dir fehlen Rechte, die diese Rolle gibt: &#6e7a82freimarken.besitz, freimarken.verwalten"),
+                new Zeile(TeamSatz.KEIN_TEAM, 1L, Einsatz.keine(), "&#e3c57eDieser Server hat keine Teamrollen eingetragen - es gibt nichts zu vergeben. Sie stehen in der config.yml unter team.rollen."),
+                new Zeile(TeamSatz.UNBEKANNTER_SPIELER, 1L,
+                        Einsatz.von("name", "Annna"), "&#d9564dDen Spieler \"Annna\" kennt dieser Server nicht."),
+                // ------------------------------------------------------------
+                // SCHRITT 16a TEIL C: MELDEN UND BEARBEITEN
+                //
+                // ZWEI Leserschaften, und darum ist diese Tafel hier doppelt wichtig:
+                // Die Saetze unter melden. liest ein Spieler im Augenblick eines
+                // Vorfalls, die unter meldung. ein Moderator in einer Liste. Eine
+                // verrutschte Spalte in der Liste sieht er einmal und tippt weiter; eine
+                // kaputte Absage an den Melder kostet die naechste Meldung.
+                // ------------------------------------------------------------
+                new Zeile(MeldeSatz.ANGELEGT, 1L, Einsatz.von("nummer", 7L)
+                        .mit("spieler", "Bert"), "&#73bf96Deine Meldung zu Bert ist aufgenommen (Nummer 7). &#6e7a82Ein Moderator sieht sie sich an - du bekommst Bescheid."),
+                new Zeile(MeldeSatz.AUS, 1L, Einsatz.keine(), "&#e3c57eAuf diesem Server wird nicht gemeldet."),
+                // GEZAEHLT: eine Sekunde ist nicht zwei. Die Null steht mit dabei, wie
+                // ueberall in dieser Tafel - sie kann nicht eintreten (Meldebuch gibt
+                // ABKLINGZEIT nur mit Restzeit > 0, und sein Entscheid klagt sonst), und
+                // genau darum ist sie aufzuschreiben: Wer den Riegel herausnimmt, sieht
+                // hier, was der Spieler dann liest.
+                new Zeile(MeldeSatz.ABKLINGZEIT, 1L, Einsatz.von("sekunden", 1L), "&#e3c57eNoch 1 Sekunde, dann kannst du wieder melden."),
+                new Zeile(MeldeSatz.ABKLINGZEIT, 2L, Einsatz.von("sekunden", 40L),
+                        "&#e3c57eNoch 40 Sekunden, dann kannst du wieder melden."),
+                new Zeile(MeldeSatz.ABKLINGZEIT, 0L, Einsatz.von("sekunden", 0L), "&#e3c57eNoch 0 Sekunden, dann kannst du wieder melden."),
+                new Zeile(MeldeSatz.ZU_VIELE_OFFENE, 1L, Einsatz.von("grenze", 1L),
+                        "&#e3c57eDu hast schon 1 unerledigte Meldung. Sobald sie bearbeitet ist, kannst du wieder melden."),
+                new Zeile(MeldeSatz.ZU_VIELE_OFFENE, 2L, Einsatz.von("grenze", 3L),
+                        "&#e3c57eDu hast schon 3 unerledigte Meldungen. Sobald eine davon bearbeitet ist, kannst du wieder melden."),
+                new Zeile(MeldeSatz.ZU_VIELE_OFFENE, 0L, Einsatz.von("grenze", 0L),
+                        "&#e3c57eDu hast schon 0 unerledigte Meldungen. Sobald eine davon bearbeitet ist, kannst du wieder melden."),
+                new Zeile(MeldeSatz.SELBST, 1L, Einsatz.keine(), "&#d9564dDich selbst kannst du nicht melden."),
+                new Zeile(MeldeSatz.GRUND_ZU_KURZ, 1L, Einsatz.von("mindestens", 1L),
+                        "&#d9564dSchreib dazu, was passiert ist - mindestens 1 Zeichen."),
+                new Zeile(MeldeSatz.GRUND_ZU_KURZ, 2L, Einsatz.von("mindestens", 3L),
+                        "&#d9564dSchreib dazu, was passiert ist - mindestens 3 Zeichen."),
+                new Zeile(MeldeSatz.GRUND_ZU_KURZ, 0L, Einsatz.von("mindestens", 0L),
+                        "&#d9564dSchreib dazu, was passiert ist - mindestens 0 Zeichen."),
+                new Zeile(MeldeSatz.GRUND_ZU_LANG, 1L, Einsatz.von("hoechstens", 1L),
+                        "&#d9564dDas ist zu lang - hoechstens 1 Zeichen."),
+                new Zeile(MeldeSatz.GRUND_ZU_LANG, 2L, Einsatz.von("hoechstens", 256L),
+                        "&#d9564dDas ist zu lang - hoechstens 256 Zeichen."),
+                new Zeile(MeldeSatz.GRUND_ZU_LANG, 0L, Einsatz.von("hoechstens", 0L),
+                        "&#d9564dDas ist zu lang - hoechstens 0 Zeichen."),
+                new Zeile(MeldeSatz.GRUND_ZEICHEN, 1L, Einsatz.keine(), "&#d9564dIn deinem Grund steht ein Zeichen, das dort nicht hingehoert. Schreib ihn in gewoehnlichen Worten."),
+                new Zeile(MeldeSatz.UNBEKANNTER_SPIELER, 1L,
+                        Einsatz.von("name", "Berrt"), "&#d9564dDen Spieler Berrt kennt dieser Server nicht."),
+                new Zeile(MeldeSatz.NUR_SPIELER, 1L, Einsatz.keine(), "&#d9564dMelden kann ein Spieler - eine Meldung haelt den Ort fest, und die Konsole steht nirgends."),
+                new Zeile(MeldeSatz.GESTOERT, 1L, Einsatz.keine(), "&#d9564dDie Meldung konnte nicht aufgenommen werden - versuch es noch einmal."),
+                new Zeile(MeldeSatz.ANSAGE, 1L, Einsatz.von("nummer", 7L)
+                        .mit("melder", "Anna").mit("betroffener", "Bert")
+                        .mit("grund", "baut auf meiner Parzelle"), "&#e3c57eNeue Meldung 7: &#a5b4bfAnna meldet Bert - baut auf meiner Parzelle&#e3c57e &#6e7a82/meldung 7"),
+                new Zeile(MeldeSatz.ANTWORT_KOPF, 1L, Einsatz.von("anzahl", 1L), "&#c6a15bEs gibt eine Antwort auf deine Meldung:"),
+                new Zeile(MeldeSatz.ANTWORT_KOPF, 2L, Einsatz.von("anzahl", 3L), "&#c6a15bEs gibt 3 Antworten auf deine Meldungen:"),
+                new Zeile(MeldeSatz.ANTWORT_KOPF, 0L, Einsatz.von("anzahl", 0L), "&#c6a15bEs gibt 0 Antworten auf deine Meldungen:"),
+                new Zeile(MeldeSatz.ANTWORT_ABGESCHLOSSEN, 1L, Einsatz.von("nummer", 7L)
+                        .mit("betroffener", "Bert").mit("vermerk", "angesprochen"),
+                        "&#73bf96  Meldung 7 (Bert): bearbeitet. &#a5b4bfangesprochen"),
+                new Zeile(MeldeSatz.ANTWORT_ABGEWIESEN, 1L, Einsatz.von("nummer", 7L)
+                        .mit("betroffener", "Bert").mit("vermerk", "nichts gefunden"),
+                        "&#e3c57e  Meldung 7 (Bert): kein Verstoss. &#a5b4bfnichts gefunden"),
+                new Zeile(MeldeSatz.LISTE_KOPF, 1L, Einsatz.von("anzahl", 1L), "&#c6a15b1 offene Meldung"),
+                new Zeile(MeldeSatz.LISTE_KOPF, 2L, Einsatz.von("anzahl", 4L), "&#c6a15b4 offene Meldungen"),
+                new Zeile(MeldeSatz.LISTE_KOPF, 0L, Einsatz.von("anzahl", 0L), "&#c6a15b0 offene Meldungen"),
+                new Zeile(MeldeSatz.LISTE_ZEILE, 1L, Einsatz.von("nummer", 7L)
+                        .mit("melder", "Anna").mit("betroffener", "Bert")
+                        .mit("grund", "baut auf meiner Parzelle")
+                        .mit("alter", "vor 3 Std.").mit("stand", "offen"), "&#a5b4bf  &#edf1f37&#a5b4bf Anna an Bert: baut auf meiner Parzelle &#6e7a82(vor 3 Std., offen)"),
+                new Zeile(MeldeSatz.LISTE_LEER, 1L, Einsatz.keine(), "&#6e7a82Es liegt keine Meldung an."),
+                new Zeile(MeldeSatz.LISTE_HINWEIS, 1L, Einsatz.keine(), "&#6e7a82/meldung NUMMER zeigt sie, dahinter annehmen, abschliessen, abweisen oder hin"),
+                new Zeile(MeldeSatz.ZEIGEN_KOPF, 1L, Einsatz.von("nummer", 7L)
+                        .mit("stand", "in Arbeit"), "&#c6a15bMeldung 7 &#6e7a82(in Arbeit)"),
+                new Zeile(MeldeSatz.ZEIGEN_WER, 1L, Einsatz.von("melder", "Anna")
+                        .mit("betroffener", "Bert").mit("alter", "vor 3 Std."), "&#a5b4bf  Anna meldet Bert &#6e7a82- vor 3 Std."),
+                new Zeile(MeldeSatz.ZEIGEN_GRUND, 1L,
+                        Einsatz.von("grund", "baut auf meiner Parzelle"), "&#a5b4bf  baut auf meiner Parzelle"),
+                new Zeile(MeldeSatz.ZEIGEN_ORT, 1L, Einsatz.von("welt", "altfurt")
+                        .mit("x", 10).mit("y", -60).mit("z", -20).mit("nummer", 7L),
+                        "&#6e7a82  Ort: altfurt 10/-60/-20 - /meldung 7 hin"),
+                new Zeile(MeldeSatz.ZEIGEN_BEARBEITER, 1L,
+                        Einsatz.von("bearbeiter", "Chef"), "&#6e7a82  In Arbeit bei Chef"),
+                new Zeile(MeldeSatz.ZEIGEN_VERMERK, 1L,
+                        Einsatz.von("vermerk", "angesprochen"), "&#6e7a82  Vermerk: angesprochen"),
+                new Zeile(MeldeSatz.GENOMMEN, 1L, Einsatz.von("nummer", 7L), "&#73bf96Meldung 7 ist jetzt bei dir."),
+                new Zeile(MeldeSatz.SCHON_GENOMMEN, 1L, Einsatz.von("nummer", 7L)
+                        .mit("bearbeiter", "Chef"), "&#e3c57eMeldung 7 hat schon Chef."),
+                new Zeile(MeldeSatz.ABGESCHLOSSEN, 1L, Einsatz.von("nummer", 7L)
+                        .mit("melder", "Anna"), "&#73bf96Meldung 7 ist abgeschlossen - Anna bekommt Bescheid."),
+                new Zeile(MeldeSatz.ABGEWIESEN, 1L, Einsatz.von("nummer", 7L)
+                        .mit("melder", "Anna"), "&#73bf96Meldung 7 ist abgewiesen - Anna bekommt Bescheid."),
+                new Zeile(MeldeSatz.SCHON_ERLEDIGT, 1L, Einsatz.von("nummer", 7L)
+                        .mit("stand", "abgeschlossen"), "&#e3c57eMeldung 7 ist schon abgeschlossen."),
+                new Zeile(MeldeSatz.UNBEKANNT, 1L, Einsatz.von("nummer", 99L), "&#d9564dEine Meldung mit der Nummer 99 gibt es nicht."),
+                new Zeile(MeldeSatz.VERMERK_ZU_LANG, 1L,
+                        Einsatz.von("hoechstens", 1L), "&#d9564dDer Vermerk ist zu lang - hoechstens 1 Zeichen."),
+                new Zeile(MeldeSatz.VERMERK_ZU_LANG, 2L,
+                        Einsatz.von("hoechstens", 256L), "&#d9564dDer Vermerk ist zu lang - hoechstens 256 Zeichen."),
+                new Zeile(MeldeSatz.VERMERK_ZU_LANG, 0L,
+                        Einsatz.von("hoechstens", 0L), "&#d9564dDer Vermerk ist zu lang - hoechstens 0 Zeichen."),
+                new Zeile(MeldeSatz.HIN_UNTERWEGS, 1L, Einsatz.von("nummer", 7L)
+                        .mit("welt", "altfurt"), "&#73bf96Unterwegs zum Ort von Meldung 7 in altfurt."),
+                new Zeile(MeldeSatz.HIN_WELT_FEHLT, 1L, Einsatz.von("welt", "kornmark"),
+                        "&#d9564dDie Welt kornmark gibt es nicht mehr - dorthin fuehrt kein Weg."),
+                new Zeile(MeldeSatz.NUR_SPIELER_MODERATION, 1L, Einsatz.keine(), "&#d9564dDas kann ein Spieler - von der Konsole geht es nicht."),
+                new Zeile(MeldeSatz.MODERATION_GESTOERT, 1L, Einsatz.keine(), "&#d9564dDie Meldungen antworten gerade nicht - es ist nichts passiert."),
+                new Zeile(TeamSatz.GESTOERT, 1L, Einsatz.keine(), "&#d9564dDie Teamrollen antworten gerade nicht - es ist nichts passiert."),
+                new Zeile(StrafSatz.VERHAENGT, 1L, Einsatz.von("nummer", 7L).mit("spieler", "Bert").mit("art", "Sperre").mit("dauer", "1 Std.").mit("grund", "Grief in Altfurt"),
+                        "&#73bf96Bert: Sperre - 1 Std. (Nummer 7). &#a5b4bfGrief in Altfurt"),
+                new Zeile(StrafSatz.VERHAENGT_OHNE_DAUER, 1L, Einsatz.von("nummer", 7L).mit("spieler", "Bert").mit("art", "Rauswurf").mit("grund", "Spam im Chat"),
+                        "&#73bf96Bert: Rauswurf (Nummer 7). &#a5b4bfSpam im Chat"),
+                new Zeile(StrafSatz.ANSAGE_OHNE_DAUER, 1L, Einsatz.von("spieler", "Bert").mit("art", "Rauswurf").mit("grund", "Spam im Chat"),
+                        "&#e3c57eBert: Rauswurf. &#a5b4bfSpam im Chat"),
+                new Zeile(StrafSatz.OHNE_RECHT, 1L, Einsatz.von("art", "Sperre"),
+                        "&#d9564dFuer Sperre fehlt dir das Recht."),
+                new Zeile(StrafSatz.OHNE_RECHT_DAUERHAFT, 1L, Einsatz.von("art", "Sperre").mit("hoechstens", "30 Tg."),
+                        "&#d9564dFuer Sperre darfst du hoechstens 30 Tg. verhaengen. &#6e7a82Laenger oder dauerhaft kann ein Verwalter."),
+                new Zeile(StrafSatz.OHNE_RECHT_TEAM, 1L, Einsatz.von("spieler", "Bert"),
+                        "&#d9564dBert ist selbst im Team. &#6e7a82Das kann ein Verwalter entscheiden."),
+                new Zeile(StrafSatz.OHNE_RECHT_AUFHEBEN, 1L, Einsatz.keine(),
+                        "&#d9564dZum Aufheben fehlt dir das Recht."),
+                new Zeile(StrafSatz.OHNE_RECHT_DAUERHAFT_AUFHEBEN, 1L, Einsatz.von("nummer", 7L),
+                        "&#d9564dStrafe 7 ist dauerhaft - sie aufzuheben kann ein Verwalter."),
+                new Zeile(StrafSatz.SELBST, 1L, Einsatz.keine(),
+                        "&#d9564dDich selbst kannst du nicht bestrafen."),
+                new Zeile(StrafSatz.GRUND_ZU_KURZ, 1L, Einsatz.von("mindestens", 3),
+                        "&#d9564dSchreib dazu, warum - mindestens 1 Zeichen."),
+                new Zeile(StrafSatz.GRUND_ZU_KURZ, 2L, Einsatz.von("mindestens", 3),
+                        "&#d9564dSchreib dazu, warum - mindestens 3 Zeichen."),
+                new Zeile(StrafSatz.GRUND_ZU_KURZ, 0L, Einsatz.von("mindestens", 3),
+                        "&#d9564dSchreib dazu, warum - mindestens 3 Zeichen."),
+                new Zeile(StrafSatz.GRUND_ZU_LANG, 1L, Einsatz.von("hoechstens", 256),
+                        "&#d9564dDer Grund ist zu lang - hoechstens 1 Zeichen."),
+                new Zeile(StrafSatz.GRUND_ZU_LANG, 2L, Einsatz.von("hoechstens", 256),
+                        "&#d9564dDer Grund ist zu lang - hoechstens 256 Zeichen."),
+                new Zeile(StrafSatz.GRUND_ZU_LANG, 0L, Einsatz.von("hoechstens", 256),
+                        "&#d9564dDer Grund ist zu lang - hoechstens 256 Zeichen."),
+                new Zeile(StrafSatz.GRUND_ZEICHEN, 1L, Einsatz.keine(),
+                        "&#d9564dIm Grund steht ein Zeichen, das dort nicht hingehoert. Schreib ihn in gewoehnlichen Worten."),
+                new Zeile(StrafSatz.UNBEKANNTER_SPIELER, 1L, Einsatz.von("name", "Zora"),
+                        "&#d9564dDen Spieler Zora kennt dieser Server nicht."),
+                new Zeile(StrafSatz.UNBEKANNTE_DAUER, 1L, Einsatz.von("wort", "10").mit("beispiele", "10m, 1h, dauerhaft"),
+                        "&#d9564d10 ist keine Dauer. &#6e7a82Zahl und Einheit, zum Beispiel: 10m, 1h, dauerhaft"),
+                new Zeile(StrafSatz.SCHON_GESTRAFT, 1L, Einsatz.von("spieler", "Bert").mit("art", "Sperre").mit("nummer", 7L).mit("bis", "26.11.2026 12:00"),
+                        "&#d9564dBert hat schon Sperre bis 26.11.2026 12:00 (Nummer 7). &#6e7a82Erst aufheben, dann neu verhaengen."),
+                new Zeile(StrafSatz.UNBEKANNT, 1L, Einsatz.von("nummer", 99L),
+                        "&#d9564dEine Strafe mit der Nummer 99 gibt es nicht."),
+                new Zeile(StrafSatz.NICHT_FORTWIRKEND, 1L, Einsatz.von("nummer", 7L).mit("art", "Rauswurf"),
+                        "&#e3c57eStrafe 7 ist ein Rauswurf - daran ist nichts aufzuheben."),
+                new Zeile(StrafSatz.AUFGEHOBEN, 1L, Einsatz.von("nummer", 7L).mit("spieler", "Bert").mit("art", "Sperre"),
+                        "&#73bf96Strafe 7 gegen Bert (Sperre) ist aufgehoben."),
+                new Zeile(StrafSatz.SCHON_AUFGEHOBEN, 1L, Einsatz.von("nummer", 7L).mit("wer", "Anna"),
+                        "&#e3c57eStrafe 7 hat Anna schon aufgehoben."),
+                new Zeile(StrafSatz.GESTOERT, 1L, Einsatz.keine(),
+                        "&#d9564dDas konnte nicht geschrieben werden - versuch es noch einmal."),
+                new Zeile(StrafSatz.HINWEIS, 1L, Einsatz.von("arten", "stumm, rauswurf, bann"),
+                        "&#c6a15b/strafe ARTEN SPIELER DAUER GRUND\n&#a5b4bfArten: stumm, rauswurf, bann\n&#6e7a82/strafe aufheben NUMMER GRUND - /strafe verlauf SPIELER - /bannliste"),
+                new Zeile(StrafSatz.ANSAGE, 1L, Einsatz.von("spieler", "Bert").mit("art", "Sperre").mit("dauer", "1 Std.").mit("grund", "Grief in Altfurt"),
+                        "&#e3c57eBert: Sperre - 1 Std.. &#a5b4bfGrief in Altfurt"),
+                new Zeile(StrafSatz.ANSAGE_AUFHEBUNG, 1L, Einsatz.von("spieler", "Bert").mit("art", "Sperre").mit("grund", "Einspruch angenommen"),
+                        "&#73bf96Bert ist wieder frei (Sperre). &#a5b4bfEinspruch angenommen"),
+                new Zeile(StrafSatz.GETROFFEN_RAUSWURF, 1L, Einsatz.von("grund", "Spam im Chat").mit("wer", "Anna"),
+                        "&#d9564dDu wurdest hinausgeworfen.\n&#a5b4bfSpam im Chat\n&#6e7a82von Anna"),
+                new Zeile(StrafSatz.GETROFFEN_BANN, 1L, Einsatz.von("grund", "Grief in Altfurt").mit("bis", "26.11.2026 12:00").mit("dauer", "1 Std."),
+                        "&#d9564dDu bist gesperrt bis 26.11.2026 12:00 (noch 1 Std.).\n&#a5b4bfGrief in Altfurt"),
+                new Zeile(StrafSatz.GETROFFEN_BANN_DAUERHAFT, 1L, Einsatz.von("grund", "Grief in Altfurt"),
+                        "&#d9564dDu bist dauerhaft gesperrt.\n&#a5b4bfGrief in Altfurt\n&#6e7a82Wenn du das fuer falsch haeltst, schreib uns."),
+                new Zeile(StrafSatz.GETROFFEN_STUMM, 1L, Einsatz.von("grund", "Beleidigung").mit("dauer", "10 Min."),
+                        "&#d9564dDu bist stummgeschaltet - noch 10 Min.. &#a5b4bfBeleidigung"),
+                new Zeile(StrafSatz.GETROFFEN_STUMM_DAUERHAFT, 1L, Einsatz.von("grund", "Beleidigung"),
+                        "&#d9564dDu bist dauerhaft stummgeschaltet. &#a5b4bfBeleidigung"),
+                new Zeile(StrafSatz.GETROFFEN_BEFEHL, 1L, Einsatz.von("befehl", "msg").mit("grund", "Beleidigung").mit("dauer", "10 Min."),
+                        "&#d9564dmsg ist gesperrt, solange du stumm bist - noch 10 Min.. &#a5b4bfBeleidigung"),
+                new Zeile(StrafSatz.VERLAUF_KOPF, 1L, Einsatz.von("anzahl", 1).mit("spieler", "Bert"),
+                        "&#c6a15b1 Strafe gegen Bert"),
+                new Zeile(StrafSatz.VERLAUF_KOPF, 2L, Einsatz.von("anzahl", 2).mit("spieler", "Bert"),
+                        "&#c6a15b2 Strafen gegen Bert"),
+                new Zeile(StrafSatz.VERLAUF_KOPF, 0L, Einsatz.von("anzahl", 0).mit("spieler", "Bert"),
+                        "&#c6a15b0 Strafen gegen Bert"),
+                new Zeile(StrafSatz.VERLAUF_ZEILE, 1L, Einsatz.von("nummer", 7L).mit("art", "Sperre").mit("stand", "gilt").mit("wann", "25.11.2026 12:00").mit("grund", "Grief in Altfurt"),
+                        "&#a5b4bf  7 Sperre (gilt) 25.11.2026 12:00 - Grief in Altfurt"),
+                new Zeile(StrafSatz.VERLAUF_LEER, 1L, Einsatz.von("spieler", "Bert"),
+                        "&#a5b4bfGegen Bert steht nichts."),
+                new Zeile(StrafSatz.VERLAUF_HINWEIS, 1L, Einsatz.keine(),
+                        "&#6e7a82/strafe aufheben NUMMER GRUND"),
+                new Zeile(StrafSatz.BANNLISTE_KOPF, 1L, Einsatz.von("anzahl", 1),
+                        "&#c6a15b1 Spieler ist gesperrt"),
+                new Zeile(StrafSatz.BANNLISTE_KOPF, 2L, Einsatz.von("anzahl", 2),
+                        "&#c6a15b2 Spieler sind gesperrt"),
+                new Zeile(StrafSatz.BANNLISTE_KOPF, 0L, Einsatz.von("anzahl", 0),
+                        "&#c6a15b0 Spieler sind gesperrt"),
+                new Zeile(StrafSatz.BANNLISTE_ZEILE, 1L, Einsatz.von("spieler", "Bert").mit("bis", "26.11.2026 12:00").mit("grund", "Grief in Altfurt"),
+                        "&#a5b4bf  Bert bis 26.11.2026 12:00 - Grief in Altfurt"),
+                new Zeile(StrafSatz.BANNLISTE_LEER, 1L, Einsatz.keine(),
+                        "&#73bf96Niemand ist gesperrt."),
+                new Zeile(StrafSatz.BANNLISTE_OHNE_RECHT, 1L, Einsatz.keine(),
+                        "&#d9564dDie Bannliste ist auf diesem Server nicht oeffentlich."),
+                new Zeile(StrafSatz.BANNLISTE_GESTOERT, 1L, Einsatz.keine(),
+                        "&#d9564dDie Bannliste ist gerade nicht lesbar - versuch es noch einmal."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

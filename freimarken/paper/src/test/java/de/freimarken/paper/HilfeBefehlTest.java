@@ -77,6 +77,22 @@ class HilfeBefehlTest {
                         "&#e3c57e/regeln&#6e7a82 - &#a5b4bfWas auf diesem Server gilt - mit /regeln chat im Chat",
                         "&#e3c57e/freimarken&#6e7a82 - &#a5b4bfStand, Preise und Welt des "
                                 + "Freimarkenbunds",
+                        // Schritt 16a Teil A: /team, in derselben Gruppe wie
+                        // /freimarken. In OHNE_RECHTE und NUR_RANG steht die
+                        // Zeile mit Absicht NICHT - dort ist ihr Fehlen die
+                        // Zusage, denn freimarken.team gehoert ab Werk nur
+                        // Operatoren.
+                        "&#e3c57e/team&#6e7a82 - &#a5b4bfTeamrollen ansehen, vergeben und entziehen",
+                        // Schritt 16a Teil C: /melden gehoert JEDEM (siehe Hilfeplan),
+                        // /meldung haengt an freimarken.meldungen und steht nur in
+                        // dieser Liste, weil hier jedes Recht gesetzt ist.
+                        "&#e3c57e/melden&#6e7a82 - &#a5b4bfEinen Spieler melden - mit Grund, ein Moderator sieht es sich an",
+                        "&#e3c57e/meldung&#6e7a82 - &#a5b4bfOffene Meldungen ansehen, annehmen und erledigen",
+                        // Schritt 16a Teil B: /strafe haengt am Recht fuer die Sperre
+                        // (das schwerste der drei Artrechte), /bannliste gehoert
+                        // JEDEM - darum steht sie auch in den zwei Listen darunter.
+                        "&#e3c57e/strafe&#6e7a82 - &#a5b4bfStummschalten, hinauswerfen, sperren - mit Dauer und Grund",
+                        "&#e3c57e/bannliste&#6e7a82 - &#a5b4bfWer gesperrt ist, warum und bis wann",
                         "&#6e7a82Jeder Befehl ohne Zusatz zeigt, was er kann.");
 
     /** Was ein Spieler OHNE jedes Recht sieht: drei Befehle in zwei Gruppen. */
@@ -90,6 +106,12 @@ class HilfeBefehlTest {
                         "&#edf1f3Der Bund",
                         "&#e3c57e/freimarken&#6e7a82 - &#a5b4bfStand, Preise und Welt des "
                                 + "Freimarkenbunds",
+                        // /melden und /bannliste stehen AUCH hier: Beide Eintraege
+                        // tragen JEDER, und das gilt unabhaengig von jedem Recht -
+                        // genau wie /parzelle, /mark und /freimarken darueber. Plan
+                        // 12c.4 macht die Bannliste ausdruecklich oeffentlich.
+                        "&#e3c57e/melden&#6e7a82 - &#a5b4bfEinen Spieler melden - mit Grund, ein Moderator sieht es sich an",
+                        "&#e3c57e/bannliste&#6e7a82 - &#a5b4bfWer gesperrt ist, warum und bis wann",
                         "&#6e7a82Jeder Befehl ohne Zusatz zeigt, was er kann.");
 
     /** Dieselbe Lage mit EINEM Recht - die Gruppe Rang und Beruf kommt dazu. */
@@ -106,6 +128,12 @@ class HilfeBefehlTest {
                         "&#edf1f3Der Bund",
                         "&#e3c57e/freimarken&#6e7a82 - &#a5b4bfStand, Preise und Welt des "
                                 + "Freimarkenbunds",
+                        // /melden und /bannliste stehen AUCH hier: Beide Eintraege
+                        // tragen JEDER, und das gilt unabhaengig von jedem Recht -
+                        // genau wie /parzelle, /mark und /freimarken darueber. Plan
+                        // 12c.4 macht die Bannliste ausdruecklich oeffentlich.
+                        "&#e3c57e/melden&#6e7a82 - &#a5b4bfEinen Spieler melden - mit Grund, ein Moderator sieht es sich an",
+                        "&#e3c57e/bannliste&#6e7a82 - &#a5b4bfWer gesperrt ist, warum und bis wann",
                         "&#6e7a82Jeder Befehl ohne Zusatz zeigt, was er kann.");
 
     @BeforeAll
@@ -198,7 +226,7 @@ class HilfeBefehlTest {
                 + Hilfeplan.ALLE.eintraege().size();
 
         assertEquals(erwartet, ALLES.size());
-        assertEquals(31, ALLES.size());
+        assertEquals(36, ALLES.size());
     }
 
     @Test

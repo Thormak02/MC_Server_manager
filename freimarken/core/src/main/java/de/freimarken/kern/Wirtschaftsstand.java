@@ -333,6 +333,78 @@ public final class Wirtschaftsstand {
             nenneMenge(geaendert, wurzel + Rangwerte.SCHLUESSEL_RECHTE,
                     new TreeSet<>(vorher.get().rechte()), new TreeSet<>(stufe.rechte()));
         }
+        // DIE TEAMROLLEN [Schritt 16a Teil A]: dieselbe Bauart wie die Rangleiter eine
+        // Zeile darueber, und aus demselben Grund. Die MENGE der Rollennamen nennt, welche
+        // dazukam und welche wegfiel; je Rolle nennt eine zweite Zeile, dass sich ihre
+        // Rechte geaendert haben.
+        //
+        // Die zweite Zeile ist hier die wichtigere - wichtiger als bei den Raengen. Eine
+        // geaenderte Rangzahl merkt ein Spieler beim naechsten Versuch; ein Recht, das
+        // einer Rolle genommen wurde, merkt der Moderator erst, wenn er es braucht, und
+        // dann haelt er es fuer einen Fehler des Plugins. Ein stummes Neuladen waere
+        // genau der Zustand, in dem niemand nachsieht.
+        nenneMenge(geaendert, Teamwerte.PFAD_ROLLEN,
+                new TreeSet<>(alt.team().schluessel()),
+                new TreeSet<>(neu.team().schluessel()));
+        for (Teamwerte.Rolle rolle : neu.team().rollen()) {
+            var vorherigeRolle = alt.team().rolle(rolle.schluessel());
+            if (vorherigeRolle.isEmpty()) {
+                // Fuer eine NEUE Rolle ist das keine Aenderung, sondern ihr erster Wert -
+                // und die Menge darueber nennt sie schon.
+                continue;
+            }
+            nenneMenge(geaendert, Teamwerte.PFAD_ROLLEN + "." + rolle.schluessel() + "."
+                            + Teamwerte.SCHLUESSEL_RECHTE,
+                    new TreeSet<>(vorherigeRolle.get().rechte()),
+                    new TreeSet<>(rolle.rechte()));
+        }
+        // DAS MELDEWESEN [Schritt 16a Teil C]: ein Schalter und drei Zahlen. Sie
+        // stehen hier und nicht als eigenes Feld im Plugin, weil es Bremsen gegen
+        // Missbrauch sind - und Missbrauch kommt unangekuendigt. Wer die
+        // Abklingzeit hochsetzt, weil gerade jemand spammt, braucht die Wirkung
+        // jetzt und nicht nach dem naechsten Neustart.
+        nenneJaNein(geaendert, Meldewerte.PFAD_AN,
+                alt.melden().an(), neu.melden().an());
+        nenneZahl(geaendert, Meldewerte.PFAD_ABKLINGZEIT,
+                alt.melden().abklingzeitSekunden(),
+                neu.melden().abklingzeitSekunden());
+        nenneZahl(geaendert, Meldewerte.PFAD_HOECHSTE_OFFENE,
+                alt.melden().hoechsteOffeneJeMelder(),
+                neu.melden().hoechsteOffeneJeMelder());
+        nenneZahl(geaendert, Meldewerte.PFAD_ZEILEN_JE_SEITE,
+                alt.melden().zeilenJeSeite(), neu.melden().zeilenJeSeite());
+        // DIE STRAFEN [Schritt 16a Teil B]: die Hoechstdauer je Art, zwei Schalter,
+        // die Seitenlaenge und die Liste der mitgesperrten Befehle. Die erste Zeile
+        // ist die wichtigste dieses Blockes - sie ist die Grenze zwischen dem, was
+        // ein Moderator darf, und dem, was ein Verwalter darf (Plan 12c.2). Wer sie
+        // enger zieht, zieht sie, weil gerade etwas geschehen ist; ein stummes
+        // Neuladen waere genau dann stumm, wenn jemand hinsieht.
+        //
+        // Je ART eine Zeile, und zwar aus der Aufzaehlung gerechnet: Eine vierte
+        // fortwirkende Art bekommt ihre Zeile dann von selbst. Eine von Hand
+        // geschriebene Liste waere die Stelle, an der sie fehlt.
+        for (Strafart art : Strafart.values()) {
+            if (!art.giltFort()) {
+                continue;
+            }
+            nenneZahl(geaendert, Strafwerte.PFAD_HOECHSTE_STUNDEN + "." + art.kuerzel(),
+                    alt.strafen().hoechsteStundenFuer(art),
+                    neu.strafen().hoechsteStundenFuer(art));
+        }
+        nenneJaNein(geaendert, Strafwerte.PFAD_BANNLISTE_OEFFENTLICH,
+                alt.strafen().bannlisteOeffentlich(),
+                neu.strafen().bannlisteOeffentlich());
+        nenneJaNein(geaendert, Strafwerte.PFAD_ANSAGEN,
+                alt.strafen().ansagen(), neu.strafen().ansagen());
+        nenneZahl(geaendert, Strafwerte.PFAD_ZEILEN_JE_SEITE,
+                alt.strafen().zeilenJeSeite(), neu.strafen().zeilenJeSeite());
+        // Die Liste der mitgesperrten Befehle als MENGE: Welcher Name dazukam und
+        // welcher wegfiel, ist die Auskunft, die zaehlt. Eine Zahl sagte nur, dass
+        // sich etwas geaendert hat - und eine Stummschaltung, die /msg nicht mehr
+        // sperrt, ist genau dann wirkungslos, wenn niemand hinsieht.
+        nenneMenge(geaendert, Strafwerte.PFAD_STUMM_SPERRT_BEFEHLE,
+                new TreeSet<>(alt.strafen().stummSperrtBefehle()),
+                new TreeSet<>(neu.strafen().stummSperrtBefehle()));
         // Die Wechselstube [Teil F]: zwei Kurse und der Wechseldeckel. Aus demselben
         // Grund wie die Bloecke darueber - sie werden beim Gebrauch gefragt, es wird
         // nichts gebaut und nichts angemeldet. Ohne diese drei Zeilen aenderte sich der

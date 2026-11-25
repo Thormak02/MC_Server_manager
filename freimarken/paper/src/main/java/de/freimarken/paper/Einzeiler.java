@@ -60,6 +60,26 @@ final class Einzeiler {
             FreistadtSatz.KOPF, FreistadtSatz.LEER, FreistadtSatz.ZEILE,
             LadenSatz.KOPF, LadenSatz.LEER, LadenSatz.ZEILE,
             MarkSatz.VERLAUF_ZEILE,
+            // Schritt 16a Teil C: die sieben Zeilen, die Meldetext einzeln holt - eine
+            // fuer die Liste, sechs fuer die Einzelansicht. Eine Umbruchmarke in einer
+            // davon ist damit schon beim LADEN eine Klage mit Zeilennummer; ohne diesen
+            // Eintrag verschwaende die zweite Zeile stumm, und zwar in der Liste des
+            // Moderators - also dort, wo niemand nachsieht.
+            MeldeSatz.LISTE_ZEILE, MeldeSatz.ZEIGEN_BEARBEITER, MeldeSatz.ZEIGEN_GRUND,
+            MeldeSatz.ZEIGEN_KOPF, MeldeSatz.ZEIGEN_ORT, MeldeSatz.ZEIGEN_VERMERK,
+            MeldeSatz.ZEIGEN_WER,
+            // Schritt 16a Teil B: die fuenf Zeilen, die Straftext und StrafBefehle
+            // einzeln holen - zwei Listenzeilen, zwei Ansagen und die Absage an den
+            // Stummgeschalteten, der einen gesperrten Befehl tippt.
+            //
+            // Die Saetze an der TUER stehen NICHT darin: strafe.getroffen.rauswurf,
+            // .bann und .bann-dauerhaft haben eine Umbruchmarke, denn Grund, Frist
+            // und Ausweg sind dort drei Zeilen. Sie gehen ueber sprache.bau, und wo
+            // ein einzelnes Component gebraucht wird - Kick und Abweisung -, fuegt
+            // Straftext.alsEine sie mit echten Umbruechen zusammen.
+            StrafSatz.ANSAGE, StrafSatz.ANSAGE_AUFHEBUNG,
+            StrafSatz.ANSAGE_OHNE_DAUER, StrafSatz.GETROFFEN_BEFEHL,
+            StrafSatz.VERLAUF_ZEILE, StrafSatz.BANNLISTE_ZEILE,
             MarktSatz.DECKEL_UNLESBAR, MarktSatz.FREI, MarktSatz.GESTOERT,
             MarktSatz.KEINE_SEITE, MarktSatz.KOPF, MarktSatz.LEER, MarktSatz.OHNE_DECKEL,
             MarktSatz.WEITER, MarktSatz.ZEILE,

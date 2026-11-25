@@ -719,13 +719,21 @@ final class Altfurtaufbau {
      * und wer von einer aelteren Fassung mit einem einzelnen Stoff kommt, soll nicht
      * ploetzlich dreissigtausend Bloecke neu gesetzt bekommen, nur weil die Streuung
      * an dieser einen Stelle jetzt einen anderen Block waehlt.
+     *
+     * <p><b>Und die LAGE wird gefragt, nicht angenommen</b> [24.11.2026]: Hier stand
+     * {@code mischung(Lage.MARKT)} - die Mitte des Marktes WAR Marktpflaster. Seit dort
+     * die vier Kreuzarme zusammentreffen, ist sie Fahrbahn, und die Frage haette von da
+     * an bei jedem Start "nein" geantwortet: dreissigtausend Bloecke neu, jedes Mal,
+     * und jede Aenderung eines Spielers am Pflaster wieder zugeschuettet. Wer die Lage
+     * FRAGT, bleibt richtig, was auch immer dort einmal liegen wird.
      */
     boolean istGepflastert(Stadtplan plan, Pflasterstoffe pflaster, Weltgriff griff) {
         if (plan == null || pflaster == null || griff == null) {
             throw new IllegalArgumentException("Ohne Plan, Pflaster und Welt gibt es"
                     + " keine Antwort");
         }
-        return pflaster.mischung(Stadtplan.Lage.MARKT).contains(
+        Stadtplan.Lage lage = plan.lageBei(Stadtplan.MITTE_X, Stadtplan.MITTE_Z);
+        return pflaster.mischung(lage).contains(
                 griff.bei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y, Stadtplan.MITTE_Z));
     }
 

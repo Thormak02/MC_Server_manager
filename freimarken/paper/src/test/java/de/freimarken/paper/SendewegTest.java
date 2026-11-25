@@ -303,6 +303,23 @@ class SendewegTest {
         for (Blocktat tat : Blocktat.values()) {
             alle.add(BlockSatz.tatwort(tat).pfad());
         }
+        // SCHRITT 16a TEIL C: die vier Standworte der Meldungen, ueber
+        // MeldeSatz.standwort gewaehlt. Dieselbe Bauart und dieselbe Deckung an anderer
+        // Stelle: In MeldungBefehlTest geht JEDER Stand durch die echte Zeile der
+        // ausgelieferten Vorlage. Hier steht er, weil DIESE Probe die Liste der Ausnahmen
+        // fuehrt.
+        for (de.freimarken.kern.Meldestand stand
+                : de.freimarken.kern.Meldestand.values()) {
+            alle.add(MeldeSatz.standwort(stand).pfad());
+        }
+        // SCHRITT 16a TEIL B: die drei Artworte der Strafen, ueber StrafSatz.artwort
+        // gewaehlt. Dieselbe Bauart und dieselbe Deckung an anderer Stelle: In
+        // StrafBefehlTest geht JEDE Art durch die echte Zeile der ausgelieferten
+        // Vorlage.
+        for (de.freimarken.kern.Strafart art
+                : de.freimarken.kern.Strafart.values()) {
+            alle.add(StrafSatz.artwort(art).pfad());
+        }
         // SIEBTE Familie seit Teil D: die Worte der Buergerrechte, ueber
         // FreistadtSatz.rechtewort gewaehlt. Dieselbe Bauart und dieselbe Deckung an
         // anderer Stelle: In FreistadtBefehlTest geht JEDES Recht durch die echte Zeile

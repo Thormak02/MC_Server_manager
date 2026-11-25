@@ -50,10 +50,18 @@ record Stadtliste(boolean bauen, int quartiere, List<String> vorlagen) {
      * Bloecke in einer Sekunde; neun Quartiere halten den Server also eine gute
      * Viertelminute an. Das ist die Grenze des Zumutbaren.
      *
-     * <p>Und sie faellt mit der Weltgrenze zusammen: Neun Quartiere reichen bis
-     * x 374, zehn bis 401 - und Altfurt hat {@code kante: 800}, also bis 400. Die
-     * zweite Grenze kommt aus {@code welten:} und klagt anders: Diese hier sagt
-     * "zu viel Arbeit", jene "kein Platz".
+     * <p><b>Sie faellt NICHT mehr mit der Weltgrenze zusammen</b> [24.11.2026]: Bis
+     * heute tat sie es, aber nur durch einen Zufall - die Stadtmitte lag bei 72/13, die
+     * Stadt also schief im Weltfenster, und neun Quartiere reichten bis x 374 bei einer
+     * Weltkante bis 400. Seit die Mitte auf 0/0 liegt, liegt die Stadt symmetrisch, und
+     * nachgemessen passen ZWOELF Quartiere in {@code kante: 800} (zwoelf bis x 385,
+     * dreizehn bis 412).
+     *
+     * <p>Die Zahl bleibt trotzdem NEUN, denn ihre erste Begruendung ist die
+     * tragende: Neun Quartiere sind eine gute Viertelminute Serverstillstand. Dass
+     * beide Grenzen bisher zusammenfielen, hat verdeckt, dass es zwei sind. Jetzt sagt
+     * diese hier "zu viel Arbeit" und {@link #passtInDieWelt} "kein Platz", und beide
+     * sind einzeln pruefbar.
      */
     static final int HOECHSTENS_QUARTIERE = 9;
 

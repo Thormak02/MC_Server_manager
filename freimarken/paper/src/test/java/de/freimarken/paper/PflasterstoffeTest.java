@@ -124,6 +124,8 @@ class PflasterstoffeTest {
         gewuenscht.put(Stadtplan.Lage.KERN, Material.IRON_BLOCK);
         gewuenscht.put(Stadtplan.Lage.RINGGASSE, Material.DIAMOND_BLOCK);
         gewuenscht.put(Stadtplan.Lage.RADIALGASSE, Material.EMERALD_BLOCK);
+        // DER BORDSTEIN ist die Kante des Kreuzarms - ungemischt, siehe Pflasterstoffe.
+        gewuenscht.put(Stadtplan.Lage.BORDSTEIN, Material.GOLD_BLOCK);
         gewuenscht.put(Stadtplan.Lage.ECKPLATZ, Material.LAPIS_BLOCK);
         gewuenscht.put(Stadtplan.Lage.ZEILE, Material.COAL_BLOCK);
         gewuenscht.put(Stadtplan.Lage.MAUER, Material.REDSTONE_BLOCK);

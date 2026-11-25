@@ -109,9 +109,13 @@ class BauplanTest {
                 new Quader(0, -61, 0, 8, -54, 10), Richtung.NORD,
                 Baustil.BACKSTEIN, Dachart.ZIEGEL);
         assertEquals(8, niedrig.hoehe(), "acht Ebenen");
-        assertEquals(8 - 1 - Bauplan.SOCKELEBENEN - 1, Bauplan.giebelstufen(niedrig),
+        assertEquals(8 - 1 - Bauplan.sockelebenen(niedrig) - 1,
+                Bauplan.giebelstufen(niedrig),
                 "was neben Boden, Sockel und einer Ebene Wand uebrig bleibt");
-        assertEquals(3, Bauplan.giebelstufen(niedrig));
+        // DIE ZAHL FOLGT AUS DEM SOCKEL dieses Hauses - er streut seit dem
+        // 24.11.2026. Bei zwei Ebenen Sockel bleibt eine Dachebene mehr.
+        assertEquals(8 - 1 - Bauplan.sockelebenen(niedrig) - 1,
+                Bauplan.giebelstufen(niedrig));
         assertTrue(Bauplan.dachansatz(niedrig) > niedrig.bereich().vonY(),
                 "auch hier liegt der Dachansatz im Quader");
     }
@@ -218,11 +222,33 @@ class BauplanTest {
 
         // Der Fussboden ist die ganze Grundflaeche.
         assertEquals(11 * 7, gezaehlt.get(Bauplan.Stueck.BODEN));
-        // Der Sockel ist der Ring auf DREI Ebenen, minus was aus ihm herausgenommen
-        // ist: die Tuer (zwei Ebenen), zwei Laternen und die acht Fenster der Augenhoehe.
+        // DER SOCKEL IST SO HOCH, WIE DIESES HAUS IHN HAT [24.11.2026]: Seit der
+        // Betreiber "mehr variation bei den haeusern" verlangt hat, streut die
+        // Sockelhoehe um SOCKELEBENEN. Die Zusage ist darum nicht mehr "drei Ebenen",
+        // sondern "der Ring auf SEINEN Ebenen, minus was aus ihm herausgenommen ist":
+        // die Tuer (zwei Ebenen), zwei Laternen und die Fenster der Augenhoehe.
+        //
+        // Die ZAHL der Fenster im Sockel haengt daran, wie viele Fensterebenen unter
+        // seiner Krone liegen - darum gezaehlt und nicht gerechnet.
         int ring = 11 * 7 - 9 * 5;
-        assertEquals(ring * Bauplan.SOCKELEBENEN - 2 - 2 - 8,
-                gezaehlt.get(Bauplan.Stueck.SOCKEL));
+        int sockel = Bauplan.sockelebenen(bau);
+        assertTrue(sockel >= Bauplan.SOCKELEBENEN - Bauplan.SOCKEL_SPIEL
+                        && sockel <= Bauplan.SOCKELEBENEN + Bauplan.SOCKEL_SPIEL,
+                "die Sockelhoehe liegt in ihrer Spanne: " + sockel);
+        int fensterImSockel = 0;
+        for (int x = 48; x <= 58; x++) {
+            for (int z = 3; z <= 9; z++) {
+                for (int y = -61 + 1; y <= -61 + sockel; y++) {
+                    if (Bauplan.stueckBei(bau, x, y, z) == Bauplan.Stueck.FENSTER) {
+                        fensterImSockel++;
+                    }
+                }
+            }
+        }
+        assertEquals(ring * sockel - 2 - 2 - fensterImSockel,
+                gezaehlt.get(Bauplan.Stueck.SOCKEL),
+                "der Sockelring auf " + sockel + " Ebenen, ohne Tuer, Laternen und die "
+                        + fensterImSockel + " Fenster darin");
         // Die Tuer ist zwei hoch, die Laterne zweimal einer.
         assertEquals(2, gezaehlt.get(Bauplan.Stueck.TUER));
         assertEquals(2, gezaehlt.get(Bauplan.Stueck.LATERNE));
@@ -246,7 +272,9 @@ class BauplanTest {
         // Konstruktion und kein Muster. Die Zone liegt zwischen dem steinernen
         // Erdgeschoss und der Krone.
         Map<Bauplan.Stueck, Integer> inDerZone = new EnumMap<>(Bauplan.Stueck.class);
-        int zoneVon = -61 + Bauplan.SOCKELEBENEN + 1;
+        // DIE ZONE BEGINNT UEBER DEM SOCKEL DIESES HAUSES - er streut seit dem
+        // 24.11.2026 um SOCKELEBENEN.
+        int zoneVon = -61 + Bauplan.sockelebenen(bau) + 1;
         int zoneBis = Bauplan.dachansatz(bau) - 1;
         assertTrue(zoneBis >= zoneVon,
                 "ohne Fachwerkzone prueft das Folgende nichts: " + zoneVon + ".."
@@ -278,9 +306,38 @@ class BauplanTest {
         assertTrue(gefach > balken * 2,
                 "Gefach " + gefach + " muss die Staender " + balken + " deutlich"
                         + " ueberwiegen - sonst ist die Wand ein Gitter");
-        assertTrue(fenster * 4 < gefach,
-                "Fenster " + fenster + " gegen Gefach " + gefach + " - ein Fensterband"
-                        + " sieht nach Kaufhaus aus, nicht nach Hanse");
+        // KEIN FENSTERBAND - und das wird seit dem 24.11.2026 STRUKTURELL geprueft
+        // und nicht an einem Verhaeltnis [Befund dieser Probe]: Als der Balkentakt je
+        // Haus zu streuen begann, verschob sich das Verhaeltnis von 1:4 auf 1:3,3 - und
+        // eine Schranke, die man dann senkt, hat nie etwas gehalten. Was ein
+        // FENSTERBAND ausmacht, ist nicht die Zahl der Fenster, sondern dass zwei
+        // nebeneinander sitzen. Genau das wird jetzt gefragt.
+        int nachbarn = 0;
+        for (int x = 48; x <= 58; x++) {
+            for (int y = zoneVon; y <= zoneBis; y++) {
+                for (int z = 3; z <= 9; z++) {
+                    if (Bauplan.stueckBei(bau, x, y, z) != Bauplan.Stueck.FENSTER) {
+                        continue;
+                    }
+                    if (x < 58 && Bauplan.stueckBei(bau, x + 1, y, z)
+                            == Bauplan.Stueck.FENSTER) {
+                        nachbarn++;
+                    }
+                    if (z < 9 && Bauplan.stueckBei(bau, x, y, z + 1)
+                            == Bauplan.Stueck.FENSTER) {
+                        nachbarn++;
+                    }
+                }
+            }
+        }
+        assertEquals(0, nachbarn,
+                "kein Fenster hat ein Fenster als waagerechten Nachbarn - " + nachbarn
+                        + " Paare bilden ein Band, und das sieht nach Kaufhaus aus,"
+                        + " nicht nach Hanse");
+        // UND DIE WAND BLEIBT UEBERWIEGEND GESCHLOSSEN: gemessen 24 Fenster gegen 80
+        // Gefachbloecke am 24.11.2026, also nicht einmal ein Viertel.
+        assertTrue(fenster * 3 < gefach,
+                "Fenster " + fenster + " gegen Gefach " + gefach);
         assertTrue(fenster > 0, "ganz ohne Fenster ist es ein Speicher");
     }
 
@@ -431,23 +488,97 @@ class BauplanTest {
             assertEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, x, -52, 3),
                     "oberstes Band auf x " + x);
         }
-        // Stehende Balken im Takt VIER, von der Ecke gezaehlt: an der Laengsseite also
-        // x 52 und x 54 (Abstand 4 von je einer Ecke).
-        assertEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, 52, -57, 3));
-        assertEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, 54, -57, 3));
-        assertNotEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, 53, -57, 3),
-                "dazwischen nicht");
+        // STEHENDE BALKEN IM TAKT DIESES HAUSES, von der Ecke gezaehlt. Der Takt
+        // streut seit dem 24.11.2026 je Haus - hier standen die festen Stellen x 52 und
+        // x 54, und die galten nur fuer einen Takt von vier.
+        int takt = Bauplan.balkentakt(bau);
+        assertTrue(takt >= Bauplan.BALKENTAKT
+                        && takt <= Bauplan.BALKENTAKT + Bauplan.BALKEN_SPIEL,
+                "der Takt liegt in seiner Spanne: " + takt);
+        int imTakt = 0;
+        int dazwischen = 0;
+        for (int x = 49; x <= 57; x++) {
+            Bauplan.Stueck stueck = Bauplan.stueckBei(bau, x, -57, 3);
+            if ((x - 48) % takt == 0) {
+                assertEquals(Bauplan.Stueck.BALKEN, stueck,
+                        "ein Staender steht bei x " + x + " (Takt " + takt + ")");
+                imTakt++;
+            } else if (stueck == Bauplan.Stueck.BALKEN) {
+                dazwischen++;
+            }
+        }
+        assertTrue(imTakt >= 1, "mindestens ein Staender zwischen den Ecken: " + imTakt);
+        assertEquals(0, dazwischen,
+                "und keiner daneben - sonst waere der Takt kein Takt");
         assertNotEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, 51, -57, 3),
                 "und beim Takt vier auch nicht bei drei - das war die alte Fassung");
 
         // VON DER ECKE GEZAEHLT und nicht vom Weltnullpunkt: Zwei gleich gebaute Haeuser
         // muessen gleich aussehen, auch wenn ihr x um eins verschoben ist.
+        // ZWEI HAEUSER AN VERSCHIEDENEN STELLEN SEHEN VERSCHIEDEN AUS [24.11.2026],
+        // und das ist der Zug: Hier stand bis heute "derselbe Takt, nur um eins
+        // verschoben" - also die Zusage, dass das Fachwerk nur von der Stelle IM Haus
+        // abhaengt. Genau daran lagen die Haeuser gleichmaessig: Zwei Haeuser aus
+        // demselben Stein waren identisch, auch bei verschiedenen Massen. Seit der
+        // Balkentakt je Haus streut, ist das nicht mehr so.
         Platzhalterbau verschoben = new Platzhalterbau("zwilling",
                 new Quader(49, -61, 3, 59, -48, 9), Richtung.OST,
                 Baustil.BACKSTEIN, Dachart.ZIEGEL);
-        assertEquals(Bauplan.stueckBei(bau, 52, -57, 3),
-                Bauplan.stueckBei(verschoben, 53, -57, 3),
-                "derselbe Takt, nur um eins verschoben");
+        Set<Integer> takte = new HashSet<>();
+        for (int x = 0; x < 60; x++) {
+            takte.add(Bauplan.balkentakt(new Platzhalterbau("takt",
+                    new Quader(x, -61, 3, x + 10, -48, 9), Richtung.OST,
+                    Baustil.BACKSTEIN, Dachart.ZIEGEL)));
+        }
+        assertTrue(takte.size() >= 2,
+                "der Balkentakt wechselt von Haus zu Haus: " + takte);
+
+        // UND DIE SOCKELHOEHE AUCH. Diese Zusage fehlte, und eine Gegenprobe hat es
+        // gezeigt: Ein sockelebenen, das immer SOCKELEBENEN gibt, lief durch - die
+        // ganze Stadt haette wieder denselben steinernen Fuss gehabt, und keine Probe
+        // haette etwas gesagt.
+        Set<Integer> sockel = new HashSet<>();
+        for (int x = 0; x < 60; x++) {
+            sockel.add(Bauplan.sockelebenen(new Platzhalterbau("sockel",
+                    new Quader(x, -61, 3, x + 10, -48, 9), Richtung.OST,
+                    Baustil.BACKSTEIN, Dachart.ZIEGEL)));
+        }
+        assertTrue(sockel.size() >= 2,
+                "die Sockelhoehe wechselt von Haus zu Haus: " + sockel);
+        for (int hoehe : sockel) {
+            assertTrue(hoehe >= Bauplan.SOCKELEBENEN - Bauplan.SOCKEL_SPIEL
+                            && hoehe <= Bauplan.SOCKELEBENEN + Bauplan.SOCKEL_SPIEL,
+                    "und bleibt in ihrer Spanne: " + hoehe);
+            assertTrue(hoehe >= 2,
+                    "ein Haus ohne steinernen Fuss gibt es an einer hansischen Gasse"
+                            + " nicht: " + hoehe);
+        }
+        // UND SIE HAENGT NICHT AM BALKENTAKT: Mit denselben Argumenten gestreut haette
+        // jedes Haus mit flachem Sockel auch dichtes Fachwerk, und aus zwei Zuegen
+        // wuerde einer. Gepruefft an den vier Paarungen, die vorkommen muessen.
+        Set<String> paarungen = new HashSet<>();
+        for (int x = 0; x < 120; x++) {
+            Platzhalterbau einer = new Platzhalterbau("paar",
+                    new Quader(x, -61, 3, x + 10, -48, 9), Richtung.OST,
+                    Baustil.BACKSTEIN, Dachart.ZIEGEL);
+            paarungen.add(Bauplan.sockelebenen(einer) + "/"
+                    + Bauplan.balkentakt(einer));
+        }
+        assertTrue(paarungen.size() >= 4,
+                "Sockel und Takt wechseln UNABHAENGIG voneinander: " + paarungen);
+        for (int einTakt : takte) {
+            // NUR NACH OBEN: Ein engerer Takt gaebe mehr Fenster - siehe BALKEN_SPIEL.
+            assertTrue(einTakt >= Bauplan.BALKENTAKT
+                            && einTakt <= Bauplan.BALKENTAKT + Bauplan.BALKEN_SPIEL,
+                    "und bleibt in seiner Spanne: " + einTakt);
+        }
+
+        // DASSELBE HAUS ZWEIMAL GEFRAGT gibt aber dasselbe Bild - das ist die Zusage,
+        // die bleiben MUSS: Ein zweites Aufsetzen legt dieselbe Stadt.
+        assertEquals(Bauplan.balkentakt(verschoben), Bauplan.balkentakt(verschoben));
+        assertEquals(Bauplan.stueckBei(verschoben, 53, -57, 3),
+                Bauplan.stueckBei(verschoben, 53, -57, 3));
+        assertEquals(Bauplan.sockelebenen(bau), Bauplan.sockelebenen(bau));
     }
 
     @Test
@@ -462,18 +593,43 @@ class BauplanTest {
         assertEquals(Bauplan.Stueck.FENSTER, Bauplan.stueckBei(bau, 56, -56, 3));
         assertEquals(Bauplan.Stueck.GEFACH, Bauplan.stueckBei(bau, 51, -56, 3),
                 "daneben das Gefach - ein Block Rahmen auf jeder Seite");
-        assertEquals(Bauplan.Stueck.GEFACH, Bauplan.stueckBei(bau, 50, -57, 3),
-                "und unter dem Fenster auch");
+        // UNTER DEM FENSTER AUCH - aber WO das Fenster sitzt, haengt am Sockel
+        // dieses Hauses, und der streut seit dem 24.11.2026. Gesucht wird darum die
+        // Fensterebene und nicht eine feste Zahl genannt.
+        boolean fensterGefunden = false;
+        int fensterY = 0;
+        for (int y = -61 + Bauplan.sockelebenen(bau) + 1; y <= -52; y++) {
+            if (Bauplan.stueckBei(bau, 50, y, 3) == Bauplan.Stueck.FENSTER) {
+                fensterY = y;
+                fensterGefunden = true;
+                break;
+            }
+        }
+        assertTrue(fensterGefunden, "ueber dem Sockel sitzt ein Fenster");
+        assertEquals(Bauplan.Stueck.GEFACH, Bauplan.stueckBei(bau, 50, fensterY - 1, 3),
+                "und unter dem Fenster liegt Gefach");
         assertEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, 50, -52, 3),
                 "darueber die Wandkrone - sie gewinnt ueber das Fenster, denn sie traegt"
                         + " das Dach");
-        // IM STEINERNEN ERDGESCHOSS auf Augenhoehe: eine Ebene, derselbe Takt. Ein
-        // Erdgeschoss ohne Fenster saehe aus wie ein Speicher.
-        assertEquals(Bauplan.Stueck.FENSTER, Bauplan.stueckBei(bau, 50, -59, 3));
+        // IM STEINERNEN ERDGESCHOSS auf Augenhoehe: GENAU EINE Ebene. Ein Erdgeschoss
+        // ohne Fenster saehe aus wie ein Speicher, zwei Ebenen Fenster im Stein wie
+        // eine Ladenfront.
+        //
+        // GEZAEHLT UND NICHT AN FESTEN HOEHEN GEPRUEFT [24.11.2026]: Die Sockelhoehe
+        // streut seit heute, also liegt die Augenhoehe nicht mehr immer auf -59. Die
+        // Zusage ist die ZAHL der Fensterebenen im Sockel, nicht ihre Lage.
+        int sockel = Bauplan.sockelebenen(bau);
+        int fensterebenen = 0;
+        for (int y = -61 + 1; y <= -61 + sockel; y++) {
+            if (Bauplan.stueckBei(bau, 50, y, 3) == Bauplan.Stueck.FENSTER) {
+                fensterebenen++;
+            }
+        }
+        assertEquals(1, fensterebenen,
+                "genau eine Fensterebene im steinernen Erdgeschoss von " + sockel
+                        + " Ebenen");
         assertEquals(Bauplan.Stueck.SOCKEL, Bauplan.stueckBei(bau, 50, -60, 3),
                 "aber nicht auf Bodenhoehe - das waere ein Loch");
-        assertEquals(Bauplan.Stueck.SOCKEL, Bauplan.stueckBei(bau, 50, -58, 3),
-                "und nicht zwei Ebenen hoch im Stein");
     }
 
     @Test
@@ -1035,6 +1191,247 @@ class BauplanTest {
         // einer Schleife, die den Quader abschreitet, und die kommt nie daneben; eine
         // Probe aber schon.
         assertNull(Bauplan.leiterzeigt(bau, 100, -50, 100), "ausserhalb");
+    }
+
+
+    @Test
+    @DisplayName("JEDE Dachtreppe zeigt bergauf - auch am traufstaendigen Bau")
+    void jedeDachtreppeZeigtBergauf() {
+        // WARUM DIESE PROBE [24.11.2026]: Die Richtung der Dachtreppen wurde bis heute
+        // an DREI Stellen einer einzigen Spaltenlinie eines giebelstaendigen Hauses
+        // geprueft. Gemessen am Bundesratshaus (17 breit, 13 tief, also TRAUFstaendig)
+        // lagen ALLE 179 Dachtreppen quer statt bergauf - keine einzige richtig, und
+        // keine Probe sagte etwas. Die Ursache: imGiebel waehlte die fallende Achse
+        // ueber traufstaendig(), dachzeigt() fragte nur die Tuerseite. Zwei Leser
+        // derselben Sache, verschieden gerechnet.
+        //
+        // Diese Probe schreitet den GANZEN Quader ab und prueft die Zusage selbst:
+        // Geht man von einer Dachstelle einen Block in die genannte Richtung UND eine
+        // Ebene hoeher, muss dort wieder Dachhaut liegen - Dach, First, Giebelstufe
+        // oder Schornstein. Das ist, was "bergauf" bedeutet.
+        for (Platzhalterbau bau : List.of(
+                // giebelstaendig, Tuer NORD - das gewoehnliche Zeilenhaus
+                new Platzhalterbau("zeilenhaus", new Quader(0, -61, 0, 8, -45, 10),
+                        Richtung.NORD, Baustil.BACKSTEIN, Dachart.ZIEGEL),
+                // giebelstaendig, Tuer OST - die andere Achse
+                new Platzhalterbau("zeileost", new Quader(0, -61, 0, 10, -45, 8),
+                        Richtung.OST, Baustil.FACHWERK, Dachart.KUPFER),
+                // TRAUFSTAENDIG, Tuer NORD - das Bundesratshaus
+                new Platzhalterbau("bundesratshaus",
+                        new Quader(64, -61, 26, 80, -46, 38), Richtung.NORD,
+                        Baustil.BACKSTEIN, Dachart.KUPFER),
+                // TRAUFSTAENDIG, Tuer OST - damit beide Achsen traufstaendig dran sind
+                new Platzhalterbau("breitost", new Quader(0, -61, 0, 12, -46, 28),
+                        Richtung.OST, Baustil.SCHIEFER, Dachart.ZIEGEL))) {
+            Quader q = bau.bereich();
+            int dachstellen = 0;
+            for (int x = q.vonX(); x <= q.bisX(); x++) {
+                for (int z = q.vonZ(); z <= q.bisZ(); z++) {
+                    for (int y = q.vonY(); y <= q.bisY(); y++) {
+                        if (Bauplan.stueckBei(bau, x, y, z) != Bauplan.Stueck.DACH) {
+                            continue;
+                        }
+                        dachstellen++;
+                        Richtung zeigt = Bauplan.dachzeigt(bau, x, y, z);
+                        assertNotNull(zeigt, bau.schluessel() + ": die Dachstelle " + x
+                                + "/" + y + "/" + z + " hat keine Richtung");
+                        int nx = x + (zeigt == Richtung.OST ? 1
+                                : zeigt == Richtung.WEST ? -1 : 0);
+                        int nz = z + (zeigt == Richtung.SUED ? 1
+                                : zeigt == Richtung.NORD ? -1 : 0);
+                        assertTrue(bau.enthaelt(nx, y + 1, nz), bau.schluessel()
+                                + ": die Treppe bei " + x + "/" + y + "/" + z
+                                + " zeigt " + zeigt + " und damit aus dem Bau hinaus");
+                        Bauplan.Stueck bergauf = Bauplan.stueckBei(bau, nx, y + 1, nz);
+                        assertTrue(bergauf == Bauplan.Stueck.DACH
+                                        || bergauf == Bauplan.Stueck.FIRST
+                                        || bergauf == Bauplan.Stueck.GIEBELSTUFE
+                                        || bergauf == Bauplan.Stueck.SCHORNSTEIN,
+                                bau.schluessel() + ": die Treppe bei " + x + "/" + y
+                                        + "/" + z + " zeigt " + zeigt + ", aber bergauf"
+                                        + " liegt " + bergauf + " - sie liegt quer");
+                    }
+                }
+            }
+            // GEZAEHLT, damit ein Bau ohne Dachflaeche nicht stillschweigend gruen ist.
+            assertTrue(dachstellen > 40, bau.schluessel() + " hat nur " + dachstellen
+                    + " Dachstellen - diese Probe haette fast nichts gemessen");
+        }
+    }
+
+    @Test
+    @DisplayName("Die fallende Achse ist bei beiden Lesern dieselbe")
+    void dieFallendeAchseIstEine() {
+        // DIE ZUSAGE HINTER DEM FUND vom 24.11.2026: imGiebel und dachzeigt muessen
+        // dieselbe Achse meinen. Gepruefter Beweis, ohne die private Methode zu
+        // sehen: Die Dachflaeche eines traufstaendigen Baus muss ueber die TIEFE
+        // fallen - also laufen die Treppenreihen laengs der FRONT, und die Richtungen
+        // sind NORD/SUED bei einer Tuer nach NORD.
+        Platzhalterbau trauf = new Platzhalterbau("bundesratshaus",
+                new Quader(64, -61, 26, 80, -46, 38), Richtung.NORD,
+                Baustil.BACKSTEIN, Dachart.KUPFER);
+        assertTrue(Bauplan.traufstaendig(trauf), "breiter als tief");
+        assertEquals(13, Bauplan.dachbreite(trauf), "die Tiefe faellt");
+
+        Set<Richtung> richtungen = new HashSet<>();
+        Quader q = trauf.bereich();
+        for (int x = q.vonX(); x <= q.bisX(); x++) {
+            for (int z = q.vonZ(); z <= q.bisZ(); z++) {
+                for (int y = q.vonY(); y <= q.bisY(); y++) {
+                    Richtung zeigt = Bauplan.dachzeigt(trauf, x, y, z);
+                    if (zeigt != null) {
+                        richtungen.add(zeigt);
+                    }
+                }
+            }
+        }
+        // FAELLT DAS DACH UEBER DIE TIEFE (z), zeigen die Treppen in z - also NORD und
+        // SUED. Vor dem 24.11.2026 standen hier OST und WEST, quer zum Gefaelle.
+        assertEquals(Set.of(Richtung.NORD, Richtung.SUED), richtungen,
+                "ein traufstaendiger Bau mit Tuer nach Norden laesst sein Dach in z"
+                        + " fallen: " + richtungen);
+
+        // UND BEIM GIEBELSTAENDIGEN umgekehrt - sonst haette die Probe oben auch mit
+        // einer festen Antwort gehalten.
+        Platzhalterbau giebel = new Platzhalterbau("zeilenhaus",
+                new Quader(0, -61, 0, 8, -45, 10), Richtung.NORD,
+                Baustil.BACKSTEIN, Dachart.ZIEGEL);
+        assertFalse(Bauplan.traufstaendig(giebel), "tiefer als breit");
+        Set<Richtung> andere = new HashSet<>();
+        Quader g = giebel.bereich();
+        for (int x = g.vonX(); x <= g.bisX(); x++) {
+            for (int z = g.vonZ(); z <= g.bisZ(); z++) {
+                for (int y = g.vonY(); y <= g.bisY(); y++) {
+                    Richtung zeigt = Bauplan.dachzeigt(giebel, x, y, z);
+                    if (zeigt != null) {
+                        andere.add(zeigt);
+                    }
+                }
+            }
+        }
+        assertEquals(Set.of(Richtung.OST, Richtung.WEST), andere,
+                "ein giebelstaendiger Bau mit Tuer nach Norden laesst sein Dach in x"
+                        + " fallen: " + andere);
+    }
+
+
+    @Test
+    @DisplayName("Ein Bau ueber dem Kreuzarm bekommt eine Laube - mit Pfeilern")
+    void dieLaube() {
+        // WARUM [24.11.2026]: Die Stadtkirche und das Bundesratshaus stehen MITTIG auf
+        // ihrem Platz und ueberspannten damit den Nord- und den Suedarm vollstaendig -
+        // je 99 Bloecke. Ein Weg, der um sie herum knickt, ist kein Weg zum Tor. Der
+        // Arm geht darum durch sie HINDURCH, und eine Laube hat jede Hansestadt.
+        //
+        // Das Bundesratshaus aus der ausgelieferten config.yml, auf die Mitte 0/0
+        // bezogen: x -16..16, z 41..51.
+        Platzhalterbau rathaus = new Platzhalterbau("bundesratshaus",
+                new Quader(-16, -61, 41, 16, -46, 51), Richtung.NORD,
+                Baustil.BACKSTEIN, Dachart.KUPFER);
+        assertTrue(Bauplan.ueberspanntKreuzarm(rathaus),
+                "es ueberspannt den Suedarm ganz");
+
+        int fuss = rathaus.bereich().vonY();
+        // DIE FAHRBAHN IST OFFEN, ueber die ganze Hoehe der Laube und die ganze Tiefe
+        // des Baus.
+        int luft = 0;
+        for (int x = -Stadtplan.RADIAL_HALB; x <= Stadtplan.RADIAL_HALB; x++) {
+            for (int z = rathaus.bereich().vonZ(); z <= rathaus.bereich().bisZ(); z++) {
+                for (int y = fuss + 1; y <= fuss + Bauplan.LAUBE_HOEHE; y++) {
+                    assertEquals(Bauplan.Stueck.LUFT,
+                            Bauplan.stueckBei(rathaus, x, y, z),
+                            "in der Laube bei " + x + "/" + y + "/" + z);
+                    luft++;
+                }
+            }
+        }
+        assertEquals((2 * Stadtplan.RADIAL_HALB + 1) * rathaus.tiefe()
+                        * Bauplan.LAUBE_HOEHE, luft,
+                "die ganze Fahrbahn ist offen");
+
+        // DER FUSSBODEN BLEIBT: Man laeuft durch die Laube, nicht in einen Graben.
+        assertEquals(Bauplan.Stueck.BODEN,
+                Bauplan.stueckBei(rathaus, 0, fuss, rathaus.bereich().vonZ() + 2),
+                "der Boden der Laube");
+
+        // UND DIE WAENDE STEHEN: Auf der KANTE des Arms ist Mauerwerk, nicht Luft.
+        // Ohne sie oeffnet sich der Durchgang nach beiden Seiten in den hohlen
+        // Innenraum - man laeuft durch die Laube und steht im Gebaeude, ohne eine Tuer
+        // genommen zu haben. Genau das hat diese Probe gefunden.
+        for (int seite : new int[] {-1, 1}) {
+            int x = seite * (Stadtplan.RADIAL_HALB + 1);
+            assertEquals(Stadtplan.Lage.BORDSTEIN,
+                    Stadtplan.kreuzBei(x, rathaus.bereich().vonZ() + 2),
+                    "bei x " + x + " liegt die Kante");
+            assertTrue(Bauplan.anDerLaube(rathaus, x, fuss + 2,
+                            rathaus.bereich().vonZ() + 2),
+                    "bei x " + x + " steht die Laubenwand");
+            // UEBER DIE GANZE HOEHE UND TIEFE, nicht nur an einer Stelle: Eine Wand mit
+            // einem Loch ist keine Wand.
+            for (int y = fuss + 1; y <= fuss + Bauplan.LAUBE_HOEHE; y++) {
+                for (int z = rathaus.bereich().vonZ() + 1;
+                        z <= rathaus.bereich().bisZ() - 1; z++) {
+                    assertEquals(Bauplan.Stueck.GEFACH,
+                            Bauplan.stueckBei(rathaus, x, y, z),
+                            "die Laubenwand bei " + x + "/" + y + "/" + z);
+                }
+            }
+        }
+        // UND DIE AUSSENWAND BEHAELT DAS WORT: Wo sie liegt, gilt sie - mit ihren
+        // Fenstern. anDerLaube sagt nur "diese Spalte und diese Hoehe"; dass die
+        // Aussenwand vorgeht, entscheidet stueckBei, und zwar daran, dass die
+        // Laubenwand erst im Innenraum gefragt wird.
+        Bauplan.Stueck amRand = Bauplan.stueckBei(rathaus, Stadtplan.RADIAL_HALB + 1,
+                fuss + 2, rathaus.bereich().vonZ());
+        assertNotEquals(Bauplan.Stueck.LUFT, amRand,
+                "an der Aussenwand steht die Aussenwand: " + amRand);
+
+        // UEBER DER LAUBE LIEGT EINE DECKE - sonst waere der Bau ein Tor und kein Haus.
+        // Gesucht und nicht gerechnet: Direkt ueber der Oeffnung ist noch Innenraum, und
+        // der ist hohl; die erste Geschossdecke liegt dort, wo auf der Fassade das
+        // liegende Band sitzt. Genau das hat diese Probe mich gelehrt - der Block
+        // unmittelbar ueber der Laube ist zu Recht Luft.
+        // KEIN ZAHLENWERT ALS "NICHT GEFUNDEN": Altfurt liegt bei y -61, und die Decke
+        // liegt bei -54. Ein Waechter auf > 0 verwirft jeden echten Treffer - genau das
+        // ist am 24.11.2026 schon einmal passiert, in einem Weltmesslauf, und der
+        // meldete dann null geprueefte Haeuser.
+        boolean deckeGefunden = false;
+        int deckeUeberDerLaube = 0;
+        for (int y = fuss + Bauplan.LAUBE_HOEHE + 1; y <= Bauplan.dachansatz(rathaus);
+                y++) {
+            if (Bauplan.stueckBei(rathaus, 0, y, rathaus.bereich().vonZ() + 2)
+                    == Bauplan.Stueck.DECKE) {
+                deckeUeberDerLaube = y;
+                deckeGefunden = true;
+                break;
+            }
+        }
+        assertTrue(deckeGefunden,
+                "ueber der Laube liegt eine Geschossdecke - der Bau ist nicht offen");
+        assertTrue(deckeUeberDerLaube <= fuss + Bauplan.LAUBE_HOEHE
+                        + Bauplan.GESCHOSSHOEHE,
+                "und zwar innerhalb eines Geschosses darueber: " + deckeUeberDerLaube);
+
+        // EIN BAU, DER DEN ARM NUR HALB BERUEHRT, bekommt KEINE Laube - ein Durchgang
+        // wuerde ihn abschneiden. Das Zunfthaus lag so, und darum ist es gewandert.
+        Platzhalterbau halb = new Platzhalterbau("halbdrin",
+                new Quader(-51, -61, -7, -41, -48, 3), Richtung.OST,
+                Baustil.FACHWERK, Dachart.ZIEGEL);
+        assertFalse(Bauplan.ueberspanntKreuzarm(halb),
+                "es reicht nicht ueber den ganzen Arm");
+        assertFalse(Bauplan.inDerLaube(halb, -46, -60, 0), "also keine Laube");
+
+        // UND EIN BAU GANZ AUSSERHALB auch nicht.
+        Platzhalterbau weitweg = new Platzhalterbau("weitweg",
+                new Quader(60, -61, 60, 68, -48, 70), Richtung.NORD,
+                Baustil.SCHIEFER, Dachart.ZIEGEL);
+        assertFalse(Bauplan.ueberspanntKreuzarm(weitweg), "weit weg vom Arm");
+
+        // OHNE BAU EINE KLAGE.
+        assertThrows(IllegalArgumentException.class,
+                () -> Bauplan.ueberspanntKreuzarm(null));
+        assertThrows(IllegalArgumentException.class,
+                () -> Bauplan.inDerLaube(null, 0, 0, 0));
     }
 
 }

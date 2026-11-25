@@ -443,6 +443,18 @@ befehl:
     #   in der Befehlsliste.
     lotterie: "Ein Los ziehen - das erste am Tag ist gratis"
     wettbewerb: "Der Angelwettbewerb - Stand, Rangliste, anmelden"
+    # Schritt 16a: die Teamrollen. Ein BETREIBERWERKZEUG - der Befehl haengt an
+    #   freimarken.team und ist fuer einen gewoehnlichen Spieler weder sichtbar noch
+    #   ausfuehrbar. Die Beschreibung steht trotzdem hier: Wer das Recht hat, liest sie
+    #   in seiner Befehlsliste.
+    team: "Teamrollen ansehen, vergeben und entziehen"
+    # Schritt 16a Teil C: das Meldewesen. /melden ist fuer JEDEN - darum steht
+    #   die Beschreibung in jeder Befehlsliste. /meldung haengt an
+    #   freimarken.meldungen und ist ab Werk nur fuer Operatoren sichtbar.
+    melden: "Einen Spieler melden - mit Grund, ein Moderator sieht es sich an"
+    meldung: "Offene Meldungen ansehen, annehmen und erledigen"
+    strafe: "Stummschalten, hinauswerfen, sperren - mit Dauer und Grund"
+    bannliste: "Wer gesperrt ist, warum und bis wann"
 
 parzelle:
   # Das Wort fuer den Preis 0 - es wird in info.frei, info.frei-am-limit und
@@ -3293,3 +3305,366 @@ wettbewerb:
     freitag: "Freitag"
     samstag: "Samstag"
     sonntag: "Sonntag"
+
+# ----------------------------------------------------------------------------
+# SCHRITT 16a TEIL A: DIE TEAMROLLEN (Plan 12c.2)
+#
+# Alle Zeilen dieses Abschnitts sind BETREIBERTEXTE - /team haengt an
+# freimarken.team, und das gehoert ab Werk nur Operatoren. Sie stehen trotzdem
+# hier und nicht im Programm: Wer seine Rollen auf englische Namen umstellt,
+# soll auch die Zeilen darum herum umstellen koennen.
+#
+# WELCHE ROLLEN es gibt, steht in der config.yml unter team.rollen - nicht
+# hier. Dieser Abschnitt gibt ihnen nur ihre NAMEN, unter team.rolle.<name>.
+# ----------------------------------------------------------------------------
+team:
+  # Die Ueberschrift von /team. GENAU EINE Zeile.
+  kopf: "<kopf>Das Team des Freimarkenbunds</kopf>"
+  # Eine Zeile je Mensch. {spieler} sein Name, {rollen} alle seine Rollen als
+  #   fertige Aufzaehlung - ein Verwalter mit drei Rollen ist EINE Person.
+  zeile: "<fliesstext>  {spieler} - <betont>{rollen}</betont></fliesstext>"
+  # OHNE spitze Klammern um die Argumente formuliert: Sie waeren hier unbekannte
+  #   Farbtags und damit eine Klage beim Laden. Wer sie trotzdem schreiben will, setzt
+  #   zwei Backslashes davor - siehe BEISPIEL ESCAPE im Kopf dieser Datei.
+  leer: "<gedaempft>Niemand hat eine Teamrolle. Vergeben wird eine mit /team gib - welche es gibt, zeigt /team rollen.</gedaempft>"
+  # Der Trenner zwischen zwei Rollennamen. DARF LEER BLEIBEN: trenner-wort: ""
+  #   KEIN Farbtag - das Wort landet mitten in einer anderen Zeile.
+  trenner-wort: ", "
+  # Steht anstelle des Vergebers, wenn die Rolle von der Konsole kam. Das ist der
+  #   Normalfall beim Aufsetzen eines Servers - dort gibt es noch niemanden, der
+  #   eine Rolle vergeben koennte. KEIN Farbtag, siehe trenner-wort.
+  zeigen:
+    kopf: "<kopf>Die Teamrollen von {spieler}</kopf>"
+    # {rolle} ihr Name, {seit} die Vergabezeit nach zeit-muster, {von} wer sie
+    #   vergeben hat. Die ZEIT steht mit darin, weil die Frage, die diesen Befehl
+    #   ausloest, fast immer "seit wann" oder "von wem" ist.
+    zeile: "<fliesstext>  <betont>{rolle}</betont> <gedaempft>- seit {seit}, von {von}</gedaempft></fliesstext>"
+    von-konsole-wort: "der Konsole"
+    # DIE ZEILE, DIE DEN BEFEHL RECHTFERTIGT: Die Rolle steht in der Datenbank,
+    #   aber nicht mehr in der config.yml. Ihre Rechte wirken NICHT - im Spiel
+    #   sieht das aus, als waere sie nie vergeben worden.
+    unbekannt: "<warnung>    Die config.yml kennt \"{rolle}\" nicht mehr - diese Rolle gibt KEINE Rechte. Entweder wieder eintragen oder mit /team nimm abnehmen.</warnung>"
+    leer: "<gedaempft>{spieler} hat keine Teamrolle.</gedaempft>"
+  rollen:
+    kopf: "<kopf>Die Teamrollen dieses Servers</kopf>"
+    # {rolle} ihr Name, {rechte} wie viele Rechte sie vergibt. Die ZAHL und nicht
+    #   die Namen: Eine Rolle hat bis zu einem Dutzend, und eine Zeile, die alle
+    #   nennt, liest niemand mehr. Was darin steht, sagt die config.yml.
+    zeile:
+      eins: "<fliesstext>  <betont>{rolle}</betont> <gedaempft>- 1 Recht</gedaempft></fliesstext>"
+      viele: "<fliesstext>  <betont>{rolle}</betont> <gedaempft>- {rechte} Rechte</gedaempft></fliesstext>"
+    leer: "<hinweis>Dieser Server hat keine Teamrollen eingetragen. Sie stehen in der config.yml unter team.rollen.</hinweis>"
+  # {spieler} der Betroffene, {rolle} die Rolle. Beide Namen in jeder Antwort:
+  #   Wer zehn Rollen hintereinander vergibt, soll jede Zeile einzeln lesen koennen.
+  vergeben: "<bestaetigung>{spieler} ist jetzt {rolle}.</bestaetigung>"
+  hatte-schon: "<hinweis>{spieler} ist schon {rolle} - es ist nichts passiert.</hinweis>"
+  genommen: "<bestaetigung>{spieler} ist nicht mehr {rolle}.</bestaetigung>"
+  hatte-nicht: "<hinweis>{spieler} ist nicht {rolle} - es ist nichts passiert.</hinweis>"
+  # Entzogen, UND die config.yml kennt die Rolle nicht mehr. Dasselbe Ergebnis aus
+  #   einem anderen Grund: Der Betreiber hat einen Altbestand aufgeraeumt und soll
+  #   das lesen - sonst sucht er die Rolle in seiner Datei und findet sie nicht.
+  genommen-unbekannt: "<bestaetigung>{spieler} ist nicht mehr {rolle}.</bestaetigung> <gedaempft>Diese Rolle stand nur noch in der Datenbank.</gedaempft>"
+  # {rolle} was getippt wurde, {rollen} die Liste der vorhandenen. Die Liste gehoert
+  #   dazu: Der haeufigste Fall ist ein Vertipper.
+  unbekannte-rolle: "<warnung>Die Rolle \"{rolle}\" gibt es nicht.</warnung> <gedaempft>Es gibt: {rollen}</gedaempft>"
+  # DER RIEGEL: Eine Rolle vergibt nur, wer jedes ihrer Rechte selbst hat. {fehlende}
+  #   nennt sie alle - wer eine Vollmacht weitergeben will, die er nicht hat, soll
+  #   lesen, welche das ist, und es nicht fuer einen Fehler des Befehls halten.
+  zu-wenig-rechte: "<warnung>Du kannst \"{rolle}\" nicht vergeben oder entziehen - dir fehlen Rechte, die diese Rolle gibt:</warnung> <gedaempft>{fehlende}</gedaempft>"
+  kein-team: "<hinweis>Dieser Server hat keine Teamrollen eingetragen - es gibt nichts zu vergeben. Sie stehen in der config.yml unter team.rollen.</hinweis>"
+  # {name} wie getippt. Vergeben wird auch an ABWESENDE - das ist der Normalfall.
+  #   Diese Absage trifft nur den, der noch nie auf diesem Server war.
+  unbekannter-spieler: "<warnung>Den Spieler \"{name}\" kennt dieser Server nicht.</warnung>"
+  gestoert: "<warnung>Die Teamrollen antworten gerade nicht - es ist nichts passiert.</warnung>"
+  # Das Muster fuer {seit} in zeigen.zeile. Buchstaben nach java.time:
+  #   dd Tag, MM Monat, yyyy Jahr, HH Stunde, mm Minute. Ein kaputtes Muster ist
+  #   eine Klage mit Zeilennummer und kein Wurf mitten im Befehl.
+  zeit-muster: "dd.MM.yyyy HH:mm"
+  # DIE NAMEN DER ROLLEN - je Rolle aus team.rollen in der config.yml eine Zeile.
+  #   Eine OFFENE FAMILIE wie beruf.name.* : Wer dort eine sechste Rolle anlegt,
+  #   gibt ihr hier ihren Namen. Fehlt die Zeile, steht in /team ihr Pfad - der
+  #   Server startet trotzdem, denn es ist ein Verwaltungstext und kein Spieltext.
+  #   KEIN Farbtag: Die Namen werden in andere Zeilen eingesetzt.
+  rolle:
+    helfer: "Helfer"
+    moderator: "Moderator"
+    verwalter: "Verwalter"
+    eventleiter: "Eventleiter"
+    baumeister: "Baumeister"
+
+# ----------------------------------------------------------------------------
+# SCHRITT 16a TEIL C: MELDEN UND BEARBEITEN (Plan 12c.3)
+#
+# ZWEI LESERSCHAFTEN in einem Abschnitt: Alles unter melden: liest ein
+# gewoehnlicher Spieler, alles unter meldung: ein Moderator. Sie stehen
+# zusammen, weil es EIN Vorgang ist - wer den Wortlaut der einen Seite aendert,
+# soll die andere daneben sehen.
+#
+# DIE ANTWORT AN DEN MELDER ist der Kern des ganzen Teils. Plan 12c.3 begruendet
+# das Meldewesen mit ihr: "Der Melder bekommt eine Rueckmeldung - sonst meldet
+# beim zweiten Mal niemand mehr." Darum hat jeder Ausgang seinen eigenen Satz:
+# Wer liest "deine Meldung wurde bearbeitet", weiss nicht, ob man ihm geglaubt
+# hat.
+# ----------------------------------------------------------------------------
+melden:
+  # {nummer} die Nummer der Meldung, {spieler} wen er gemeldet hat. Die Nummer
+  #   gehoert hinein, auch wenn der Melder sie nie tippt: Sie ist das, was er
+  #   nennen kann, wenn er nachfragt.
+  angelegt: "<bestaetigung>Deine Meldung zu {spieler} ist aufgenommen (Nummer {nummer}).</bestaetigung> <gedaempft>Ein Moderator sieht sie sich an - du bekommst Bescheid.</gedaempft>"
+  aus: "<hinweis>Auf diesem Server wird nicht gemeldet.</hinweis>"
+  # {sekunden} wie lange er noch warten muss. Die ZAHL gehoert hinein - eine
+  #   Absage ohne sie laesst ihn raten, und er versucht es sofort wieder.
+  abklingzeit:
+    eins: "<hinweis>Noch 1 Sekunde, dann kannst du wieder melden.</hinweis>"
+    viele: "<hinweis>Noch {sekunden} Sekunden, dann kannst du wieder melden.</hinweis>"
+  # {grenze} wie viele unerledigte Meldungen erlaubt sind. Der Satz muss sagen,
+  #   dass die Meldung VERSCHOBEN und nicht verweigert ist - sonst liest der
+  #   Melder eine Absage und meldet nicht wieder.
+  zu-viele-offene:
+    eins: "<hinweis>Du hast schon 1 unerledigte Meldung. Sobald sie bearbeitet ist, kannst du wieder melden.</hinweis>"
+    viele: "<hinweis>Du hast schon {grenze} unerledigte Meldungen. Sobald eine davon bearbeitet ist, kannst du wieder melden.</hinweis>"
+  selbst: "<warnung>Dich selbst kannst du nicht melden.</warnung>"
+  # {mindestens} und {hoechstens} kommen aus dem Programm. DREI Saetze fuer drei
+  #   Faelle: Der Spieler soll wissen, was er aendern muss.
+  grund-zu-kurz:
+    eins: "<warnung>Schreib dazu, was passiert ist - mindestens 1 Zeichen.</warnung>"
+    viele: "<warnung>Schreib dazu, was passiert ist - mindestens {mindestens} Zeichen.</warnung>"
+  grund-zu-lang:
+    eins: "<warnung>Das ist zu lang - hoechstens 1 Zeichen.</warnung>"
+    viele: "<warnung>Das ist zu lang - hoechstens {hoechstens} Zeichen.</warnung>"
+  # Der Satz nennt NICHT, welches Zeichen stoert: Wer Farben faelschen wollte,
+  #   braucht keine Anleitung.
+  grund-zeichen: "<warnung>In deinem Grund steht ein Zeichen, das dort nicht hingehoert. Schreib ihn in gewoehnlichen Worten.</warnung>"
+  unbekannter-spieler: "<warnung>Den Spieler {name} kennt dieser Server nicht.</warnung>"
+  # Nicht aus Prinzip: Eine Meldung hat einen ORT, weil der Moderator hinspringt.
+  #   Die Konsole steht nirgends.
+  nur-spieler: "<warnung>Melden kann ein Spieler - eine Meldung haelt den Ort fest, und die Konsole steht nirgends.</warnung>"
+  gestoert: "<warnung>Die Meldung konnte nicht aufgenommen werden - versuch es noch einmal.</warnung>"
+  # AN ALLE ANWESENDEN MODERATOREN, wenn eine Meldung eingeht.
+  #   DARF LEER BLEIBEN: ansage: ""
+  #   Auf einem Server mit zehn Moderatoren und vielen Meldungen ist eine Zeile
+  #   je Meldung eine Belaestigung, und /meldung gibt es ohnehin. Der Wortlaut
+  #   IST der Schalter - genau wie bei den Ansagen des Angelwettbewerbs.
+  ansage: "<hinweis>Neue Meldung {nummer}:</hinweis> <fliesstext>{melder} meldet {betroffener} - {grund}</fliesstext> <gedaempft>/meldung {nummer}</gedaempft>"
+  antwort:
+    # {anzahl} wie viele Antworten warten. Sie kommen beim Beitritt - ein
+    #   Moderator erledigt eine Meldung um drei Uhr nachts, und eine Chatzeile
+    #   ginge an niemanden.
+    kopf:
+      eins: "<kopf>Es gibt eine Antwort auf deine Meldung:</kopf>"
+      viele: "<kopf>Es gibt {anzahl} Antworten auf deine Meldungen:</kopf>"
+    # {nummer}, {betroffener} wen er gemeldet hatte, {vermerk} was der
+    #   Bearbeiter geschrieben hat. ZWEI Saetze fuer zwei Ausgaenge: Wer liest
+    #   "bearbeitet", weiss nicht, ob man ihm geglaubt hat.
+    abgeschlossen: "<bestaetigung>  Meldung {nummer} ({betroffener}): bearbeitet.</bestaetigung> <fliesstext>{vermerk}</fliesstext>"
+    abgewiesen: "<hinweis>  Meldung {nummer} ({betroffener}): kein Verstoss.</hinweis> <fliesstext>{vermerk}</fliesstext>"
+    # Steht anstelle des Vermerks, wenn der Bearbeiter keinen geschrieben hat.
+    #   KEIN Farbtag - das Wort landet mitten in einer anderen Zeile.
+    ohne-vermerk-wort: "Danke fuer die Meldung."
+
+meldung:
+  liste:
+    # {anzahl} wie viele unerledigte es gibt.
+    kopf:
+      eins: "<kopf>1 offene Meldung</kopf>"
+      viele: "<kopf>{anzahl} offene Meldungen</kopf>"
+    # {nummer}, {melder}, {betroffener}, {grund} (in der Liste gekuerzt),
+    #   {alter} wie lange sie liegt, {stand} das Wort von unten.
+    #   Das ALTER und nicht der Zeitpunkt: Was zaehlt, ist wie lange sie liegt.
+    zeile: "<fliesstext>  <betont>{nummer}</betont> {melder} an {betroffener}: {grund}</fliesstext> <gedaempft>({alter}, {stand})</gedaempft>"
+    leer: "<gedaempft>Es liegt keine Meldung an.</gedaempft>"
+    hinweis: "<gedaempft>/meldung NUMMER zeigt sie, dahinter annehmen, abschliessen, abweisen oder hin</gedaempft>"
+  zeigen:
+    kopf: "<kopf>Meldung {nummer}</kopf> <gedaempft>({stand})</gedaempft>"
+    wer: "<fliesstext>  {melder} meldet {betroffener}</fliesstext> <gedaempft>- {alter}</gedaempft>"
+    # Der GANZE Grund, nicht der gekuerzte: Hier ist Platz, und genau dafuer
+    #   oeffnet man eine Meldung einzeln.
+    grund: "<fliesstext>  {grund}</fliesstext>"
+    ort: "<gedaempft>  Ort: {welt} {x}/{y}/{z} - /meldung {nummer} hin</gedaempft>"
+    bearbeiter: "<gedaempft>  In Arbeit bei {bearbeiter}</gedaempft>"
+    vermerk: "<gedaempft>  Vermerk: {vermerk}</gedaempft>"
+  genommen: "<bestaetigung>Meldung {nummer} ist jetzt bei dir.</bestaetigung>"
+  # Der NAME ist der Zweck des Satzes: Ein blosses "zu spaet" liesse den
+  #   zweiten Moderator ratlos.
+  schon-genommen: "<hinweis>Meldung {nummer} hat schon {bearbeiter}.</hinweis>"
+  abgeschlossen: "<bestaetigung>Meldung {nummer} ist abgeschlossen - {melder} bekommt Bescheid.</bestaetigung>"
+  abgewiesen: "<bestaetigung>Meldung {nummer} ist abgewiesen - {melder} bekommt Bescheid.</bestaetigung>"
+  schon-erledigt: "<hinweis>Meldung {nummer} ist schon {stand}.</hinweis>"
+  unbekannt: "<warnung>Eine Meldung mit der Nummer {nummer} gibt es nicht.</warnung>"
+  vermerk-zu-lang:
+    eins: "<warnung>Der Vermerk ist zu lang - hoechstens 1 Zeichen.</warnung>"
+    viele: "<warnung>Der Vermerk ist zu lang - hoechstens {hoechstens} Zeichen.</warnung>"
+  hin:
+    unterwegs: "<bestaetigung>Unterwegs zum Ort von Meldung {nummer} in {welt}.</bestaetigung>"
+    # Das kommt vor: Eine Meldung aus Kornmark ueberlebt den Reset der Welt.
+    welt-fehlt: "<warnung>Die Welt {welt} gibt es nicht mehr - dorthin fuehrt kein Weg.</warnung>"
+  gestoert: "<warnung>Die Meldungen antworten gerade nicht - es ist nichts passiert.</warnung>"
+  # Gilt fuer DREI Zweige: hin, annehmen und abschliessen/abweisen. EIN Satz,
+  #   weil die Aussage dieselbe ist - und darum NICHT unter hin:, sonst aendert
+  #   ein Betreiber hier unwissentlich die Absage von zwei anderen Zweigen.
+  nur-spieler: "<warnung>Das kann ein Spieler - von der Konsole geht es nicht.</warnung>"
+  # DIE VIER STAENDE. Sie werden in die Zeilen oben EINGESETZT - kein Farbtag,
+  #   er ueberschriebe die Farbe der Zeile.
+  stand:
+    offen: "offen"
+    in-arbeit: "in Arbeit"
+    abgeschlossen: "abgeschlossen"
+    abgewiesen: "abgewiesen"
+  # DAS ALTER einer Meldung, eingesetzt in die Zeilen oben.
+  #   {anzahl} ist die Zahl. ABKUERZUNGEN ab Werk, und das ist Absicht: "Min."
+  #   beugt sich nicht, also gibt es kein "vor 1 Minuten". Wer ausschreibt, hat
+  #   die Beugung selbst zu verantworten - und in einer Uebersichtsliste ist die
+  #   kurze Form ohnehin die bessere.
+  alter:
+    minuten: "vor {anzahl} Min."
+    stunden: "vor {anzahl} Std."
+    tage: "vor {anzahl} Tg."
+    soeben: "soeben"
+strafe:
+  # {nummer} die Nummer der Strafe, {spieler} wen es trifft, {art} stumm,
+  #   rauswurf oder bann, {dauer} wie lange, {grund} warum. Die NUMMER gehoert
+  #   hinein: Sie ist das, was der Moderator tippt, wenn er die Strafe aufheben
+  #   will.
+  verhaengt: "<bestaetigung>{spieler}: {art} - {dauer} (Nummer {nummer}).</bestaetigung> <fliesstext>{grund}</fliesstext>"
+  # OHNE {dauer} - fuer einen Rauswurf. Ein eigener Satz, weil die Restzeit dort
+  #   null ist: Im Startlauf stand "Rauswurf fuer 0 Sek.", und eine Dauer von
+  #   null Sekunden ist keine Angabe.
+  verhaengt-ohne-dauer: "<bestaetigung>{spieler}: {art} (Nummer {nummer}).</bestaetigung> <fliesstext>{grund}</fliesstext>"
+  # {art} welche Art gefehlt hat.
+  ohne-recht: "<warnung>Fuer {art} fehlt dir das Recht.</warnung>"
+  # {art} die Art, {hoechstens} wie lange ohne das Recht erlaubt waere. Die
+  #   GRENZE gehoert hinein - wer nur "zu lang" liest, tippt als naechstes
+  #   dieselbe Zahl. Nach Plan 12c.2 ist das die Grenze zwischen Moderator und
+  #   Verwalter.
+  ohne-recht-dauerhaft: "<warnung>Fuer {art} darfst du hoechstens {hoechstens} verhaengen.</warnung> <gedaempft>Laenger oder dauerhaft kann ein Verwalter.</gedaempft>"
+  # {spieler} wer im Team ist. Der Satz muss sagen, WARUM es nicht geht - sonst
+  #   haelt der Moderator es fuer einen Fehler und versucht es noch dreimal.
+  ohne-recht-team: "<warnung>{spieler} ist selbst im Team.</warnung> <gedaempft>Das kann ein Verwalter entscheiden.</gedaempft>"
+  # Beim AUFHEBEN fehlt nicht das Recht fuer eine Art, sondern das zum
+  #   Zuruecknehmen - darum ein eigener Satz. Ein gemeinsamer muesste eine Art
+  #   nennen, die es hier nicht gibt.
+  ohne-recht-aufheben: "<warnung>Zum Aufheben fehlt dir das Recht.</warnung>"
+  # {nummer} die Strafe. Nach Plan 12c.2 Absicht: Wer nicht dauerhaft sperren
+  #   darf, nimmt auch keinen dauerhaften Bann zurueck. Der Satz muss das SAGEN,
+  #   sonst haelt der Moderator es fuer einen Fehler.
+  ohne-recht-dauerhaft-aufheben: "<warnung>Strafe {nummer} ist dauerhaft - sie aufzuheben kann ein Verwalter.</warnung>"
+  selbst: "<warnung>Dich selbst kannst du nicht bestrafen.</warnung>"
+  # {mindestens} und {hoechstens} kommen aus dem Programm. DREI Saetze fuer drei
+  #   Faelle: Der Moderator soll wissen, was er aendern muss - mitten im Vorfall.
+  grund-zu-kurz:
+    eins: "<warnung>Schreib dazu, warum - mindestens 1 Zeichen.</warnung>"
+    viele: "<warnung>Schreib dazu, warum - mindestens {mindestens} Zeichen.</warnung>"
+  grund-zu-lang:
+    eins: "<warnung>Der Grund ist zu lang - hoechstens 1 Zeichen.</warnung>"
+    viele: "<warnung>Der Grund ist zu lang - hoechstens {hoechstens} Zeichen.</warnung>"
+  # Der Satz nennt NICHT, welches Zeichen stoert: Wer Farben faelschen wollte,
+  #   braucht keine Anleitung. Der Grund steht in der oeffentlichen Bannliste.
+  grund-zeichen: "<warnung>Im Grund steht ein Zeichen, das dort nicht hingehoert. Schreib ihn in gewoehnlichen Worten.</warnung>"
+  unbekannter-spieler: "<warnung>Den Spieler {name} kennt dieser Server nicht.</warnung>"
+  # {wort} was getippt wurde, {beispiele} die brauchbaren Formen. Die BEISPIELE
+  #   sind der Zweck des Satzes: Wer 10 getippt hat, braucht 10m - und soll das
+  #   hier lesen und nicht erraten.
+  unbekannte-dauer: "<warnung>{wort} ist keine Dauer.</warnung> <gedaempft>Zahl und Einheit, zum Beispiel: {beispiele}</gedaempft>"
+  # {spieler}, {art}, {nummer} die geltende Strafe, {bis} wann sie endet. Die
+  #   NUMMER ist der Weg aus der Absage heraus: aufheben, dann neu verhaengen.
+  schon-gestraft: "<warnung>{spieler} hat schon {art} bis {bis} (Nummer {nummer}).</warnung> <gedaempft>Erst aufheben, dann neu verhaengen.</gedaempft>"
+  unbekannt: "<warnung>Eine Strafe mit der Nummer {nummer} gibt es nicht.</warnung>"
+  # {nummer}, {art} - ein Rauswurf ist vorbei, sobald er geschieht.
+  nicht-fortwirkend: "<hinweis>Strafe {nummer} ist ein {art} - daran ist nichts aufzuheben.</hinweis>"
+  aufgehoben: "<bestaetigung>Strafe {nummer} gegen {spieler} ({art}) ist aufgehoben.</bestaetigung>"
+  # {nummer}, {wer} wer sie aufgehoben hat.
+  schon-aufgehoben: "<hinweis>Strafe {nummer} hat {wer} schon aufgehoben.</hinweis>"
+  gestoert: "<warnung>Das konnte nicht geschrieben werden - versuch es noch einmal.</warnung>"
+  # {arten} die Zweige, die es gibt. Steht bei /strafe ohne weitere Angabe -
+  #   ohne diesen Satz endet der Befehl in Brigadiers englischer Fehlermeldung.
+  hinweis: "<kopf>/strafe ARTEN SPIELER DAUER GRUND</kopf>\n<fliesstext>Arten: {arten}</fliesstext>\n<gedaempft>/strafe aufheben NUMMER GRUND - /strafe verlauf SPIELER - /bannliste</gedaempft>"
+  # AN ALLE ANWESENDEN, wenn eine Strafe faellt.
+  #   DARF LEER BLEIBEN: ansage: ""
+  #   Wer zusieht, wie jemand grieft, und nichts geschieht, meldet beim naechsten
+  #   Mal nicht - die Ansage ist die Antwort an alle, die zugesehen haben. Der
+  #   zweite Weg, sie abzuschalten, ist moderation.strafen.ansagen: false.
+  ansage: "<hinweis>{spieler}: {art} - {dauer}.</hinweis> <fliesstext>{grund}</fliesstext>"
+  # Desgleichen ohne Dauer - darf auch leer bleiben.
+  ansage-ohne-dauer: "<hinweis>{spieler}: {art}.</hinweis> <fliesstext>{grund}</fliesstext>"
+  # Desgleichen bei einer Aufhebung - darf auch leer bleiben.
+  ansage-aufhebung: "<bestaetigung>{spieler} ist wieder frei ({art}).</bestaetigung> <fliesstext>{grund}</fliesstext>"
+  getroffen:
+    # WAS DER BESTRAFTE LIEST. Plan 12c.3: "der Grund wird dem Betroffenen
+    #   angezeigt. Eine Strafe, die niemand erklaert, erzeugt nur Wiederkehr."
+    #   Darum steht {grund} in JEDEM dieser Saetze, und zwar ungekuerzt.
+    #
+    # {grund} warum, {wer} wer ihn hinausgeworfen hat. Dieser Satz IST der
+    #   Rauswurf - mehr bleibt von ihm nicht. Ein Kick ohne Grund ist ein
+    #   Verbindungsabbruch, von dem der Spieler annimmt, sein Netz sei
+    #   ausgefallen.
+    rauswurf: "<warnung>Du wurdest hinausgeworfen.</warnung>\n<fliesstext>{grund}</fliesstext>\n<gedaempft>von {wer}</gedaempft>"
+    # {grund}, {bis} wann die Sperre endet, {dauer} wie lange noch. ZWEI Saetze
+    #   fuer befristet und dauerhaft: Wer dauerhaft gesperrt ist, soll das lesen
+    #   und nicht ein Datum im Jahr 2126, das ihn fuer einen Augenblick hoffen
+    #   laesst.
+    bann: "<warnung>Du bist gesperrt bis {bis} (noch {dauer}).</warnung>\n<fliesstext>{grund}</fliesstext>"
+    bann-dauerhaft: "<warnung>Du bist dauerhaft gesperrt.</warnung>\n<fliesstext>{grund}</fliesstext>\n<gedaempft>Wenn du das fuer falsch haeltst, schreib uns.</gedaempft>"
+    # {grund}, {dauer} wie lange noch.
+    stumm: "<warnung>Du bist stummgeschaltet - noch {dauer}.</warnung> <fliesstext>{grund}</fliesstext>"
+    stumm-dauerhaft: "<warnung>Du bist dauerhaft stummgeschaltet.</warnung> <fliesstext>{grund}</fliesstext>"
+    # {befehl} welcher Befehl, {grund}, {dauer}. Ein EIGENER Satz: Wer /msg
+    #   tippt und "du bist stummgeschaltet" liest, haelt es fuer einen Fehler -
+    #   er hat ja nicht in den Chat geschrieben.
+    befehl: "<warnung>{befehl} ist gesperrt, solange du stumm bist - noch {dauer}.</warnung> <fliesstext>{grund}</fliesstext>"
+  verlauf:
+    # {anzahl} wie viele Strafen, {spieler} wessen.
+    kopf:
+      eins: "<kopf>1 Strafe gegen {spieler}</kopf>"
+      viele: "<kopf>{anzahl} Strafen gegen {spieler}</kopf>"
+    # {nummer}, {art}, {stand} gilt, abgelaufen oder aufgehoben, {wann} wann
+    #   verhaengt, {grund} gekuerzt. Der STAND macht die Liste lesbar: Ohne ihn
+    #   saehe ein Moderator drei Banne, von denen zwei zurueckgenommen wurden.
+    zeile: "<fliesstext>  {nummer} {art} ({stand}) {wann} - {grund}</fliesstext>"
+    leer: "<fliesstext>Gegen {spieler} steht nichts.</fliesstext>"
+    hinweis: "<gedaempft>/strafe aufheben NUMMER GRUND</gedaempft>"
+  art:
+    # Die Worte fuer die drei Arten. KEIN Farbtag - sie landen mitten in
+    #   anderen Zeilen.
+    stumm: "stumm"
+    rauswurf: "Rauswurf"
+    bann: "Sperre"
+  stand:
+    # Wo eine Strafe steht. KEIN Farbtag, siehe oben.
+    gilt: "gilt"
+    abgelaufen: "abgelaufen"
+    aufgehoben: "aufgehoben"
+  dauer:
+    # {anzahl} die Zahl. KEIN Farbtag - diese Worte werden EINGESETZT.
+    #
+    # ABKUERZUNGEN, und das hat einen gemessenen Grund: Ein eingesetztes Wort
+    #   ist im Programm Art.WORT und kennt keine Mehrzahl - "Min." beugt sich
+    #   nicht. Wer ausschreibt ("1 Minuten"), verantwortet die Beugung selbst.
+    dauerhaft: "dauerhaft"
+    sekunden: "{anzahl} Sek."
+    minuten: "{anzahl} Min."
+    stunden: "{anzahl} Std."
+    tage: "{anzahl} Tg."
+  wer:
+    # Steht anstelle eines Namens, wenn die Konsole gestraft hat. KEIN Farbtag.
+    konsole: "der Konsole"
+  # Wie ein Zeitpunkt geschrieben wird. Ein Muster fuer DateTimeFormatter, kein
+  #   Satz: Ein unbrauchbares Muster ist eine Klage beim Laden. Gerechnet wird
+  #   in die Zone aus zeit.zone - bei einer Sperre ist das die Zeit, auf die
+  #   jemand wartet.
+  zeit-muster: "dd.MM.yyyy HH:mm"
+
+bannliste:
+  # {anzahl} wie viele gesperrt sind.
+  kopf:
+    eins: "<kopf>1 Spieler ist gesperrt</kopf>"
+    viele: "<kopf>{anzahl} Spieler sind gesperrt</kopf>"
+  # {spieler}, {bis} wann die Sperre endet, {grund} gekuerzt. Plan 12c.4:
+  #   "Bannliste mit Grund und Dauer - oeffentlich, wie im Vorbild." Beides ist
+  #   unbequem, und genau deshalb gehoert es dazu: Die Liste zwingt zu
+  #   Begruendungen, die standhalten.
+  zeile: "<fliesstext>  {spieler} bis {bis} - {grund}</fliesstext>"
+  leer: "<bestaetigung>Niemand ist gesperrt.</bestaetigung>"
+  # Steht, wenn moderation.strafen.bannliste-oeffentlich auf false steht. Eine
+  #   leere Liste waere die falsche Antwort - sie behauptet, niemand sei gesperrt.
+  ohne-recht: "<warnung>Die Bannliste ist auf diesem Server nicht oeffentlich.</warnung>"
+  gestoert: "<warnung>Die Bannliste ist gerade nicht lesbar - versuch es noch einmal.</warnung>"

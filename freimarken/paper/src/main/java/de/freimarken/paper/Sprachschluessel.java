@@ -53,7 +53,8 @@ final class Sprachschluessel {
             WerderSatz.class, WolkeSatz.class, RangSatz.class,
             MenueSatz.class, RegelnSatz.class, HilfeSatz.class,
             AnmeldeSatz.class, RundgangSatz.class, LotterieSatz.class,
-            WettbewerbSatz.class);
+            WettbewerbSatz.class, TeamSatz.class, MeldeSatz.class,
+            StrafSatz.class);
 
     /** Alle Saetze, aus ALLEN Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();
@@ -148,7 +149,13 @@ final class Sprachschluessel {
         // Die Stationen des Rundgangs [21.11.2026] - dieselbe offene Familie: Welche es
         // gibt, steht in der config.yml, und der Betreiber MUSS je Station zwei Zeilen
         // setzen koennen. Ohne diesen Zweig waere jede davon ein unbekannter Schluessel.
-        return Stationssatz.passt(pfad) ? Stationssatz.ausPfad(pfad) : null;
+        if (Stationssatz.passt(pfad)) {
+            return Stationssatz.ausPfad(pfad);
+        }
+        // Die FUENFTE Familie, seit es Teamrollen gibt [Schritt 16a Teil A]. Welche
+        // Rollen ein Server hat, steht in der config.yml - ein Betreiber, der eine
+        // sechste anlegt, muss ihr einen Namen geben koennen.
+        return Teamrolle.passt(pfad) ? Teamrolle.ausPfad(pfad) : null;
     }
 
     /**
@@ -170,7 +177,15 @@ final class Sprachschluessel {
                 // Sprachzeile der Betreiber vergessen hat - mitten im Spiel, und
                 // mitgerissen waere auch jede richtig benannte Station. Genau das ist
                 // am 20.11.2026 beim Muenzhaus gemessen worden.
-                || satz instanceof Stationssatz;
+                || satz instanceof Stationssatz
+                // Die fuenfte offene Familie [Schritt 16a Teil A]: die Teamrollen. Ohne
+                // diese Zeile wuerfe /team bei einer Rolle, deren Namenszeile der
+                // Betreiber vergessen hat - und mitgerissen waere die ganze Liste, also
+                // auch jede richtig benannte Rolle. Dasselbe Fehlerbild wie beim
+                // Muenzhaus, und mit demselben Unterschied: Hier trifft es ein
+                // Betreiberwerkzeug, und der Betreiber ist der, der die Zeile vergessen
+                // hat - aber die Liste, die er dann braucht, waere genau die, die wirft.
+                || satz instanceof Teamrolle;
     }
 
     /** Alle Pfade, die in der Datei stehen duerfen - mit {@code .eins}/{@code .viele}. */
@@ -536,6 +551,27 @@ final class Sprachschluessel {
         // ueber BlockSatz.tatwort gewaehlt und nirgends namentlich getippt. Gedeckt sind
         // sie in BlockBefehlTest: Dort geht JEDE Tat durch die echte Zeile aus der
         // ausgelieferten Vorlage.
+        // Die vier Standworte der Meldungen [Schritt 16a Teil C] - dieselbe Bauart und
+        // derselbe Grund: Sie werden ueber MeldeSatz.standwort gewaehlt und nirgends
+        // namentlich getippt. Gedeckt sind sie in MeldungBefehlTest: Dort geht JEDER
+        // Stand durch die echte Zeile aus der ausgelieferten Vorlage.
+        for (de.freimarken.kern.Meldestand stand
+                : de.freimarken.kern.Meldestand.values()) {
+            pfade.add(MeldeSatz.standwort(stand).pfad());
+        }
+        // Die drei Artworte der Strafen [Schritt 16a Teil B] - dieselbe Bauart und
+        // derselbe Grund: Sie werden ueber StrafSatz.artwort gewaehlt und nirgends
+        // namentlich getippt. Gedeckt sind sie in StrafBefehlTest: Dort geht JEDE Art
+        // durch die echte Zeile aus der ausgelieferten Vorlage.
+        //
+        // ALLE DREI, obwohl strafe.art.bann im Quelltext auch namentlich vorkommt
+        // (StrafBefehle.antwort nimmt es als Rueckfall, wenn die Art nicht bekannt
+        // ist). Die Deckung ist eine Zusage ueber die FAMILIE, und eine Liste, die
+        // nach dem Zufall des Rueckfalls eine Art auslaesst, ist keine.
+        for (de.freimarken.kern.Strafart art
+                : de.freimarken.kern.Strafart.values()) {
+            pfade.add(StrafSatz.artwort(art).pfad());
+        }
         for (Blocktat tat : Blocktat.values()) {
             pfade.add(BlockSatz.tatwort(tat).pfad());
         }

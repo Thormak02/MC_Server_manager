@@ -72,7 +72,8 @@ class WirtschaftsstandTest {
                 Truhenwerte.VORGABE, Freistadtwerte.VORGABE, Inselwerte.VORGABE,
                 Angelwerte.VORGABE, Wolkenwerte.VORGABE, Rangwerte.VORGABE,
                 Wechselwerte.VORGABE, Muenzwerte.VORGABE, Anmeldewerte.VORGABE,
-                Lotteriewerte.VORGABE, Wettbewerbswerte.VORGABE);
+                Lotteriewerte.VORGABE, Wettbewerbswerte.VORGABE, Teamwerte.VORGABE,
+                Meldewerte.VORGABE, Strafwerte.VORGABE);
     }
 
     /**
@@ -640,6 +641,110 @@ class WirtschaftsstandTest {
                 zeileZu(weg, Freistadtwerte.PFAD_BUERGERRECHTE),
                 "auch der Weg zurueck muss ankommen - ein Recht, das der Betreiber"
                         + " herausnimmt, ist die Aenderung, die er am ehesten nachprueft");
+    }
+
+    @Test
+    @DisplayName("Geaenderte Strafwerte werden alle sechs genannt")
+    void strafwerteGenannt() {
+        // Jeder PFAD_* der Strafwerte in EINER Uebernahme [Schritt 16a Teil B]. Tafel
+        // GrenzeTest 31cw haelt, dass jeder Pfad im Quelltext von uebernimm VORKOMMT;
+        // diese Probe haelt, dass die Zeile wirklich ENTSTEHT. Beides ist noetig: Ein
+        // Vergleich der neuen Menge mit sich selbst waere dort gruen und hier stumm.
+        //
+        // Die wichtigste der sechs Zeilen ist die Hoechstdauer - sie ist die Grenze
+        // zwischen dem, was ein Moderator darf, und dem, was ein Verwalter darf
+        // (Plan 12c.2). Wer sie enger zieht, zieht sie, weil gerade etwas geschehen
+        // ist, und liest dann "nichts geaendert".
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitStrafen(
+                Strafwerte.VORGABE
+                        .mitHoechsteStunden(Strafart.STUMM, 12L)
+                        .mitHoechsteStunden(Strafart.BANN, 48L)
+                        .mitBannlisteOeffentlich(false)
+                        .mitAnsagen(false)
+                        .mitZeilenJeSeite(7)
+                        .mitStummSperrtBefehle(List.of("msg"))));
+
+        for (String pfad : List.of(
+                Strafwerte.PFAD_HOECHSTE_STUNDEN + "." + Strafart.STUMM.kuerzel(),
+                Strafwerte.PFAD_HOECHSTE_STUNDEN + "." + Strafart.BANN.kuerzel(),
+                Strafwerte.PFAD_BANNLISTE_OEFFENTLICH, Strafwerte.PFAD_ANSAGEN,
+                Strafwerte.PFAD_ZEILEN_JE_SEITE,
+                Strafwerte.PFAD_STUMM_SPERRT_BEFEHLE)) {
+            assertTrue(uebernahme.geaendert().stream().anyMatch(zeile ->
+                            zeile.startsWith(pfad + ":")),
+                    pfad + " wird beim Neuladen nicht genannt: "
+                            + uebernahme.geaendert());
+        }
+    }
+
+    @Test
+    @DisplayName("Die Hoechstdauer wird je ART genannt - gerechnet, nicht aufgezaehlt")
+    void hoechstdauerJeArtGenannt() {
+        // Die Zeilen entstehen in einer Schleife ueber Strafart.values(). Diese Probe
+        // laeuft dieselbe Schleife: Eine vierte fortwirkende Art ist damit von selbst
+        // mitgeprueft - und eine von Hand geschriebene Liste in uebernimm waere die
+        // Stelle, an der sie fehlt.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        Strafwerte anders = Strafwerte.VORGABE;
+        int erwartet = 0;
+        for (Strafart art : Strafart.values()) {
+            if (!art.giltFort()) {
+                continue;
+            }
+            anders = anders.mitHoechsteStunden(art, 5L);
+            erwartet++;
+        }
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitStrafen(anders));
+
+        assertTrue(erwartet > 0, "es gibt keine fortwirkende Art - dann ist der ganze"
+                + " Riegel gegen den dauerhaften Bann unerreichbar");
+        long gezaehlt = uebernahme.geaendert().stream()
+                .filter(zeile -> zeile.startsWith(
+                        Strafwerte.PFAD_HOECHSTE_STUNDEN + "."))
+                .count();
+        assertEquals(erwartet, gezaehlt,
+                "je fortwirkender Art eine Zeile: " + uebernahme.geaendert());
+    }
+
+    @Test
+    @DisplayName("Die Befehlssperre wird in BEIDE Richtungen genannt")
+    void befehlssperreInBeideRichtungen() {
+        // In beide Richtungen, weil die Vorgabe NICHT leer ist: erst alles weg, dann
+        // alles wieder her. Eine Probe, die nur hinzufuegt, waere auch mit einem
+        // Vergleich gruen, der die neue Menge zweimal nimmt - und dann liest ein
+        // Betreiber, der /msg aus der Sperre nimmt, "nichts geaendert". Seine
+        // Stummschaltung ist ab da umgehbar.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var weg = stand.uebernimm(Wirtschaftswerte.VORGABE.mitStrafen(
+                Strafwerte.VORGABE.mitStummSperrtBefehle(List.of())));
+        var her = stand.uebernimm(Wirtschaftswerte.VORGABE);
+
+        assertTrue(zeileZu(weg, Strafwerte.PFAD_STUMM_SPERRT_BEFEHLE).contains("weg:"),
+                "die weggefallenen Namen muessen in der Zeile stehen: "
+                        + zeileZu(weg, Strafwerte.PFAD_STUMM_SPERRT_BEFEHLE));
+        assertTrue(zeileZu(her, Strafwerte.PFAD_STUMM_SPERRT_BEFEHLE).contains("dazu:"),
+                "und der Weg zurueck auch: "
+                        + zeileZu(her, Strafwerte.PFAD_STUMM_SPERRT_BEFEHLE));
+    }
+
+    @Test
+    @DisplayName("Unveraenderte Strafwerte schweigen")
+    void unveraenderteStrafwerteSchweigen() {
+        // Die Gegenrichtung, und sie ist Pflicht: Sechs Zeilen, die immer dastehen,
+        // waeren mit den Proben darueber genauso gruen - und der Betreiber laese bei
+        // jedem Neuladen, die Hoechstdauer habe sich geaendert. Beim dritten Mal liest
+        // er die Meldung nicht mehr.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE);
+
+        assertFalse(uebernahme.geaendert().stream().anyMatch(zeile ->
+                        zeile.startsWith("moderation.strafen")),
+                uebernahme.geaendert().toString());
     }
 
     /** Die eine Zeile der Uebernahme zu diesem Pfad - oder ein leerer Text. */
