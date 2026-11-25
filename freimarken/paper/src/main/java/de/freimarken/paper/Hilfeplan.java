@@ -190,7 +190,12 @@ record Hilfeplan(List<Gruppe> gruppen) {
                     // Begruendungen, die standhalten, und genau deshalb gehoert sie
                     // dazu. Eine Liste, die niemand findet, zwingt zu nichts.
                     new Eintrag("bannliste", JEDER,
-                            BundSatz.BEFEHL_BANNLISTE)))));
+                            BundSatz.BEFEHL_BANNLISTE),
+                    // /einsehen [Teil D] mit seinem Recht davor: Es ist ein Zugriff
+                    // auf fremdes Eigentum, und wer ihn nicht hat, soll die Zeile
+                    // nicht lesen - sonst tippt er den Befehl und liest eine Absage.
+                    new Eintrag("einsehen", EinsichtBefehle.RECHT,
+                            BundSatz.BEFEHL_EINSEHEN)))));
 
     /** Jeder Befehl des Plans, in der Reihenfolge der Anzeige - fuer die Tafeln. */
     List<String> befehle() {

@@ -209,7 +209,11 @@ class HilfeplanTest {
                         // freimarken.bannliste steht auf default true; ob die Liste
                         // wirklich jedem offen ist, entscheidet zusaetzlich
                         // moderation.strafen.bannliste-oeffentlich.
-                        Map.entry("bannliste", Hilfeplan.JEDER))),
+                        Map.entry("bannliste", Hilfeplan.JEDER),
+                        // Schritt 16a Teil D: /einsehen traegt sein eigenes
+                        // Recht. Kein JEDER wie /melden: Wer es tippen kann,
+                        // oeffnet damit fremde Behaelter.
+                        Map.entry("einsehen", EinsichtBefehle.RECHT))),
                 gebaut, "Ein Eintrag traegt ein anderes Recht als sein Befehl.");
     }
 

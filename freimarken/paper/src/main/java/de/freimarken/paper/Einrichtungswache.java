@@ -73,6 +73,9 @@ final class Einrichtungswache implements Listener {
     private final Shopfrage shops;
     private final Sprache sprache;
 
+    /** Ob der Leser gerade einsieht - siehe {@link Schutzwache.Einsicht}. */
+    private final Schutzwache.Einsicht einsicht;
+
     /**
      * @param weltschluessel die Ladenwelt, fertig als {@code freimarken:altfurt}
      * @param truhen         die Stellen der Freien Truhen - darf leer sein
@@ -80,15 +83,22 @@ final class Einrichtungswache implements Listener {
      */
     Einrichtungswache(String weltschluessel, Truhenverzeichnis truhen, Shopfrage shops,
             Sprache sprache) {
+        this(weltschluessel, truhen, shops, sprache, Schutzwache.KEINE_EINSICHT);
+    }
+
+    Einrichtungswache(String weltschluessel, Truhenverzeichnis truhen, Shopfrage shops,
+            Sprache sprache, Schutzwache.Einsicht einsicht) {
         if (weltschluessel == null || weltschluessel.isBlank() || truhen == null
-                || shops == null || sprache == null) {
+                || shops == null || sprache == null || einsicht == null) {
             throw new IllegalArgumentException("Eine Einrichtungswache ohne Welt, Truhen,"
-                    + " Shopbuch oder Sprache waere eine, die nichts entscheiden kann");
+                    + " Shopbuch, Sprache oder Einsicht waere eine, die nichts"
+                    + " entscheiden kann");
         }
         this.weltschluessel = weltschluessel;
         this.truhen = truhen;
         this.shops = shops;
         this.sprache = sprache;
+        this.einsicht = einsicht;
     }
 
     /**
@@ -134,6 +144,13 @@ final class Einrichtungswache implements Listener {
             return;
         }
         if (spieler.hasPermission(Schutzwache.UEBERALL)) {
+            return;
+        }
+        // DIE EINSICHT genau neben dem Teamrecht [Schritt 16a Teil D]: Ein Moderator,
+        // der einer Meldung in Altfurt nachgeht, soll in die Kiste sehen koennen -
+        // und die Stadt ist der Ort, an dem am meisten steht. Genommen wird dabei
+        // nichts; das haelt die Einsichtswache am Inventar selbst.
+        if (einsicht.schaut(spieler)) {
             return;
         }
         boolean stadt = false;

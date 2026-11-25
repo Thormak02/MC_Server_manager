@@ -138,6 +138,9 @@ final class Shopwache implements Listener {
     private final Abklingzeit drossel = new Abklingzeit(MELDEPAUSE);
     private final Logger protokoll;
 
+    /** Ob der Oeffner gerade einsieht - siehe {@link Schutzwache.Einsicht}. */
+    private final Schutzwache.Einsicht einsicht;
+
     /**
      * <b>Kein Bundwort mehr im Feld</b> - FUND VOM 10.11.2026. Es stand hier als Text,
      * also als Schnappschuss des Starts, und wurde an {@code Shopbuch.anlege}
@@ -148,16 +151,28 @@ final class Shopwache implements Listener {
      */
     Shopwache(Shopbuch buch, Shopware waren, Sprache sprache, Nachtrag nachtrag,
             Logger protokoll) {
+        this(buch, waren, sprache, nachtrag, protokoll,
+                Schutzwache.KEINE_EINSICHT);
+    }
+
+    Shopwache(Shopbuch buch, Shopware waren, Sprache sprache, Nachtrag nachtrag,
+            Logger protokoll, Schutzwache.Einsicht einsicht) {
         if (nachtrag == null) {
             throw new IllegalArgumentException("Ohne Nachtrag bleibt jedes Shopschild"
                     + " unbewachst, und ein unbewachstes Schild darf seit Minecraft 1.20"
                     + " jeder umschreiben - auch die Preise eines fremden Shops.");
+        }
+        if (einsicht == null) {
+            throw new IllegalArgumentException("Ohne Einsicht waere diese Wache eine,"
+                    + " die bei jedem Oeffnen wirft - wer keine hat, nimmt"
+                    + " Schutzwache.KEINE_EINSICHT.");
         }
         this.buch = buch;
         this.waren = waren;
         this.sprache = sprache;
         this.nachtrag = nachtrag;
         this.protokoll = protokoll;
+        this.einsicht = einsicht;
     }
 
     // --- Anlegen --------------------------------------------------------------
@@ -533,6 +548,18 @@ final class Shopwache implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void beimOeffnen(InventoryOpenEvent ereignis) {
         if (!(ereignis.getPlayer() instanceof Player spieler)) {
+            return;
+        }
+        // DIE EINSICHT VOR der Shopfrage [Schritt 16a Teil D]: Ein Moderator, der
+        // einer Meldung nachgeht, soll auch in eine fremde Shopkiste sehen - dort
+        // steht Ware, und Ware ist der haeufigste Streitgegenstand. Vor der
+        // Shopfrage, weil shopsAn die Ablage liest: Wer ohnehin durchkommt, soll
+        // dafuer keinen Lesezugriff kosten.
+        //
+        // Diese Wache fragt Schutzwache.UEBERALL NICHT - und das bleibt so: Jenes
+        // Recht ist das BAUrecht, und ein Bauer ist kein Kaeufer. Die Einsicht ist
+        // das Recht, das hierher gehoert.
+        if (einsicht.schaut(spieler)) {
             return;
         }
         AnDerKiste kiste = shopsAn(ereignis.getInventory());

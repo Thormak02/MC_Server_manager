@@ -423,6 +423,151 @@
 </section>
 {% endif %}
 
+{% elif inhalt.seite.quelle == "moderation" %}
+<section class="card">
+    <h2>Moderation</h2>
+    <p class="hint">
+        Alles auf dieser Seite ist <strong>nur zur Anzeige</strong>. Eine Strafe
+        aufzuheben, eine Meldung zu bearbeiten oder eine Rolle zu geben sind Handlungen
+        mit Ansage, Rechteriegel und Protokollzeile &ndash; sie laufen ueber
+        <code>/strafe aufheben</code>, <code>/meldung</code> und <code>/team</code> am
+        laufenden Server. Ein Knopf hier daneben waere der eine Weg, der daran
+        vorbeigeht.
+    </p>
+    {% if moderation.zahlen %}
+    <table class="table">
+        <tbody>
+            <tr>
+                <th>Dauerhafte Strafen</th>
+                <td>{{ moderation.zahlen.strafen_dauerhaft }}</td>
+                <td class="hint">ohne Ende und nicht aufgehoben &ndash; die Liste
+                    darunter</td>
+            </tr>
+            <tr>
+                <th>Befristete Strafen, die gelten</th>
+                <td>{{ moderation.zahlen.strafen_befristet }}</td>
+                <td class="hint">nur als Zahl: wer sie einzeln sucht, fragt
+                    <code>/strafe verlauf</code> im Spiel</td>
+            </tr>
+            <tr>
+                <th>Strafen insgesamt</th>
+                <td>{{ moderation.zahlen.strafen_gesamt }}</td>
+                <td class="hint">auch abgelaufene und aufgehobene &ndash; geloescht wird
+                    nie</td>
+            </tr>
+            <tr>
+                <th>Meldungen in Arbeit</th>
+                <td>{{ moderation.zahlen.meldungen_offen }}</td>
+                <td class="hint">von {{ moderation.zahlen.meldungen_gesamt }} insgesamt
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Dauerhafte Strafen</h2>
+    {% if moderation.strafen %}
+    <table class="table">
+        <thead>
+            <tr><th>Nr.</th><th>Wer</th><th>Art</th><th>Grund</th><th>Von</th>
+                <th>Verhaengt</th></tr>
+        </thead>
+        <tbody>
+            {% for zeile in moderation.strafen %}
+            <tr>
+                <td>{{ zeile.nummer }}</td>
+                <td title="{{ zeile.betroffener }}">{{ zeile.betroffener_name }}</td>
+                <td>{{ zeile.art }}</td>
+                <td>{{ zeile.grund }}</td>
+                <td title="{{ zeile.von_wem }}">{{ zeile.von_wem_name }}</td>
+                <td>{{ zeile.verhaengt_am.strftime("%d.%m.%Y %H:%M")
+                       if zeile.verhaengt_am else "" }} UTC</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if moderation.strafen|length >= moderation.grenze %}
+    <p class="hint">Mehr als {{ moderation.grenze }} Zeilen &ndash; hier stehen die
+        neuesten.</p>
+    {% endif %}
+    {% else %}
+    <p>Niemand ist dauerhaft gesperrt oder stummgeschaltet.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Meldungen in Arbeit</h2>
+    <p class="hint">
+        Offen und in Arbeit, die aelteste oben. Eine Meldung <em>in Arbeit</em>, an der
+        seit Tagen niemand war, ist der Fund: Einen Weg zurueck nach <em>offen</em> gibt
+        es nicht, ein Moderator, der aufhoert, laesst sie so stehen. Der Ort ist der des
+        <strong>Melders</strong> &ndash; was er gesehen hat, hat er von dort gesehen.
+    </p>
+    {% if moderation.meldungen %}
+    <table class="table">
+        <thead>
+            <tr><th>Nr.</th><th>Stand</th><th>Melder</th><th>Betroffen</th>
+                <th>Grund</th><th>Ort</th><th>Gemeldet</th><th>Bearbeiter</th></tr>
+        </thead>
+        <tbody>
+            {% for zeile in moderation.meldungen %}
+            <tr>
+                <td>{{ zeile.nummer }}</td>
+                <td>{{ zeile.stand }}</td>
+                <td title="{{ zeile.melder }}">{{ zeile.melder_name }}</td>
+                <td title="{{ zeile.betroffener }}">{{ zeile.betroffener_name }}</td>
+                <td>{{ zeile.grund }}</td>
+                <td>{{ zeile.welt }} {{ zeile.stelle }}</td>
+                <td>{{ zeile.gemeldet_am.strftime("%d.%m.%Y %H:%M")
+                       if zeile.gemeldet_am else "" }} UTC</td>
+                <td title="{{ zeile.bearbeiter }}">
+                    {% if zeile.bearbeiter_name %}{{ zeile.bearbeiter_name }}
+                    {% else %}<span class="hint">niemand</span>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Keine Meldung wartet auf Bearbeitung.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Teamrollen</h2>
+    <p class="hint">
+        Eine Zeile je Mensch, mit allen seinen Rollen &ndash; die Rechte sind die
+        Vereinigung. Welche Rolle wie viel darf, steht in der <code>config.yml</code>
+        unter <code>team.rollen</code>; der Startbericht des Plugins nennt je Rolle die
+        Zahl ihrer Rechte.
+    </p>
+    {% if moderation.team %}
+    <table class="table">
+        <thead><tr><th>Wer</th><th>Rollen</th></tr></thead>
+        <tbody>
+            {% for eintrag in moderation.team %}
+            <tr>
+                <td title="{{ eintrag.kennung }}">{{ eintrag.name }}</td>
+                <td>
+                    {% for rolle in eintrag.rollen %}
+                    <code>{{ rolle.rolle }}</code>
+                    <span class="hint">seit {{ rolle.seit.strftime("%d.%m.%Y")
+                        if rolle.seit else "" }}, von {{ rolle.vergeber_name }}</span>
+                    {% if not loop.last %}<br>{% endif %}
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Niemand hat eine Teamrolle. Nach einem Neustart ohne Datenbank ist das der
+        gewoehnliche Zustand &ndash; eine Rolle wird gegeben und nicht gemessen.</p>
+    {% endif %}
+</section>
+
 {% elif inhalt.seite.quelle == "mitglieder" %}
 <section class="card">
     <h2>Mitgliedschaften</h2>

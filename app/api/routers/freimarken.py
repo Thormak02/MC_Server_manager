@@ -35,6 +35,7 @@ from app.services import (
     freimarken_db_service,
     freimarken_einrichtung_service,
     freimarken_mitglied_service,
+    freimarken_moderation_service,
     freimarken_service,
     freimarken_spieldaten_service,
 )
@@ -188,6 +189,7 @@ def freimarken_seite(request: Request, server_id: int, seite: str,
     # Schluessel zurueckgibt.
     spieldaten: dict = {}
     mitglieder: dict = {}
+    moderation: dict = {}
 
     if beschreibung.get("quelle") == "audit":
         # Diese Seite liest nicht die config.yml, sondern das Protokoll des Managers.
@@ -226,6 +228,20 @@ def freimarken_seite(request: Request, server_id: int, seite: str,
                     freimarken_spieldaten_service.zusammenfassung(server)
         except freimarken_db_service.FreimarkenDbFehler as problem:
             fehler = str(problem)
+    elif beschreibung.get("quelle") == "moderation":
+        # Dieselbe Bauart wie bei den Spieldaten, und aus demselben Grund: Die Zeilen
+        # kommen aus der Datenbank des PLUGINS, und die kann fehlen, ohne dass etwas
+        # kaputt ist. Ein Server ohne datenbank.url speichert nichts.
+        #
+        # Im Fehlerfall bleibt moderation leer, und das genuegt: Die Vorlage endet
+        # bei einem Lesefehler VOR dem Moderationsblock (anders als bei den
+        # Spieldaten, wo das Korrekturformular stehenbleiben muss). Ein zweiter Riegel
+        # hier - leere Listen setzen - waere eine zweite Pruefung fuer denselben Fall,
+        # und zwei Riegel fuer einen Fall machen sich gegenseitig unpruefbar.
+        try:
+            moderation = freimarken_moderation_service.stand(server)
+        except freimarken_db_service.FreimarkenDbFehler as problem:
+            fehler = str(problem)
     elif beschreibung.get("quelle") == "mitglieder":
         # Diese Zeilen stehen im MANAGER. Sie koennen nicht unlesbar sein, und darum gibt
         # es hier auch keinen Fehlerzweig.
@@ -253,6 +269,7 @@ def freimarken_seite(request: Request, server_id: int, seite: str,
                       inhalt=inhalt, lesefehler=fehler, zeilen=zeilen,
                       sprache=sprache, abschnitt=abschnitt,
                       spieldaten=spieldaten, mitglieder=mitglieder,
+                      moderation=moderation,
                       darf_aendern=(has_minimum_role(current_user.role,
                                                      UserRole.ADMIN.value)
                                     and can_edit_server_files(db, current_user, server)),

@@ -2961,7 +2961,21 @@ class BildGleichTest {
                 new Zeile(StrafSatz.BANNLISTE_OHNE_RECHT, 1L, Einsatz.keine(),
                         "&#d9564dDie Bannliste ist auf diesem Server nicht oeffentlich."),
                 new Zeile(StrafSatz.BANNLISTE_GESTOERT, 1L, Einsatz.keine(),
-                        "&#d9564dDie Bannliste ist gerade nicht lesbar - versuch es noch einmal."));
+                        "&#d9564dDie Bannliste ist gerade nicht lesbar - versuch es noch einmal."),
+                new Zeile(EinsichtSatz.AN, 1L, Einsatz.von("bis", "13:05:00").mit("dauer", "5 Min."),
+                        "&#73bf96Du siehst jetzt in fremde Behaelter - bis 13:05:00 (noch 5 Min.). &#6e7a82Nehmen kannst du nichts."),
+                new Zeile(EinsichtSatz.AUS, 1L, Einsatz.keine(),
+                        "&#73bf96Du siehst nicht mehr ein."),
+                new Zeile(EinsichtSatz.WAR_AUS, 1L, Einsatz.keine(),
+                        "&#e3c57eDu hast gar nicht eingesehen."),
+                new Zeile(EinsichtSatz.STAND_AN, 1L, Einsatz.von("bis", "13:05:00").mit("dauer", "5 Min."),
+                        "&#a5b4bfDu siehst ein bis 13:05:00 (noch 5 Min.)."),
+                new Zeile(EinsichtSatz.STAND_AUS, 1L, Einsatz.keine(),
+                        "&#a5b4bfDu siehst nicht ein."),
+                new Zeile(EinsichtSatz.NUR_SEHEN, 1L, Einsatz.keine(),
+                        "&#d9564dEinsehen heisst hinsehen - nehmen kannst du hier nichts."),
+                new Zeile(EinsichtSatz.NUR_SPIELER, 1L, Einsatz.keine(),
+                        "&#d9564dEinsehen kann ein Spieler - die Konsole klickt nicht in Kisten."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

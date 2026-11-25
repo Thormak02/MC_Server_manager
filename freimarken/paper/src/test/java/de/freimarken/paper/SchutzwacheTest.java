@@ -518,6 +518,103 @@ class SchutzwacheTest {
     }
 
     /**
+     * Eine Wache mit EINSICHT - fuer Teil D.
+     *
+     * @param schaut ob der Spieler gerade einsieht
+     */
+    private static Schutzwache wacheMitEinsicht(Besitzbuch buch, boolean schaut) {
+        return new Schutzwache(buch, WELT_SCHLUESSEL, Sprachprobe.spracheAusDemJar(),
+                Schutzwache.KEINE_ORTSREGEL, Schutzwache.KEIN_HANDEL,
+                spieler -> schaut);
+    }
+
+    @Test
+    @DisplayName("36r - DIE EINSICHT oeffnet fremde BEHAELTER [Teil D]")
+    void einsichtOeffnetBehaelter() {
+        // Plan 12c.3: "Einsehen eines Grundstuecks ohne Baurecht: hinsehen duerfen,
+        // anfassen nicht." Die Erlaubnis steht in DIESER Regel und nicht in einer
+        // zweiten Wache - der Klassenkopf sagt, warum: Eine zweite Pruefung daneben
+        // waere irgendwann anders, und das waere die Luecke.
+        Serverprobe.keineWeltenMehr();
+        Stand stand = stand();
+        Besitzbuch buch = stand.buch();
+        stand.lager().anlegen(WELT_SCHLUESSEL, 0, 0, EIGENTUEMER, 25_000L);
+        Location fremd = ortInDerWelt(buch.plan().mitteX(0), buch.plan().mitteZ(0));
+        Spielerprobe moderator = new Spielerprobe("Cara", BESUCHER);
+
+        assertFalse(wacheMitEinsicht(buch, false)
+                        .darfHandeln(moderator.spieler(), Tat.BEHAELTER, fremd),
+                "ohne Einsicht ist die fremde Kiste zu - sonst prueft diese Probe"
+                        + " nichts");
+
+        assertTrue(wacheMitEinsicht(buch, true)
+                        .darfHandeln(moderator.spieler(), Tat.BEHAELTER, fremd),
+                "mit Einsicht geht sie auf");
+    }
+
+    @Test
+    @DisplayName("36s - DIE EINSICHT oeffnet NUR Behaelter - nicht Bauen, nicht Benutzen")
+    void einsichtOeffnetNurBehaelter() {
+        // DIE PROBE DIESES TEILS. Wer einsieht, veraendert nichts - und eine Tuer oder
+        // ein Knopf ist eine Veraenderung. Ohne diesen Riegel waere "/einsehen an" ein
+        // Baurecht auf Zeit, und das ist genau das, was Plan 12c.3 NICHT sagt.
+        //
+        // Ueber Tat.values() und nicht mit einer Liste von Hand: Eine vierte Tat ist
+        // damit von selbst mitgeprueft, und genau dort wuerde die Luecke entstehen.
+        Serverprobe.keineWeltenMehr();
+        Stand stand = stand();
+        Besitzbuch buch = stand.buch();
+        stand.lager().anlegen(WELT_SCHLUESSEL, 0, 0, EIGENTUEMER, 25_000L);
+        Location fremd = ortInDerWelt(buch.plan().mitteX(0), buch.plan().mitteZ(0));
+        Spielerprobe moderator = new Spielerprobe("Cara", BESUCHER);
+        Schutzwache wache = wacheMitEinsicht(buch, true);
+
+        for (Tat tat : Tat.values()) {
+            boolean erlaubt = wache.darfHandeln(moderator.spieler(), tat, fremd);
+            assertEquals(tat == Tat.BEHAELTER, erlaubt,
+                    tat + ": die Einsicht oeffnet genau die Behaelter und sonst"
+                            + " nichts");
+        }
+    }
+
+    @Test
+    @DisplayName("36t - die Einsicht gilt auch, wo die ORTSREGEL verboten hat [Teil D]")
+    void einsichtGiltVorDerOrtsregel() {
+        // Die Reihenfolge ist eine Zusage: Ein Moderator, der einer Meldung nachgeht,
+        // soll auch in die Kiste einer LADENEINHEIT sehen - gerade dort wird
+        // gehandelt. Stuende die Einsicht hinter der Ortsregel, waere die Markthalle
+        // der eine Ort, an dem sie nicht wirkt.
+        Serverprobe.keineWeltenMehr();
+        Stand stand = stand();
+        Besitzbuch buch = stand.buch();
+        Location irgendwo = ortInDerWelt(buch.plan().mitteX(0), buch.plan().mitteZ(0));
+        Spielerprobe moderator = new Spielerprobe("Cara", BESUCHER);
+
+        Schutzwache mitVerbot = new Schutzwache(buch, WELT_SCHLUESSEL,
+                Sprachprobe.spracheAusDemJar(),
+                festeRegel(Schutzwache.Ortsregel.Urteil.VERBOTEN),
+                Schutzwache.KEIN_HANDEL, spieler -> true);
+
+        assertTrue(mitVerbot.darfHandeln(moderator.spieler(), Tat.BEHAELTER, irgendwo),
+                "die Einsicht steht VOR der Ortsregel");
+        assertFalse(mitVerbot.darfHandeln(moderator.spieler(), BAUEN, irgendwo),
+                "bauen bleibt verboten - auch mit Einsicht");
+    }
+
+    @Test
+    @DisplayName("36u - ohne Einsicht gibt es keine Wache [Teil D]")
+    void ohneEinsichtWirft() {
+        Stand stand = stand();
+
+        // Ein null waere eine Wache, die bei jedem Klick auf eine Kiste wirft - und
+        // Bukkit laesst das Ereignis dann UNABGEBROCHEN durch.
+        assertThrows(IllegalArgumentException.class,
+                () -> new Schutzwache(stand.buch(), WELT_SCHLUESSEL,
+                        Sprachprobe.spracheAusDemJar(), Schutzwache.KEINE_ORTSREGEL,
+                        Schutzwache.KEIN_HANDEL, null));
+    }
+
+    /**
      * Eine Ortsregel, die jeden Aufruf MITSCHREIBT - mit Namen und Tat.
      *
      * <p>Geschrieben wird VOR der Antwort: Eine Mitschrift danach saehe einen Aufruf

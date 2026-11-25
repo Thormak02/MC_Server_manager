@@ -85,7 +85,9 @@ class SprachstandTest {
                 "befehl.beschreibung.team",
                 // Schritt 16a Teil C: /melden und /meldung.
                 "befehl.beschreibung.melden", "befehl.beschreibung.meldung",
-            "befehl.beschreibung.strafe", "befehl.beschreibung.bannliste"));
+            "befehl.beschreibung.strafe", "befehl.beschreibung.bannliste",
+                // Schritt 16a Teil D: /einsehen.
+                "befehl.beschreibung.einsehen"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachstand.NUR_BEIM_START.forEach(satz -> gefuehrt.add(satz.pfad()));
         // assertEquals auf Groesse UND Inhalt: contains haette auch eine Liste mit einem
@@ -134,7 +136,7 @@ class SprachstandTest {
         // die Zeile - der Betreiber sieht daran, ob seine Aenderung dabei ist. Hier ist
         // die Zahl eine Zusicherung ueber die Zeile und keine Ueberschrift: Sie steht im
         // Text, den er liest.
-        assertTrue(ohne.get(0).contains("27 Saetze"), ohne.get(0));
+        assertTrue(ohne.get(0).contains("28 Saetze"), ohne.get(0));
         // BEIDE LESER [21.11.2026]: Seit es /hilfe gibt, liest ein zweiter Befehl
         // dieselben Saetze aus demselben Buch. Nannte die Zeile nur /help, verbesserte
         // der Betreiber eine Beschreibung, las die Einschraenkung - und tippte dann

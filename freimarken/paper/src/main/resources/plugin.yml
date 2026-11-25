@@ -359,6 +359,22 @@ permissions:
     # offline sein, und offline hat niemand Rechte.
     description: Darf jemanden strafen, der selbst im Team ist
     default: op
+  freimarken.einsehen:
+    # DAS EINSEHEN [Schritt 16a Teil D]: /einsehen an oeffnet fremde Behaelter -
+    # Kisten, Faesser, Spender, auch die einer Ladeneinheit und die eines
+    # Kistenshops. Plan 12c.3: "hinsehen duerfen, anfassen nicht."
+    #
+    # Das "anfassen nicht" ist KEINE Rechtefrage, sondern gebaut: Die
+    # Einsichtswache sagt waehrend der Einsicht JEDEN Klick in einem offenen
+    # Behaelter ab, ohne Ausnahme. Ein Recht dafuer waere eines, das man
+    # versehentlich mitvergibt.
+    #
+    # Die Einsicht hat eine FRIST (moderation.einsehen.dauer-sekunden, ab Werk
+    # fuenf Minuten). Ohne sie haette ein Moderator nach einem einzigen
+    # /einsehen dauerhaft Zugriff auf jede fremde Kiste - und im Spiel sieht man
+    # einen Modus nicht.
+    description: Darf in fremde Behaelter sehen, ohne etwas zu nehmen
+    default: op
   freimarken.bannliste:
     # default: true - Plan 12c.4 macht die Bannliste ausdruecklich oeffentlich: "Sie
     # zwingt zu Begruendungen, die standhalten, und genau deshalb gehoert sie dazu."

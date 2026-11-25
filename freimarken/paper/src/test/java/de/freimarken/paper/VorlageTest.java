@@ -342,7 +342,11 @@ class VorlageTest {
                 // Schritt 16a Teil A: die Saetze von /team.
                 "TeamSatz",
                 // Schritt 16a Teil C: die Saetze von /melden und /meldung.
-                "MeldeSatz", "StrafSatz"));
+                "MeldeSatz", "StrafSatz",
+                // Schritt 16a Teil D: die Saetze von /einsehen. Der erste
+                // Bereich, dessen wichtigster Satz eine ABSAGE ist: Ein Klick,
+                // der nichts tut, sieht aus wie ein Fehler des Servers.
+                "EinsichtSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));

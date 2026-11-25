@@ -4028,6 +4028,10 @@ team:
         - strafen.rauswurf
         - strafen.bann
         - strafen.aufheben
+        # Das EINSEHEN aus Plan 12c.2 ("Grundstuecke einsehen"): in fremde
+        # Behaelter sehen, ohne etwas zu nehmen. Beim Moderator und nicht beim
+        # Helfer - ein Blick in eine fremde Kiste ist ein Zugriff auf Eigentum.
+        - einsehen
 
     # Dazu die Eingriffe aus Plan 12c.2: Besitz uebertragen, Freistaedte
     # aufloesen, die Welt nachsehen - und das Recht, Rollen weiterzugeben.
@@ -4060,6 +4064,7 @@ team:
         # ihn bannen sie einander, und wer schneller tippt, hat gewonnen.
         - strafen.dauerhaft
         - strafen.team
+        - einsehen
 
     # Events anlegen und Preise ausschuetten - die Werkzeuge dafuer kommen mit
     # Plan 15. Bis dahin darf diese Rolle zu Spielern springen und sonst nichts;
@@ -4222,3 +4227,26 @@ moderation:
       - tm
       - me
       - say
+
+  einsehen:
+    # Wie lange die Einsicht gilt, nachdem ein Moderator sie mit /einsehen an
+    # eingeschaltet hat, in Sekunden.
+    #
+    # DAS IST EINE BREMSE GEGEN DAS VERGESSEN. Ohne Frist haette ein Moderator
+    # nach einem einzigen /einsehen dauerhaft Zugriff auf jede fremde Kiste des
+    # Servers - und zwar ohne es zu merken, denn im Spiel sieht man einen Modus
+    # nicht. Die Frist ist kein Misstrauen, sondern die Gestalt des Werkzeugs:
+    # Einsehen geschieht WAEHREND einer Untersuchung, und die dauert Minuten.
+    #
+    # 300 ab Werk (fuenf Minuten): Eine Meldung lesen, hinspringen, in zwei oder
+    # drei Kisten sehen, entscheiden. Wer laenger braucht, tippt /einsehen an
+    # noch einmal - das ist ein Tastendruck und eine Zeile im Protokoll.
+    #
+    # Erlaubt sind 10 bis 3600 Sekunden. Darunter ist der Modus abgelaufen, bevor
+    # der Moderator die Kiste erreicht; darueber macht die Zahl aus der Bremse
+    # das Gegenteil. Der Startbericht meldet eine Frist ab einer halben Stunde.
+    #
+    # Dass waehrend der Einsicht NICHTS genommen werden kann, ist keine
+    # Einstellung: Die Einsichtswache sagt jeden Klick in einem offenen Behaelter
+    # ab, ohne Ausnahme. Plan 12c.3 - "hinsehen duerfen, anfassen nicht."
+    dauer-sekunden: 300

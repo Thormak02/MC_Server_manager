@@ -73,7 +73,8 @@ class WirtschaftsstandTest {
                 Angelwerte.VORGABE, Wolkenwerte.VORGABE, Rangwerte.VORGABE,
                 Wechselwerte.VORGABE, Muenzwerte.VORGABE, Anmeldewerte.VORGABE,
                 Lotteriewerte.VORGABE, Wettbewerbswerte.VORGABE, Teamwerte.VORGABE,
-                Meldewerte.VORGABE, Strafwerte.VORGABE);
+                Meldewerte.VORGABE, Strafwerte.VORGABE,
+                Einsichtswerte.VORGABE);
     }
 
     /**

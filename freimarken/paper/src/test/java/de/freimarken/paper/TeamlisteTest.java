@@ -318,7 +318,11 @@ class TeamlisteTest {
                 // und sie ist der Inhalt dieses Teils.
                 "freimarken.strafen.stumm", "freimarken.strafen.rauswurf",
                 "freimarken.strafen.bann", "freimarken.strafen.aufheben",
-                "freimarken.strafen.dauerhaft", "freimarken.strafen.team");
+                "freimarken.strafen.dauerhaft", "freimarken.strafen.team",
+                // Schritt 16a Teil D: das Einsehen. Moderator UND Verwalter
+                // tragen es - Plan 12c.2 nennt das Einsehen von Grundstuecken
+                // als Moderationswerkzeug und nicht als Verwaltungssache.
+                "freimarken.einsehen");
 
         assertEquals(List.of(),
                 Teamliste.unbekannteRechte(Teamwerte.VORGABE, angemeldet),

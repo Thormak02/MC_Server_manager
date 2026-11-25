@@ -94,6 +94,9 @@ enum BundSatz implements Satz {
      */
     BEFEHL_BANNLISTE("befehl.beschreibung.bannliste", Art.WORT),
 
+    /** Die Beschreibung von {@code /einsehen} in der Befehlsliste [Schritt 16a Teil D]. */
+    BEFEHL_EINSEHEN("befehl.beschreibung.einsehen", Art.WORT),
+
     // --- Das nackte /freimarken: vier oder fuenf Chatzeilen -----------------
     STAND_KOPF("stand.kopf", Art.SATZ),
     STAND_VERSION("stand.version", Art.SATZ, "version", "java", "minecraft"),

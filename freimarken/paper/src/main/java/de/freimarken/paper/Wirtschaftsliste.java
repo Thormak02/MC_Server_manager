@@ -310,6 +310,13 @@ final class Wirtschaftsliste {
         klagen.addAll(strafen.klagen());
         bericht.addAll(strafen.bericht());
 
+        // Das Einsehen (Plan 12c.3): EINE Zahl, die Frist. Ihre Rechenprobe steht beim
+        // Start im Protokoll und nennt die Minuten dazu - "300" liest sich nicht als
+        // fuenf Minuten.
+        Einsichtsliste.Ergebnis einsehen = Einsichtsliste.ausKonfiguration(wurzel);
+        klagen.addAll(einsehen.klagen());
+        bericht.addAll(einsehen.bericht());
+
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
             bericht.add(Wirtschaftswerte.PFAD_GRUNDPREIS + " ist 0 - jede weitere Parzelle"
@@ -345,8 +352,8 @@ final class Wirtschaftsliste {
                 inseln.werte(), angeln.werte(), wolken.werte(),
                 raenge.werte(), wechsel.werte(), muenzhaus.werte(),
                 anmeldung.werte(), lotterie.werte(), wettbewerb.werte(),
-                team.werte(), melden.werte(), strafen.werte()), klagen,
-                bericht);
+                team.werte(), melden.werte(), strafen.werte(),
+                einsehen.werte()), klagen, bericht);
     }
 
     /**

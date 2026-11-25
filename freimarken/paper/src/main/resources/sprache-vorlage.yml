@@ -455,6 +455,7 @@ befehl:
     meldung: "Offene Meldungen ansehen, annehmen und erledigen"
     strafe: "Stummschalten, hinauswerfen, sperren - mit Dauer und Grund"
     bannliste: "Wer gesperrt ist, warum und bis wann"
+    einsehen: "In fremde Behaelter sehen, ohne etwas zu nehmen"
 
 parzelle:
   # Das Wort fuer den Preis 0 - es wird in info.frei, info.frei-am-limit und
@@ -3675,3 +3676,31 @@ bannliste:
   #   leere Liste waere die falsche Antwort - sie behauptet, niemand sei gesperrt.
   ohne-recht: "<warnung>Die Bannliste ist auf diesem Server nicht oeffentlich.</warnung>"
   gestoert: "<warnung>Die Bannliste ist gerade nicht lesbar - versuch es noch einmal.</warnung>"
+
+einsehen:
+  # {bis} der Zeitpunkt nach zeit-muster, {dauer} wie lange noch. BEIDES: Den
+  #   Zeitpunkt merkt man sich, die Restdauer sagt, ob es noch reicht.
+  #
+  # Derselbe Satz beim VERLAENGERN - ein erneutes /einsehen an setzt die Frist
+  #   neu, und in beiden Faellen gilt die Einsicht ab jetzt genauso lange.
+  an: "<bestaetigung>Du siehst jetzt in fremde Behaelter - bis {bis} (noch {dauer}).</bestaetigung> <gedaempft>Nehmen kannst du nichts.</gedaempft>"
+  aus: "<bestaetigung>Du siehst nicht mehr ein.</bestaetigung>"
+  # Ein EIGENER Satz: Wer "ist jetzt aus" liest auf etwas, das nie an war,
+  #   glaubt, er habe eben noch eingesehen - und das ist die Annahme, mit der
+  #   man eine fremde Kiste fuer die eigene haelt.
+  war-aus: "<hinweis>Du hast gar nicht eingesehen.</hinweis>"
+  stand-an: "<fliesstext>Du siehst ein bis {bis} (noch {dauer}).</fliesstext>"
+  stand-aus: "<fliesstext>Du siehst nicht ein.</fliesstext>"
+  # DER SATZ, OHNE DEN DAS WERKZEUG UNBRAUCHBAR IST. Plan 12c.3: "hinsehen
+  #   duerfen, anfassen nicht" - und das "nicht" muss man LESEN koennen: Ein
+  #   Klick, der nichts tut, sieht aus wie ein Fehler des Servers.
+  #
+  # Er kommt gedrosselt, eine Zeile je zwei Sekunden - sonst wird aus einem
+  #   gehaltenen Klick ein Chatregen.
+  nur-sehen: "<warnung>Einsehen heisst hinsehen - nehmen kannst du hier nichts.</warnung>"
+  # Nicht aus Prinzip: Einsehen ist der Zustand EINES Spielers, der in eine
+  #   Kiste klickt. Was darin steht, liest der Betreiber ueber den Manager.
+  nur-spieler: "<warnung>Einsehen kann ein Spieler - die Konsole klickt nicht in Kisten.</warnung>"
+  # Wie ein Zeitpunkt geschrieben wird. OHNE Datum: Die Einsicht gilt Minuten,
+  #   und ein Datum davor waere Platz ohne Auskunft.
+  zeit-muster: "HH:mm:ss"

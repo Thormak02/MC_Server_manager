@@ -204,9 +204,13 @@ public record Teamwerte(List<Teamwerte.Rolle> rollen) {
             // Irrtum auch zuruecknehmen koennen. Eine UNBEGRENZTE Strafe aufzuheben
             // braucht trotzdem strafen.dauerhaft - sonst nimmt ein Moderator den
             // dauerhaften Bann eines Verwalters zurueck.
+            // Dazu das EINSEHEN aus Plan 12c.2 ("Grundstuecke einsehen") - Teil D.
+            // Es steht beim Moderator und nicht beim Helfer: Ein Blick in eine fremde
+            // Kiste ist ein Zugriff auf Eigentum, und der Helfer bearbeitet
+            // Meldungen, ohne einzugreifen.
             new Rolle("moderator", List.of("tpa", "sofort", "meldungen", "blockbuch",
                     "spielzeit.andere", "strafen.stumm", "strafen.rauswurf",
-                    "strafen.bann", "strafen.aufheben")),
+                    "strafen.bann", "strafen.aufheben", "einsehen")),
             // Dazu die drei Eingriffe aus Plan 12c.2: Besitz uebertragen, Freistaedte
             // aufloesen, die Welt nachsehen. NICHT freimarken.geld - Geldkorrekturen sind
             // nach Plan 12a Sache des Super-Admins im Dashboard und keine Moderation.
@@ -218,7 +222,7 @@ public record Teamwerte(List<Teamwerte.Rolle> rollen) {
                     "spielzeit.andere", "verwalten", "besitz", "freistadt.raeumen",
                     "team", "team.vergeben", "strafen.stumm", "strafen.rauswurf",
                     "strafen.bann", "strafen.aufheben", "strafen.dauerhaft",
-                    "strafen.team")),
+                    "strafen.team", "einsehen")),
             new Rolle("eventleiter", List.of("tpa", "sofort")),
             // Baurecht ueberall und sonst nichts - getrennte Rollen fuer Strafen und
             // Bauen sind nach Plan 12c.2 Absicht.

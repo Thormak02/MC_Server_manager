@@ -89,6 +89,7 @@ import de.freimarken.kern.SpeicherMeldungen;
 import de.freimarken.kern.SpeicherStrafen;
 import de.freimarken.kern.Meldeablage;
 import de.freimarken.kern.Meldebuch;
+import de.freimarken.kern.Einsichtsstand;
 import de.freimarken.kern.Strafablage;
 import de.freimarken.kern.Strafbuch;
 import de.freimarken.kern.Teamablage;
@@ -697,6 +698,22 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * Bannliste zeigt sie, und kein gesperrter Spieler merkt davon etwas.
      */
     private Strafwache strafwache;
+
+    /**
+     * Wer gerade einsieht - Plan 12c.3 [Schritt 16a Teil D].
+     *
+     * <p><b>EIN Exemplar fuer VIER Fragesteller</b>, und das ist der ganze Grund, warum
+     * es ein Feld ist: Die Schutzwache, die Shopwache und die Einrichtungswache fragen
+     * ihn beim Oeffnen eines Behaelters, die Einsichtswache bei jedem Klick darin. Zwei
+     * Exemplare waeren zwei Wahrheiten darueber, wer einsieht - und dann geht die Kiste
+     * auf, waehrend das Nehmen nicht gesperrt ist.
+     *
+     * <p>Im Arbeitsspeicher und ausdruecklich KEINE Tabelle: Einsicht ist kein Besitz,
+     * sie ist eine Haltung fuer die naechsten Minuten. Ueberlebte sie einen Neustart,
+     * waere sie nach einem vergessenen {@code /einsehen} fuer immer an - die Begruendung
+     * steht an {@code Einsichtsstand} selbst.
+     */
+    private Einsichtsstand einsichtsstand;
 
     /**
      * Ob dieser Spieler im Team ist - die EINE Quelle fuer beide Riegel.
@@ -1371,6 +1388,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // liegen - sie ist trotzdem festgelegt und nicht dem Zufall einer Menge
         // ueberlassen, damit eine vierte Regel an einer entschiedenen Stelle einzufuegen
         // ist.
+        // DER EINSICHTSSTAND VOR DEN WACHEN: Drei von ihnen bekommen ihn als Naht
+        // mit, und eine Naht auf ein null-Feld waere ein Wurf beim ersten Klick auf
+        // eine Kiste.
+        einsichtsstand = new Einsichtsstand(() -> wirtschaft.werte().einsehen());
         schutzwache = new Schutzwache(buch, welt, sprache,
                 Schutzwache.Ortsregel.nacheinander(
                         new Ladenschutz(ladenverzeichnis, mietablage,
@@ -1380,7 +1401,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
                         Schutzwache.Ortsregel.spaet(() -> inselwache),
                         Schutzwache.Ortsregel.spaet(() -> wolkenwache)),
                 (spieler, block) -> shopklick != null
-                        && shopklick.istHandel(spieler, block));
+                        && shopklick.istHandel(spieler, block),
+                // DIE EINSICHT als dritte benannte Tuer: Sie oeffnet fremde
+                // Behaelter, und zwar NUR diese - bauen und benutzen bleiben
+                // verwehrt. Dass darin nichts genommen werden kann, haelt die
+                // Einsichtswache weiter unten.
+                spieler -> einsichtsstand.schaut(spieler.getUniqueId(),
+                        uhr.instant()));
         getServer().getPluginManager().registerEvents(schutzwache, this);
         getLogger().info("Ladenschutz aktiv: " + ladenverzeichnis.anzahl()
                 + " Einheiten in " + ladenwelt + " - darin baut, bearbeitet und oeffnet"
@@ -1486,6 +1513,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Meldungen je Spieler offen sein duerfen, will daneben lesen, wie lange ein
         // Moderator dafuer sperren darf.
         getLogger().info(Strafliste.rechenprobe(wirtschaft.werte().strafen()));
+        getLogger().info(Einsichtsliste.rechenprobe(wirtschaft.werte().einsehen()));
         nenneGoldmark();
         nennePostenOhneWort();
         nenneUnlieferbarePosten();
@@ -1812,6 +1840,19 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 () -> wirtschaft.werte().zeit().zone(), Spielername::von,
                 uhr::instant, getLogger());
         getServer().getPluginManager().registerEvents(strafwache, this);
+
+        // OHNE DIESE ZEILE WAERE DIE EINSICHT EIN NEHMRECHT [Teil D]. Die drei Naehte
+        // oben oeffnen fremde Behaelter; diese Wache ist die andere Haelfte von Plan
+        // 12c.3 - "hinsehen duerfen, ANFASSEN NICHT". Sie sagt waehrend der Einsicht
+        // jeden Klick und jedes Ziehen in einem offenen Behaelter ab, ohne Ausnahme,
+        // und sie raeumt den Zustand beim Verlassen weg.
+        //
+        // IMMER angemeldet, ohne Schalter: Es gibt keine Einstellung "kein Einsehen" -
+        // wer keines will, entzieht das Recht. Eine Wache, die an einem Schalter
+        // haengt, waere die Stelle, an der ein Betreiber aus dem Einsichtsrecht ein
+        // Nehmrecht macht, ohne es zu merken.
+        getServer().getPluginManager().registerEvents(new Einsichtswache(
+                einsichtsstand, sprache, uhr::instant), this);
         // DIE WACHE nur bei eingeschalteter Anmeldung - dieselbe Entscheidung wie bei
         // der Torwache, die ohne Tore nicht angemeldet wird. Aus heisst dann wirklich
         // aus: kein Zuhoerer am Beitritt, kein Lesen der Ablage.
@@ -1903,7 +1944,12 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 // der Start schon mit zwei eigenen Zeilen.
                 freistadtbuch, getLogger());
         Shopwache shopwache = new Shopwache(shopbuch, shopware, sprache,
-                tat -> getServer().getScheduler().runTask(this, tat), getLogger());
+                tat -> getServer().getScheduler().runTask(this, tat), getLogger(),
+                // Auch die SHOPKISTE oeffnet die Einsicht: Dort steht Ware, und Ware
+                // ist der haeufigste Streitgegenstand. Diese Wache fragt
+                // Schutzwache.UEBERALL absichtlich nicht - jenes ist das Baurecht.
+                spieler -> einsichtsstand.schaut(spieler.getUniqueId(),
+                        uhr.instant()));
         getServer().getPluginManager().registerEvents(shopwache, this);
         // Der HANDEL, und er wird ZULETZT gesetzt: Das Feld ist die Tuer der
         // Schutzwache, und die steht schon. Solange es null war, galt an jedem
@@ -1948,7 +1994,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // jeden Kistenshop seinem Besitzer verschliesst.
         getServer().getPluginManager().registerEvents(new Einrichtungswache(
                 weltschluessel(ladenwelt), truhenstellen, shopbuch::istShopkiste,
-                sprache), this);
+                sprache,
+                // Und die Kisten der Stadt: Dort steht am meisten, und einer Meldung
+                // aus Altfurt geht man am haeufigsten nach.
+                spieler -> einsichtsstand.schaut(spieler.getUniqueId(),
+                        uhr.instant())), this);
         getLogger().info("Einrichtungsschutz: Behaelter in "
                 + weltschluessel(ladenwelt) + " bleiben zu - ausser der Freien Truhe,"
                 + " den Kistenshops und den gemieteten Staenden. Der Abenteuermodus"
@@ -2452,6 +2502,18 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     /**
+     * Baut den Befehlsbaum von {@code /einsehen} - im Ereignis, nicht im onEnable.
+     *
+     * <p>Er braucht wenig: den Stand, die Sprache, die Uhr und die Zone. Keine Ablage,
+     * keine Namenssuche - Einsehen betrifft immer den Tippenden selbst, und ein Zustand
+     * fuer einen anderen waere ein Recht, das man jemandem aufdraengt.
+     */
+    private EinsichtBefehle einsichtBefehle() {
+        return new EinsichtBefehle(einsichtsstand, sprache, uhr::instant,
+                () -> wirtschaft.werte().zeit().zone(), getLogger());
+    }
+
+    /**
      * Baut die Befehlsbaeume von {@code /strafe} und {@code /bannliste} - im Ereignis,
      * nicht im onEnable.
      *
@@ -2692,6 +2754,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // Fassung erreicht, liest "You do not have permission" - er ist kein
             // Operator - und glaubt, der Rauswurf sei gescheitert. Die deutschen
             // Namen kollidieren mit nichts.
+            // /einsehen [Teil D] - ein eigener Wurzelbefehl und kein Zweig von
+            // /strafe: Einsehen ist keine Strafe. Es ist das Werkzeug, mit dem man
+            // herausfindet, ob eine noetig ist, und es hat eine andere Leserschaft -
+            // ein Helfer mit Blockbuchrecht kann es brauchen, ohne strafen zu duerfen.
+            angemeldet.addAll(verzeichnis.register(einsichtBefehle().einsehen(),
+                    sprache.wort(BundSatz.BEFEHL_EINSEHEN, Einsatz.keine()),
+                    List.of()));
             if (strafablage != null) {
                 StrafBefehle strafen = strafBefehle();
                 angemeldet.addAll(verzeichnis.register(strafen.strafe(),

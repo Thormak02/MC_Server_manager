@@ -321,6 +321,32 @@ public final class Schutzwache implements Listener {
     /** Wer das hat, baut ueberall. Fuer das Team - die Regel selbst bleibt unangetastet. */
     public static final String UEBERALL = "freimarken.bauen.ueberall";
 
+    /**
+     * Ob dieser Spieler gerade EINSIEHT - die dritte benannte Tuer dieser Wache
+     * [Schritt 16a Teil D].
+     *
+     * <p>Plan 12c.3: <i>"Einsehen eines Grundstuecks ohne Baurecht: hinsehen duerfen,
+     * anfassen nicht."</i> Die Erlaubnis gehoert HIERHIN und nicht in eine zweite
+     * Wache - siehe den Klassenkopf: Eine zweite Pruefung daneben waere der
+     * naheliegende Weg und der falsche, weil eine von beiden irgendwann anders
+     * antwortet.
+     *
+     * <p><b>Sie oeffnet nur BEHAELTER.</b> Bauen und Benutzen bleiben verwehrt: Wer
+     * einsieht, soll nichts veraendern, und eine Tuer oder ein Knopf ist eine
+     * Veraenderung. Das "anfassen nicht" im Inventar selbst haelt die
+     * {@code Einsichtswache} - diese Naht entscheidet nur, ob die Kiste AUFGEHT.
+     *
+     * <p>Als Naht und nicht als Feld: Dahinter steht ein Zustand mit FRIST
+     * ({@code Einsichtsstand}), und der lebt im Arbeitsspeicher des Plugins. Die
+     * Schutzwache soll ihn nicht halten - sie haelt die Regel.
+     */
+    public interface Einsicht {
+        boolean schaut(Player spieler);
+    }
+
+    /** Keine Einsicht - der Stand, solange niemand sie eingeschaltet hat. */
+    public static final Einsicht KEINE_EINSICHT = spieler -> false;
+
     /** Eine Absage je Spieler und Pause. Ohne das wird aus Abbauhalten ein Chatregen. */
     private static final long MELDEPAUSE_MS = 2_000L;
 
@@ -378,6 +404,8 @@ public final class Schutzwache implements Listener {
      */
     private final String welt;
 
+    private final Einsicht einsicht;
+
     private final Map<UUID, Long> letzteMeldung = new HashMap<>();
     private long letzteKlage;
 
@@ -407,21 +435,28 @@ public final class Schutzwache implements Listener {
      * das Geprueefte sich aendert, sagt hinterher nicht mehr, was vorher galt.
      */
     public Schutzwache(Besitzbuch buch, String welt, Sprache sprache) {
-        this(buch, welt, sprache, KEINE_ORTSREGEL, KEIN_HANDEL);
+        this(buch, welt, sprache, KEINE_ORTSREGEL, KEIN_HANDEL, KEINE_EINSICHT);
     }
 
     public Schutzwache(Besitzbuch buch, String welt, Sprache sprache, Ortsregel ortsregel,
                        Handelsklick handel) {
-        if (ortsregel == null || handel == null) {
-            throw new IllegalArgumentException("Ortsregel und Handelsklick sind Pflicht -"
-                    + " wer keine hat, nimmt KEINE_ORTSREGEL und KEIN_HANDEL. Ein null"
-                    + " waere eine Wache, die bei jedem Klick wirft.");
+        this(buch, welt, sprache, ortsregel, handel, KEINE_EINSICHT);
+    }
+
+    public Schutzwache(Besitzbuch buch, String welt, Sprache sprache, Ortsregel ortsregel,
+                       Handelsklick handel, Einsicht einsicht) {
+        if (ortsregel == null || handel == null || einsicht == null) {
+            throw new IllegalArgumentException("Ortsregel, Handelsklick und Einsicht sind"
+                    + " Pflicht - wer keine hat, nimmt KEINE_ORTSREGEL, KEIN_HANDEL und"
+                    + " KEINE_EINSICHT. Ein null waere eine Wache, die bei jedem Klick"
+                    + " wirft.");
         }
         this.sprache = sprache;
         this.buch = buch;
         this.welt = welt;
         this.ortsregel = ortsregel;
         this.handel = handel;
+        this.einsicht = einsicht;
     }
 
     // --- Die eine Regel ---------------------------------------------------------
@@ -458,6 +493,18 @@ public final class Schutzwache implements Listener {
         // dem 08.11.2026 auch in der Markthalle. Haenge es nur an den Parzellen, muesste
         // ein Betreiber den Laden eines Spielers kuendigen, um darin aufzuraeumen.
         if (spieler.hasPermission(UEBERALL)) {
+            return true;
+        }
+        // DIE EINSICHT, und zwar NUR fuer Behaelter [Schritt 16a Teil D]. Sie steht
+        // hinter dem Teamrecht, weil wer ueberall bauen darf ohnehin durch ist, und
+        // VOR der Ortsregel: Ein Moderator, der einer Meldung nachgeht, soll auch in
+        // die Kiste einer Ladeneinheit sehen - gerade dort wird gehandelt.
+        //
+        // Bauen und Benutzen bleiben verwehrt: Wer einsieht, veraendert nichts, und
+        // eine Tuer ist eine Veraenderung. Dass im Inventar dann auch nichts
+        // genommen werden kann, haelt die Einsichtswache - hier geht es nur darum,
+        // ob die Kiste AUFGEHT.
+        if (tat == Tat.BEHAELTER && einsicht.schaut(spieler)) {
             return true;
         }
         // Die Ortsregel ZUERST und in ihrer Welt endgueltig - die Begruendung steht an

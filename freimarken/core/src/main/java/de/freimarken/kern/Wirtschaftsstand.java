@@ -405,6 +405,11 @@ public final class Wirtschaftsstand {
         nenneMenge(geaendert, Strafwerte.PFAD_STUMM_SPERRT_BEFEHLE,
                 new TreeSet<>(alt.strafen().stummSperrtBefehle()),
                 new TreeSet<>(neu.strafen().stummSperrtBefehle()));
+        // DIE EINSICHTSFRIST [Schritt 16a Teil D]: eine Zahl, und sie ist die Bremse
+        // gegen das Vergessen. Wer sie kuerzer stellt, tut es, weil eben jemand die
+        // Einsicht anliess - ein stummes Neuladen waere genau dann stumm.
+        nenneZahl(geaendert, Einsichtswerte.PFAD_DAUER,
+                alt.einsehen().dauerSekunden(), neu.einsehen().dauerSekunden());
         // Die Wechselstube [Teil F]: zwei Kurse und der Wechseldeckel. Aus demselben
         // Grund wie die Bloecke darueber - sie werden beim Gebrauch gefragt, es wird
         // nichts gebaut und nichts angemeldet. Ohne diese drei Zeilen aenderte sich der

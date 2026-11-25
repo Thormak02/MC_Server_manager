@@ -1019,6 +1019,98 @@ Schritt 10.
 
 ## Schritt 16a: Moderation
 
+### Teil E: Moderation im Manager - 25.11.2026
+
+- **ZWEI Seiten, weil es zwei Sachen sind**: *Moderation* stellt die Grenzen (Hoechstdauern
+  je Strafart, Meldebremsen, Frist der Einsicht) und die Teamrollen aus der `config.yml`;
+  *Strafen und Meldungen* zeigt, was daraus geworden ist - dauerhafte Strafen, Meldungen
+  in Arbeit, wer gerade eine Rolle hat. Eine Seite hat genau eine Quelle, und eine Seite
+  fuer beides muesste sich zwischen Formular und Tabelle entscheiden.
+- **Die Standseite kann NICHTS aendern** (Plan 12c.3: "sichtbar"). Eine Strafe aufzuheben
+  hat Ansage, Rechteriegel und Protokollzeile - sie laeuft ueber `/strafe aufheben` am
+  laufenden Server. Ein Knopf daneben waere der eine Weg, der an allen drei vorbeigeht.
+  Die Seite SAGT, wo es geht; eine Seite, die nur nichts kann, laesst den Betreiber
+  suchen.
+- **KEIN ORM-Modell fuer `strafen`, `meldungen`, `team`, und das ist der tragende Riegel
+  des Teils.** Der Manager ruft bei jedem Start `Base.metadata.create_all` - ein Modell
+  hiesse, dass er in der FREMDEN Datenbank des Plugins Tabellen anlegt, gegen ein Schema,
+  das das Plugin selbst in Schemaschritten fuehrt. Gelesen wird darum ausschliesslich
+  ueber `freimarken_db_service.frage` (weist alles ab, was nicht mit SELECT beginnt) und
+  ohne zweites `create_engine` - jenes haette den SELECT-Riegel, die Zeitgrenzen,
+  `pool_pre_ping` und die Maskierung des Kennworts einzeln wieder aufzubauen.
+- **Die Zeit kommt vom Manager, nicht von der Datenbank**: Ob eine befristete Strafe JETZT
+  gilt, entscheidet `:jetzt` als Parameter und nicht `NOW()`. Jenes waere die Zone des
+  Datenbankservers; die Spalten des Plugins stehen in UTC.
+- **Drei Befunde beim Bauen:**
+  - **`bauten`, `moderation` und `team` waren im Dashboard gar nicht verortet** - seit
+    Teil A liegengeblieben, und gefunden hat es die Katalogtafel des Managers, die jeden
+    Abschnitt der `config.yml` einfordert. `bauten` ist jetzt begruendet ausgenommen (ein
+    Bauplan aus verschachtelten Quadern ist kein Formular), die anderen zwei haben ihre
+    Seite.
+  - `IN :staende` mit einem Tupel findet NIE etwas: SQLAlchemy braucht dafuer ein
+    ausdehnendes Bindeglied, und `frage` nimmt nur ein gewoehnliches Woerterbuch. Jetzt
+    werden die Platzhalter aus der EINEN Standliste gerechnet.
+  - **Zwei eigene Quelltexttafeln waren zu grob** und pruefen seither enger: Die eine traf
+    das Wort `Base` in ihrer eigenen Begruendung, die andere ein Wortstueck aus der Mitte
+    einer zusammengesetzten Abfrage. Geschaerft, nicht ausgenommen.
+- **Und eine eigene Probe hielt die falsche Stelle:** "ohne Datenbank keine Aussage ueber
+  Strafen" war gruen mit UND ohne den Router-Zweig - gehalten wird es von der Vorlage, die
+  bei einem Lesefehler vor dem Block endet. Aufgefallen durch die Einspritzung, die
+  nichts rot machte. Begruendung und Einspritzfall liegen jetzt auf der Vorlage, und der
+  zweite Riegel im Router ist nicht gebaut: Zwei Riegel fuer einen Fall machen sich
+  gegenseitig unpruefbar.
+- **2.243 Proben des Managers gruen**, davon 23 neu. **Zwoelf Einspritzungen, zwoelf
+  gehalten.**
+
+### Teil D: Einsehen ohne Baurecht - 25.11.2026
+
+- `/einsehen` zeigt den Stand, `/einsehen an` schaltet ein oder verlaengert,
+  `/einsehen aus` schaltet aus. **Kein Umschalter:** Wer nicht weiss, ob die Einsicht an
+  war, weiss nach dem Tippen auch nicht, ob sie es jetzt ist - und oeffnet dann eine
+  fremde Kiste, die er nur ansehen wollte.
+- **Die Einsicht hat eine FRIST** (`moderation.einsehen.dauer-sekunden`, ab Werk 300).
+  Ohne sie haette ein Moderator nach einem einzigen `/einsehen` dauerhaft Zugriff auf
+  jede fremde Kiste - und zwar ohne es zu merken, denn im Spiel sieht man einen Modus
+  nicht. Die Frist ist ein **Zeitpunkt und kein Zaehler**: Ein Zaehler braeuchte einen
+  Takt, und ein Takt, der ausfaellt, liesse die Einsicht offen.
+- **EINE Entscheidung, DREI Frager:** Erlaubt wird in `Schutzwache.darfHandeln` - eine
+  zweite Pruefung daneben waere der naheliegende Weg und der falsche. Einen fremden
+  Behaelter verriegeln aber auch `Shopwache` (Ladeneinheiten) und `Einrichtungswache`
+  (Altfurt), also bekamen alle drei dieselbe Naht auf denselben `Einsichtsstand`.
+- **Die Einsicht oeffnet GENAU Behaelter** - nicht Bauen, nicht Benutzen. Ohne diesen
+  Riegel waere `/einsehen an` ein Baurecht auf Zeit. Gehalten wird es ueber
+  `Tat.values()`: Eine vierte Tat ist damit von selbst mitgeprueft.
+- **Ohne die `Einsichtswache` waere die Einsicht ein NEHMRECHT.** Wer eine offene Kiste
+  vor sich hat, nimmt daraus mit jedem Klick. Abgesagt werden `InventoryClickEvent` und
+  `InventoryDragEvent` ganz - ohne Ausnahme fuer Klickart oder Fach, denn ein
+  Umschaltklick im eigenen Rucksack legt etwas IN die Kiste.
+- **Gefragt wird der HALTER und nicht die Art des Inventars.** Die Art zu fragen waere
+  der naheliegende Weg und in keiner Probe pruefbar: `InventoryType.<clinit>` geht ueber
+  `MenuType` an die Registry und wirft ohne Server (*"No RegistryAccess implementation
+  found"*, gemessen). Ein Inventar ohne menschlichen Halter gilt als fremd - von zwei
+  Fehlern der, der nichts oeffnet.
+- **Jedes Einschalten geht ins Protokoll** (Plan 12c.3: *"alles protokolliert"*). Einen
+  GRUND verlangt der Befehl nicht - er wuerde zu "x" fuehren, und die Tat ist das
+  Hinsehen. Der Grund steht in der Meldung, der er nachgeht.
+- Das Verlassen vergisst die Einsicht: Ein Modus, der eine Abwesenheit uebersteht, ist
+  einer, den man beim Beitritt nicht mehr erwartet.
+- Zwei Funde im eigenen Probenlauf:
+  - `InventoryType` laedt ohne Server nicht - gemessen, und darum entscheidet die Wache
+    am Halter. `MenuewacheTest` ist nur deshalb gruen, weil seine Attrappe `getType` nie
+    gefragt bekommt.
+  - Die Attrappen dieser Probe beantworten `getType` darum **absichtlich nicht**: Fragt
+    die Wache je wieder die Art, faellt die Probe um, statt die Luecke durchzulassen.
+- **5.994 Proben gruen** (Kern 2.315, Daten 521, Plugin 3.158), davon 46 neu. Dreizehn
+  Tafeln nachgezogen. **Zehn Einspritzungen, zehn gehalten**: Jeder Riegel des Teils
+  macht beim Entfernen genau seine Probe rot.
+- Startlauf `Done (9.945s)`, die Rechenprobe im Protokoll: *"Einsehen: 300 Sekunden
+  (5 Min.) je `/einsehen an`; wer `freimarken.einsehen` hat, sieht in fremde Behaelter,
+  nimmt aber nichts."* An der Konsole alle drei Zweige abgewiesen, `/hilfe` nennt den
+  Befehl.
+- **Noch nicht gemessen:** ob Bukkit beim eigenen Werkfeld (`CRAFTING`) den Spieler als
+  Halter nennt. Nennt es niemanden, ist der eigene Rucksack waehrend der Einsicht
+  gesperrt - laestig, aber die sichere Richtung. Gehoert in den Spieltest.
+
 ### Teil B: Strafen - 25.11.2026
 
 - `/strafe` mit den Arten als ZWEIGEN (`stumm`, `rauswurf`, `bann`), dazu `aufheben` und
@@ -1131,8 +1223,8 @@ Schritt 10.
   die Proben legen ihre Strafen auf einen festen Zeitpunkt mit kurzer Dauer - vier
   Proben waren damit nur in einem Zehn-Minuten-Fenster am Tag gruen. Aufgefallen, weil
   derselbe Lauf zwei Stunden spaeter rot war. Die Uhr ist jetzt eine Naht.
-- **Offen in 16a:** Teil D Einsehen ohne Baurecht, Teil E Protokoll im Manager. Dazu der
-  **Spieltest zu zweit** - er braucht ein Konto OHNE Rechte, und genau das fehlt in
+- **Offen in 16a:** ~~Teil D Einsehen ohne Baurecht~~, ~~Teil E Protokoll im
+  Manager~~ (25.11. gebaut, siehe darueber). Offen bleibt der **Spieltest zu zweit** - er braucht ein Konto OHNE Rechte, und genau das fehlt in
   diesem Projekt bei jedem bisherigen Spieltest. Fuer Teil B waere er der Nachweis, dass
   ein Moderator ohne `strafen.dauerhaft` an der Grenze wirklich haengt.
 

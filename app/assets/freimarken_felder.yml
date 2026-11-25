@@ -121,6 +121,30 @@ seiten:
       Zahlungsanbieter, es liest nur das Recht freimarken.extra.<name>.<zahl>.
     bloecke: []
 
+  - schluessel: moderation
+    name: Moderation
+    hinweis: >-
+      Die Grenzen der Moderation und die Teamrollen. Die Hoechstdauern je Strafart sind
+      die Linie aus Plan 12c.2 zwischen Moderator und Verwalter: Was darueber liegt,
+      braucht freimarken.strafen.dauerhaft. Eine 0 sperrt die Art ganz.
+
+      Die Rollen und ihre Rechte sind eine LISTE - es gibt keine festen Rollen im
+      Programm. Wer eine Rolle vergibt, braucht jedes ihrer Rechte selbst; das prueft
+      das Plugin bei /team gib. Der Abschnitt team wird nur beim Start gelesen.
+    bloecke: [moderation, team]
+
+  - schluessel: strafen
+    name: Strafen und Meldungen
+    quelle: moderation
+    hinweis: >-
+      Dauerhafte Strafen, Meldungen in Arbeit und wer gerade eine Teamrolle hat -
+      gelesen aus der Datenbank des Plugins, NUR zur Anzeige. Plan 12c.3 verlangt
+      dauerhafte Banne "zusaetzlich im Manager sichtbar"; aufgehoben wird eine Strafe
+      ueber /strafe aufheben am laufenden Server, denn dort haengen Ansage,
+      Rechteriegel und Protokollzeile daran. Befristete Strafen stehen nur als ZAHL:
+      Wer sie einzeln sucht, fragt /strafe verlauf im Spiel.
+    bloecke: []
+
   - schluessel: protokoll
     name: Protokoll
     quelle: audit
@@ -131,6 +155,13 @@ seiten:
 # Abschnitte, die bewusst NICHT im Dashboard stehen. Der Grund wird dem Nutzer gezeigt -
 # eine gesperrte Einstellung mit Begruendung ist freundlicher als eine fehlende.
 nicht-im-dashboard:
+  bauten: >-
+    Die Bauwerke in Altfurt: Baustoffe, Haeuser, Torhaeuser, Dioramen, Pflaster und
+    Platzgruen. Das sind keine Einstellungen, sondern ein BAUPLAN - verschachtelte
+    Listen von Quadern, Ecken und Blocknamen, die zusammen gelesen werden muessen. Ein
+    Formular mit einem Feld je Zahl waere hier kein Werkzeug: Wer eine Ecke um einen
+    Block verschiebt, muss die anderen drei kennen. Geaendert wird die Datei im
+    Dateieditor, und der ganze Abschnitt wird nur beim Start gelesen.
   datenbank: >-
     Zugangsdaten. Sie stehen in plugins/Freimarken/config.yml unter datenbank und werden
     nur beim Start gelesen; das Einrichtungsskript legt sie unter

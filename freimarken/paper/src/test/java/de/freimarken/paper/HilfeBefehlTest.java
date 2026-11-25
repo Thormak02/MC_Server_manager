@@ -93,6 +93,10 @@ class HilfeBefehlTest {
                         // JEDEM - darum steht sie auch in den zwei Listen darunter.
                         "&#e3c57e/strafe&#6e7a82 - &#a5b4bfStummschalten, hinauswerfen, sperren - mit Dauer und Grund",
                         "&#e3c57e/bannliste&#6e7a82 - &#a5b4bfWer gesperrt ist, warum und bis wann",
+                        // Schritt 16a Teil D: /einsehen steht NUR in dieser
+                        // Liste - es haengt an freimarken.einsehen, und wer
+                        // das nicht hat, soll nicht lesen, dass es das gibt.
+                        "&#e3c57e/einsehen&#6e7a82 - &#a5b4bfIn fremde Behaelter sehen, ohne etwas zu nehmen",
                         "&#6e7a82Jeder Befehl ohne Zusatz zeigt, was er kann.");
 
     /** Was ein Spieler OHNE jedes Recht sieht: drei Befehle in zwei Gruppen. */
@@ -226,7 +230,7 @@ class HilfeBefehlTest {
                 + Hilfeplan.ALLE.eintraege().size();
 
         assertEquals(erwartet, ALLES.size());
-        assertEquals(36, ALLES.size());
+        assertEquals(37, ALLES.size());
     }
 
     @Test

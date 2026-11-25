@@ -2915,12 +2915,12 @@ unterschiedliche Leute an, und niemand braucht beides.
 
 ### 12c.3 Werkzeuge, die ins Plugin gehören
 
-- **Melden**: `/melden <spieler> <grund>` legt eine Meldung an. Moderatoren sehen eine
+- **Melden** [gebaut 25.11.2026]: `/melden <spieler> <grund>` legt eine Meldung an. Moderatoren sehen eine
   Liste, springen hin, bearbeiten sie, schließen sie mit einem Vermerk ab. Der Melder
   bekommt eine Rückmeldung — sonst meldet beim zweiten Mal niemand mehr.
-- **Stummschalten, kicken, bannen** — jeweils mit **Dauer und Grund**, und der Grund wird
+- **Stummschalten, kicken, bannen** [gebaut 25.11.2026] — jeweils mit **Dauer und Grund**, und der Grund wird
   dem Betroffenen angezeigt. Eine Strafe, die niemand erklärt, erzeugt nur Wiederkehr.
-- **Einsehen** eines Grundstücks ohne Baurecht: hinsehen dürfen, anfassen nicht.
+- **Einsehen** [gebaut 25.11.2026] eines Grundstücks ohne Baurecht: hinsehen dürfen, anfassen nicht. `/einsehen an` öffnet fremde Behälter fünf Minuten lang — mit Frist, weil ein Modus im Spiel unsichtbar ist, und ohne jedes Nehmen.
 - **Das Blockbuch** [gebaut 09.11.2026] beantwortet die Frage *wer war das*:
   `/freimarken blockbuch` auf den Block im Blick, `/freimarken blockbuch spieler <name>`
   für die andere Richtung. Es schreibt Setzen, Abbauen und das Benutzen von Behältern —
@@ -2940,8 +2940,9 @@ unterschiedliche Leute an, und niemand braucht beides.
   kann.
 - **Zurückrollen** eines Griefs über das Logbuch (Prism läuft als Nachbar,
   siehe [13](#13-betrieb)) — begrenzt auf Zeitraum und Spieler, nie flächig.
-- **Alles protokolliert**, mit Grund und Bearbeiter. Bei Besitzübertragungen und
-  dauerhaften Bannen zusätzlich im Manager sichtbar.
+- **Alles protokolliert** [gebaut 25.11.2026], mit Grund und Bearbeiter. Bei
+  Besitzübertragungen und dauerhaften Bannen zusätzlich im Manager sichtbar — die
+  Seite *Strafen und Meldungen* zeigt sie, ändern lässt sich dort nichts.
 
 Zwei Regeln dazu [empfohlen]:
 

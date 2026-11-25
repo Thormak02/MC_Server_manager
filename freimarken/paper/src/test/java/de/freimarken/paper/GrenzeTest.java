@@ -386,7 +386,11 @@ class GrenzeTest {
             // die an den, dessen Fluesterbefehl gesperrt ist. Die Zeile an der TUER
             // sendet sie nicht: Dort geht sie ueber disallow, denn der Spieler ist
             // noch nicht im Spiel.
-            "StrafBefehle.java", "Strafwache.java"));
+            "StrafBefehle.java", "Strafwache.java",
+            // Schritt 16a Teil D: /einsehen und seine Wache. Die Wache hat
+            // EINE Sendestelle, und sie ist die Zusage des Teils: "hinsehen
+            // duerfen, anfassen nicht" muss man LESEN koennen.
+            "EinsichtBefehle.java", "Einsichtswache.java"));
 
     /**
      * Wo ein Satz aus Text werden darf - zwei Dateien, und das ist der ganze Weg
@@ -603,7 +607,12 @@ class GrenzeTest {
             // Ansage an alle und die Ansage der Aufhebung. Die Strafwache an ZWEI:
             // Chat und gesperrter Befehl.
             Map.entry("StrafBefehle.java", 3),
-            Map.entry("Strafwache.java", 2));
+            Map.entry("Strafwache.java", 2),
+            // Zwei: die eine Sendestelle an den Spieler und die Absage an die
+            // Konsole. Letztere geht an den Sender und nicht an einen Spieler
+            // - darum kann sie nicht durch sende() laufen.
+            Map.entry("EinsichtBefehle.java", 2),
+            Map.entry("Einsichtswache.java", 1));
 
     /**
      * Wie oft jede reine Zeilen-Methode von {@code ParzellenBefehle} AUFGERUFEN wird.
@@ -1204,6 +1213,7 @@ class GrenzeTest {
             "BEFEHL_MELDEN -> WORT",
             "BEFEHL_MELDUNG -> WORT", "BEFEHL_STRAFE -> WORT",
             "BEFEHL_BANNLISTE -> WORT",
+            "BEFEHL_EINSEHEN -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",
