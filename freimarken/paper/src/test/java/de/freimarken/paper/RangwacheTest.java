@@ -78,9 +78,12 @@ class RangwacheTest {
 
         // Ein Neuling hat keine Zeile in der Ablage. Bekaeme er darum NICHTS, stuende er
         // ohne jedes Rangrecht da - und im Spiel sieht das aus wie die Regel.
+        // freimarken.stufe.reisender ist seit dem 25.11.2026 dabei: Die unterste
+        // Stufe ist eine ERREICHTE Stufe, und eine Welt mit ab-rang: reisender muss
+        // jedem offenstehen, der ueberhaupt in der Leiter steht.
         assertEquals(Set.of("freimarken.parzellen.1", "freimarken.gruppe.1",
                         "freimarken.inseln.1", "freimarken.wolken.1",
-                        "freimarken.freistaedte.1"),
+                        "freimarken.freistaedte.1", "freimarken.stufe.reisender"),
                 griff.gesetzt(anna));
     }
 
@@ -194,9 +197,12 @@ class RangwacheTest {
         // Der Rueckfall allein ist das, was niemand bemerkt: Im Spiel sieht es aus, als
         // waere der Spieler nie aufgestiegen. Darum die Zeile - und sie muss den Rang
         // NENNEN, sonst weiss der Betreiber nicht, welchen er wieder eintragen soll.
+        // freimarken.stufe.reisender ist seit dem 25.11.2026 dabei: Die unterste
+        // Stufe ist eine ERREICHTE Stufe, und eine Welt mit ab-rang: reisender muss
+        // jedem offenstehen, der ueberhaupt in der Leiter steht.
         assertEquals(Set.of("freimarken.parzellen.1", "freimarken.gruppe.1",
                         "freimarken.inseln.1", "freimarken.wolken.1",
-                        "freimarken.freistaedte.1"),
+                        "freimarken.freistaedte.1", "freimarken.stufe.reisender"),
                 griff.gesetzt(anna));
         assertEquals(1, gemeldet.size(), gemeldet.toString());
         assertTrue(gemeldet.get(0).contains("fuerst"), gemeldet.get(0));
@@ -237,7 +243,11 @@ class RangwacheTest {
         // Keine Zahl und kein Name aus Plan 9 steht im Programm. Wer hier die Vorgabe
         // fest einbaute, gaebe auf einem Server mit eigenen Raengen Rechte aus, die es
         // dort nicht gibt.
-        assertEquals(Set.of("freimarken.parzellen.7", "freimarken.shop.bund"),
+        // Die zwei Stufenrechte kommen aus DIESER Leiter und nicht aus der Vorgabe -
+        // gast und haendler gibt es in Plan 9 nicht. Genau das ist hier die
+        // Zusicherung: Die Namen entstehen aus der Datei.
+        assertEquals(Set.of("freimarken.parzellen.7", "freimarken.shop.bund",
+                        "freimarken.stufe.gast", "freimarken.stufe.haendler"),
                 griff.gesetzt(anna));
     }
 

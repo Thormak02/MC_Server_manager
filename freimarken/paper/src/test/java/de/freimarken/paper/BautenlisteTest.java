@@ -301,19 +301,19 @@ class BautenlisteTest {
         // Abschrift - sonst prueft diese Probe gegen Tore, die es nicht mehr gibt. Die
         // fuenf Weltnamen stehen so, wie das Plugin sie im onEnable einsetzt.
         var welten = Weltenliste.ausKonfiguration(
-                ausgeliefert.getConfigurationSection("welten"), "marktstadt", "altfurt",
+                ausgeliefert.getConfigurationSection("welten"), "marktstadt",
                 "freistaedte", "hafenwerder", "wolkenwerder");
         assertEquals(List.of(), welten.klagen(),
                 "die ausgelieferten Welten selbst muessen sauber sein: "
                         + welten.klagen());
         var kanten = new java.util.LinkedHashMap<String, Integer>();
-        var tore = new java.util.ArrayList<Quader>();
-        welten.welten().forEach(angabe -> {
-            kanten.put(angabe.name(), angabe.kante());
-            if (angabe.tor() != null) {
-                tore.add(angabe.tor());
-            }
-        });
+        welten.welten().forEach(angabe -> kanten.put(angabe.name(), angabe.kante()));
+        // Die Tore kommen seit dem 25.11.2026 aus tore.yml und nicht mehr aus den
+        // Weltangaben. Gelesen wird die AUSGELIEFERTE Datei - mit einem leeren Buch
+        // waere diese Probe gruen, ohne einen einzigen Quader geprueft zu haben,
+        // und genau das soll die Zahl darunter verhindern.
+        var buch = torbuchAusDerRessource();
+        var tore = buch.quader();
         assertEquals(8, tore.size(), "acht Tore am Bundesmarkt");
 
         var ergebnis = Bautenliste.ausKonfiguration(ausgeliefert, kanten, tore);
@@ -450,4 +450,33 @@ class BautenlisteTest {
                 "und mitten im Arm ist sie offen");
     }
 
+    /**
+     * Das Torbuch aus der ausgelieferten {@code tore.yml}.
+     *
+     * <p>Ueber eine echte Datei und nicht ueber eine gebaute Karte: Diese Probe
+     * haelt die AUSGELIEFERTEN Tore gegen die AUSGELIEFERTEN Bauten, und beide
+     * muessen aus ihren Dateien kommen. Eine Karte im Quelltext waere eine dritte
+     * Wahrheit, die mit keiner der zwei Dateien mitwaechst.
+     */
+    private static Torbuch torbuchAusDerRessource() {
+        java.io.File ort;
+        try {
+            java.nio.file.Path ordner =
+                    java.nio.file.Files.createTempDirectory("tore");
+            ort = ordner.resolve(Torbuch.DATEI).toFile();
+            try (var strom = BautenlisteTest.class.getResourceAsStream(
+                    "/" + Torbuch.DATEI)) {
+                assertTrue(strom != null,
+                        Torbuch.DATEI + " liegt nicht im Klassenpfad");
+                java.nio.file.Files.write(ort.toPath(), strom.readAllBytes());
+            }
+        } catch (java.io.IOException nichtLesbar) {
+            throw new IllegalStateException(Torbuch.DATEI + " nicht lesbar",
+                    nichtLesbar);
+        }
+        Torbuch buch = new Torbuch(ort);
+        assertEquals(List.of(), buch.lade(), "die ausgelieferte " + Torbuch.DATEI
+                + " muss sauber lesen");
+        return buch;
+    }
 }

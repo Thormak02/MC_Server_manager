@@ -62,14 +62,18 @@ class AnkunftswacheTest {
         Map<String, Weltangabe> welten = Map.of(
                 ABENTEUERWELT, angabe("wildnis", GameMode.ADVENTURE),
                 BAUWELT, angabe("marktstadt", GameMode.SURVIVAL));
+        // Nachher laeuft SOFORT: In einer Probe gibt es keinen Taktgeber, und die
+        // Verzoegerung im Spiel hat einen anderen Grund als die Wirkung - sie wartet
+        // auf die Rangwache. Hier gibt es keine.
         return new Ankunftswache(ankunftswelt, welten, new SpeicherKasse(0L),
-                Logger.getLogger("AnkunftswacheTest"), Sprachprobe.spracheAusDemJar());
+                Logger.getLogger("AnkunftswacheTest"), Sprachprobe.spracheAusDemJar(),
+                Runnable::run);
     }
 
     /** Eine Weltangabe, von der nur der Spielmodus zaehlt - der Rest ist Beiwerk. */
     private static Weltangabe angabe(String name, GameMode modus) {
         return new Weltangabe(name, World.Environment.NORMAL, Weltangabe.Art.GEWOEHNLICH,
-                null, 0, null, modus, null);
+                null, 0, null, modus, false, "");
     }
 
     /** Ein Ereignis, wie Paper es der Wache gibt - nur Spieler und Anlass zaehlen. */
@@ -216,5 +220,112 @@ class AnkunftswacheTest {
                         + " faellt die Pruefung, steht er beim naechsten Weltwechsel im"
                         + " Abenteuer und kann nichts mehr abbauen");
         assertEquals(List.of(), baumeister.chatBild());
+    }
+    // -------------------------------------------------- Die Rettung beim Beitritt
+
+    /** Die Mitgliederwelt - premium, und darum nur mit dem Weltrecht. */
+    private static final String MITGLIEDERWELT = "minecraft:vogtei";
+
+    /**
+     * Eine Wache, die auch die Vogtei kennt - und zwar als PREMIUM-Welt.
+     *
+     * <p>Dieselbe Wache wie oben, nur mit einem vierten Eintrag. Eine eigene Methode
+     * und nicht die bestehende erweitert: Jene prueft den Spielmodus, und ihre Welten
+     * sollen offen bleiben - sonst pruefte die Haelfte ihrer Proben kuenftig den
+     * Zutritt.
+     */
+    private static Ankunftswache wacheMitVogtei() {
+        return new Ankunftswache(Serverprobe.welt(ANKUNFT), Map.of(
+                        ABENTEUERWELT, angabe("wildnis", GameMode.ADVENTURE),
+                        BAUWELT, angabe("marktstadt", GameMode.SURVIVAL),
+                        MITGLIEDERWELT, premiumAngabe("vogtei")),
+                new SpeicherKasse(0L), Logger.getLogger("AnkunftswacheTest"),
+                Sprachprobe.spracheAusDemJar(), Runnable::run);
+    }
+
+    /** Eine Weltangabe, von der nur das premium zaehlt. */
+    private static Weltangabe premiumAngabe(String name) {
+        return new Weltangabe(name, World.Environment.NORMAL,
+                Weltangabe.Art.GEWOEHNLICH, null, 0, null, GameMode.SURVIVAL, true, "");
+    }
+
+    /**
+     * WIRKT: Wer in der Vogtei abgemeldet hat und sein Recht verliert, kommt heim.
+     *
+     * <p><b>Der Fall, den {@code Zutrittsregel} in {@code Reise} nicht abdeckt</b>: Jene
+     * sieht jeden Weg DORTHIN. Wer aber schon drin steht, reist nicht - und ohne diese
+     * Rettung bliebe er dort, solange er sich nicht wegbewegt. Dasselbe gilt, wenn ein
+     * Betreiber einer Welt nachtraeglich {@code premium: true} gibt: Alle, die gerade
+     * drin stehen, duerften bleiben.
+     */
+    @Test
+    @DisplayName("37f - WIRKT: ohne das Weltrecht wird er beim Beitritt heimgeholt")
+    void ohneWeltrechtHeimgeholt() {
+        Spielerprobe gast = new Spielerprobe("Gast", Spielerprobe.kennungAus(45))
+                .inWelt(MITGLIEDERWELT)
+                .anOrt(new org.bukkit.Location(Serverprobe.welt(MITGLIEDERWELT),
+                        0.5, 64, 0.5));
+
+        wacheMitVogtei().beimBeitritt(new org.bukkit.event.player.PlayerJoinEvent(
+                gast.spieler(), net.kyori.adventure.text.Component.empty()));
+
+        // DER ORT und nicht nur der Satz: Ein Satz ohne Teleport waere eine Warnung,
+        // die nichts tut - und der Spieler stuende weiter in der Welt, die ihm nicht
+        // mehr offensteht.
+        // Nach dem SCHLUESSEL und nicht nach dem Exemplar: Serverprobe.welt gibt
+        // bei jedem Aufruf einen neuen Stellvertreter - ein Vergleich der Objekte
+        // waere auch bei derselben Welt rot.
+        assertEquals(ANKUNFT,
+                gast.spieler().getLocation().getWorld().key().asString(),
+                "er muss WIRKLICH in der Ankunftswelt stehen");
+        assertEquals(1, gast.chatBild().size(), gast.chatBild().toString());
+        assertTrue(gast.chatBild().get(0).contains("steht dir nicht mehr offen"),
+                gast.chatBild().get(0));
+        assertTrue(gast.chatBild().get(0).contains("vogtei"),
+                "der Satz nennt die Welt, aus der er kommt: " + gast.chatBild().get(0));
+    }
+
+    /**
+     * Das Gegenbeispiel - ohne das waere 37f auch gruen, wenn jeder heimgeholt wuerde.
+     */
+    @Test
+    @DisplayName("37g - WIRKT: MIT dem Weltrecht bleibt er, wo er ist")
+    void mitWeltrechtBleibtErDa() {
+        Spielerprobe mitglied = new Spielerprobe("Mila", Spielerprobe.kennungAus(46),
+                "freimarken.welt.vogtei")
+                .inWelt(MITGLIEDERWELT)
+                .anOrt(new org.bukkit.Location(Serverprobe.welt(MITGLIEDERWELT),
+                        0.5, 64, 0.5));
+
+        wacheMitVogtei().beimBeitritt(new org.bukkit.event.player.PlayerJoinEvent(
+                mitglied.spieler(), net.kyori.adventure.text.Component.empty()));
+
+        assertEquals(MITGLIEDERWELT,
+                mitglied.spieler().getLocation().getWorld().key().asString(),
+                "wer darf, wird nicht weggesetzt");
+        assertEquals(List.of(), mitglied.chatBild(),
+                "und liest auch nichts davon");
+    }
+
+    /**
+     * Und wer in einer OFFENEN Welt beitritt, merkt von der Rettung nichts.
+     *
+     * <p>Der dritte Zeuge: Ohne ihn koennte die Rettung jeden heimholen, der nicht
+     * gerade in der Ankunftswelt steht - und 37f und 37g waeren trotzdem gruen.
+     */
+    @Test
+    @DisplayName("37h - in einer offenen Welt greift die Rettung nicht")
+    void inEinerOffenenWeltKeineRettung() {
+        Spielerprobe jeder = new Spielerprobe("Jan", Spielerprobe.kennungAus(47))
+                .inWelt(BAUWELT)
+                .anOrt(new org.bukkit.Location(Serverprobe.welt(BAUWELT),
+                        0.5, 64, 0.5));
+
+        wacheMitVogtei().beimBeitritt(new org.bukkit.event.player.PlayerJoinEvent(
+                jeder.spieler(), net.kyori.adventure.text.Component.empty()));
+
+        assertEquals(BAUWELT,
+                jeder.spieler().getLocation().getWorld().key().asString());
+        assertEquals(List.of(), jeder.chatBild());
     }
 }

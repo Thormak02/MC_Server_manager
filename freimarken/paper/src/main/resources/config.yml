@@ -631,7 +631,8 @@ bauten:
   # der Seite des kleineren Laengsmasses - an Nord und Sued also die westliche, an Ost
   # und West die noerdliche.
   #
-  # DIE NISCHE IST DAS TOR: Ihr Quader muss mit welten.<welt>.tor uebereinstimmen. Der
+  # DIE NISCHE IST DAS TOR: Ihr Quader muss mit dem Eintrag tore.<welt> in tore.yml
+  # uebereinstimmen (bis zum 25.11.2026 war das welten.<welt>.tor). Der
   # Start rechnet ihn nach und KLAGT mit den richtigen Zahlen, wenn er abweicht - die
   # Datei bleibt die Wahrheit, du bekommst nur gesagt, was dort stehen muesste.
   #
@@ -3422,7 +3423,7 @@ freie-truhe:
   # und die Wache wird gar nicht angemeldet.
   #
   # DIESE STELLEN GELTEN NUR FUER DIE VORHANDENE WELT - genauso wie die Quader der
-  # Ladeneinheiten weiter oben und die acht Torquader unter reisen.tore. Altfurt ist
+  # Ladeneinheiten weiter oben und die acht Torquader in tore.yml. Altfurt ist
   # art: flach, der Boden liegt also ueberall auf y -61 und der erste freie Block auf
   # y -60; eine Truhe steht auf -60. Wer die Welt neu anlegt, behaelt diese Hoehen -
   # eine Ebene hat keine zweite Gestalt.
@@ -3699,46 +3700,36 @@ welten:
   #           Welt. Wer das Recht freimarken.spielmodus.frei hat, wird nie umgestellt;
   #           ohne diese Ausnahme wuerde ein Baumeister im Kreativmodus beim Betreten
   #           Altfurts mitten im Bauen heruntergestuft.
-  # tor:      Der Quader am Bundesmarkt, der HIERHER fuehrt - zwei Ecken, je drei ganze
-  #           Zahlen, beide eingeschlossen:
-  #               tor:
-  #                 von: [58, -60, 0]
-  #                 bis: [60, -58, 0]
-  #           Das Tor steht am Eintrag der ZIELwelt und nicht in einer eigenen Liste:
-  #           So bleibt eine neue Welt ein Eintrag und ist nicht ein Eintrag plus ein
-  #           vergessenes Tor. Geprueft wird beim Start, dass kein Tor in der
-  #           Ankunftswelt selbst steht, keines ausserhalb ihrer Grenze liegt und keine
-  #           zwei Tore sich Bloecke teilen - sonst entschiede die Reihenfolge der
-  #           Eintraege, wohin ein Spieler reist.
+  # premium:  true oder false (Vorgabe). true heisst: Diese Welt steht nur offen,
+  #           wer das Recht freimarken.welt.<welt> hat - fuer vogtei also
+  #           freimarken.welt.vogtei. Das Recht vergibt die Rechteverwaltung des
+  #           Servers, nicht diese Datei; der Manager zeigt die Zeile zum Kopieren.
+  #           SCHREIB true UND NICHT ja: YAML liest jedes andere Wort als false,
+  #           und eine Mitgliederwelt stuende dann fuer alle offen. Das Plugin
+  #           klagt beim Start darueber und sperrt die Welt vorsichtshalber.
+  # ab-rang:  der Schluessel einer Stufe aus raenge.leiter, etwa siedler. Dann
+  #           steht die Welt nur offen, wer diese Stufe ERREICHT hat; gefragt wird
+  #           das Recht freimarken.stufe.<stufe>, und das vergibt das Plugin beim
+  #           Beitritt fuer die erreichte Stufe und jede darunter. Leer oder
+  #           weggelassen heisst: keine Schranke.
+  #           Eine Stufe, die es in raenge.leiter NICHT gibt, sperrt die Welt fuer
+  #           jeden - das Protokoll nennt sie beim Start einzeln.
+  #           Beides gilt UND: Eine Welt mit premium: true und ab-rang: siedler
+  #           verlangt beides.
+  #
+  # KEIN tor: MEHR. Die Tore am Bundesmarkt stehen seit dem 25.11.2026 in einer
+  # eigenen Datei tore.yml, im selben Ordner wie diese. Der Grund ist das
+  # SCHREIBEN: /portal setzen <welt> setzt ein Tor im Spiel, und dafuer muesste
+  # das Plugin diese Datei neu schreiben - Bukkits Schreiber wirft dabei jeden
+  # Kommentar weg, und das sind hier 4000 Zeilen Anleitung.
+  # Eine tor:-Zeile, die hier stehen bleibt, WIRKT NICHT und wird beim Start
+  # einzeln beklagt - sie wird nicht stillschweigend uebersprungen.
   #
   # Neue Welten kommen beim Update NICHT von selbst in diese Datei - eine vorhandene
   # config.yml wird nie ueberschrieben. Was hier fehlt, nennt das Protokoll beim Start
   # einzeln; der Block muss dann von Hand hierher.
   marktstadt:
     art: raster
-
-    # Das Tor steht am Bundesmarkt in Altfurt und fuehrt HIERHER.
-    #
-    # DIE REIHE IST NICHT MEHR EINGEMESSEN, sondern GEGEBEN [18.11.2026]:
-    # Altfurt ist art: flach, der Boden also ueberall y -61 und der erste
-    # freie Block y -60. Darum steht JEDES der acht Tore auf z=0 mit
-    # y -60..-58, drei Bloecke breit und drei hoch, in Schritten von vier
-    # (x 58, 62, 66, 70, 74, 78, 82, 86) - dazwischen je eine tragende
-    # Saeule. Die Wand reicht damit von x 57 bis x 89.
-    #
-    # Bis zum 18.11.2026 waren die Zahlen an einer gewachsenen Welt vom
-    # 02.11. gemessen, die es nicht mehr gibt. Acht Tore brauchen
-    # 1 + 8*4 = 33 Bloecke; das damals gemessene flache Feld war 32 breit -
-    # das achte Tor hatte gar keinen Platz. Auf einer Ebene gibt es diese
-    # Grenze nicht.
-    #
-    # Das Mauerwerk ist von Hand zu bauen (Plan 2.1 nennt die Gebaeude). Bis dahin ist
-    # das Tor eine unsichtbare Tuer - das Protokoll sagt beim Start, welche Tore noch
-    # ohne Bauwerk sind.
-    tor:
-      # Osttorhaus, nordliche Nische - gerechnet von Torhausplan.
-      von: [106, -60, -4]
-      bis: [108, -58, -4]
     # Wunschkante der Weltgrenze in Bloecken; Plan Abschnitt 4 nennt 3.000.
     #
     # Gerechnet wird daraus ABGERUNDET auf ganze Rasterzellen (64 Parzelle + 7 Weg = 71)
@@ -3834,10 +3825,6 @@ welten:
     # landet das Tor aus Altfurt. Was wirklich gilt, steht beim Start im Protokoll.
     art: stadtfelder
     kante: 6000
-    tor:
-      # Osttorhaus, suedliche Nische - gerechnet von Torhausplan.
-      von: [106, -60, 4]
-      bis: [108, -58, 4]
 
   # Archipel mit eigenem Angelgut (Plan 4.1), eine Insel je Feld.
   hafenwerder:
@@ -3866,11 +3853,6 @@ welten:
     # Start im Protokoll.
     art: inseln
     kante: 5000
-    # Plan 2.1: "Hafen von Altfurt - Tor nach Hafenwerder".
-    tor:
-      # Suedtorhaus, westliche Nische - gerechnet von Torhausplan.
-      von: [-4, -60, 106]
-      bis: [-4, -58, 108]
 
   wolkenwerder:
     # WOLKEN [18.11.2026, Plan 4.1 und 6.2]: die Skyblockwelt. Leere mit einem Raster
@@ -3893,26 +3875,12 @@ welten:
     # Welt hat keine Chunks, solange niemand eine Insel nimmt.
     art: wolken
     kante: 20000
-    # Plan 2.1: "Wolkenturm - Tor nach Wolkenwerder".
-    #
-    # Das achte Tor der Reihe [18.11.2026]. Es setzt sie um eine Oeffnung fort und
-    # endet bei x=89. Auf der Ebene braucht es dafuer keine Messung mehr -
-    # gebaut werden muss die Oeffnung aber, wie die sieben anderen auch.
-    tor:
-      # Suedtorhaus, oestliche Nische - gerechnet von Torhausplan.
-      von: [4, -60, 106]
-      bis: [4, -58, 108]
 
   # Freibau; eine Sicherung kostet 5.000 Mark.
   hochwald:
     art: gewoehnlich
     startwert: 110926004
     kante: 5000
-    # Plan 2.1: "Forsttor - Tor zum Hochwald".
-    tor:
-      # Nordtorhaus, westliche Nische - gerechnet von Torhausplan.
-      von: [-4, -60, -108]
-      bis: [-4, -58, -106]
 
   # Farmwelt. Wird bei jeder neuen Minecraft-Version zurueckgesetzt und neu
   # vorgeneriert - deshalb haengt an ihr kein Besitz (Plan 4.2).
@@ -3920,21 +3888,16 @@ welten:
     art: gewoehnlich
     startwert: 110926005
     kante: 2000
-    # Plan 2.1: "Kornpforte - Tor nach Kornmark".
-    tor:
-      # Nordtorhaus, oestliche Nische - gerechnet von Torhausplan.
-      von: [4, -60, -108]
-      bis: [4, -58, -106]
 
+  # Der Nether erst ab siedler: Ein Spieler, der eine Stunde alt ist, verliert dort
+  # seine erste Ausruestung, und der Rueckweg ist weiter als der Hinweg. Die Stufe
+  # ist eine Einstellung, keine Ansicht - leer lassen oeffnet ihn fuer jeden.
   nether:
     art: gewoehnlich
     startwert: 110926006
     umgebung: nether
     kante: 2000
-    tor:
-      # Westtorhaus, nordliche Nische - gerechnet von Torhausplan.
-      von: [-108, -60, -4]
-      bis: [-106, -58, -4]
+    ab-rang: siedler
 
   # "end" und nicht "ende": Der Schluessel ist der Weltname, und den fuehrt Plan
   # Abschnitt 4 so. Weltnamen sind nach Plan 12a.6 nur lesbar - an ihnen haengen
@@ -3944,10 +3907,27 @@ welten:
     startwert: 110926007
     umgebung: ende
     kante: 2000
-    tor:
-      # Westtorhaus, suedliche Nische - gerechnet von Torhausplan.
-      von: [-108, -60, 4]
-      bis: [-106, -58, 4]
+    # Das Ende erst ab buerger - ein Drache ist kein Anfaengerziel, und die
+    # Elytren daraus gehoeren nicht in die erste Spielstunde.
+    ab-rang: buerger
+
+  # Farmwelt fuer Mitglieder. Wie kornmark ohne Besitz und bei jeder neuen
+  # Minecraft-Version zurueckgesetzt - deshalb haengt an ihr kein Grundstueck.
+  # Kein tor: Alle acht Nischen der vier Torhaeuser sind belegt; bis ein
+  # neues Torhaus steht, fuehrt /warp vogtei hierher. Das Tor kommt dann mit
+  # /portal setzen vogtei und landet in tore.yml, nicht hier.
+  vogtei:
+    art: gewoehnlich
+    startwert: 110926008
+    kante: 2000
+    premium: true
+
+  # Bergbauwelt, fuer jeden offen. Eigener Startwert und eigene Grenze, damit die
+  # Stollen nicht in der Welt liegen, in der gebaut wird.
+  stollenberg:
+    art: gewoehnlich
+    startwert: 110926009
+    kante: 2000
 
 # ============================================================================
 # DIE TEAMROLLEN (Plan 12c.2, Schritt 16a Teil A)
@@ -4064,6 +4044,11 @@ team:
         # ihn bannen sie einander, und wer schneller tippt, hat gewonnen.
         - strafen.dauerhaft
         - strafen.team
+        # Die Tore am Bundesmarkt setzen (/portal). Beim Verwalter und nicht
+        # beim Moderator: Ein neues Tor ist ein neuer Weg in eine Welt, auch
+        # in eine mit Rangschranke - das ist eine Entscheidung ueber den
+        # Aufbau des Servers und keine Moderation.
+        - portal
         - einsehen
 
     # Events anlegen und Preise ausschuetten - die Werkzeuge dafuer kommen mit

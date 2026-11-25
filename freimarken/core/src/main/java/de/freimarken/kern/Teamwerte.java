@@ -222,7 +222,7 @@ public record Teamwerte(List<Teamwerte.Rolle> rollen) {
                     "spielzeit.andere", "verwalten", "besitz", "freistadt.raeumen",
                     "team", "team.vergeben", "strafen.stumm", "strafen.rauswurf",
                     "strafen.bann", "strafen.aufheben", "strafen.dauerhaft",
-                    "strafen.team", "einsehen")),
+                    "strafen.team", "portal", "einsehen")),
             new Rolle("eventleiter", List.of("tpa", "sofort")),
             // Baurecht ueberall und sonst nichts - getrennte Rollen fuer Strafen und
             // Bauen sind nach Plan 12c.2 Absicht.

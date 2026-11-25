@@ -111,7 +111,7 @@ class TeamBefehlTest {
         // die, die den Verwalter vom Moderator trennen (Plan 12c.2) - und darum ist
         // diese Zahl die, an der man eine verrutschte Rolle merkt.
         // SIEBZEHN seit Teil D: die sechzehn von Teil B plus einsehen.
-        assertTrue(zeilen.get(3).contains("17 Rechte"), zeilen.get(3));
+        assertTrue(zeilen.get(3).contains("18 Rechte"), zeilen.get(3));
     }
 
     @Test

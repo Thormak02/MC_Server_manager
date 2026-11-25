@@ -48,6 +48,18 @@ import org.junit.jupiter.api.Test;
  */
 class WarpBefehlTest {
 
+    /**
+     * Eine Zutrittsfrage, die JEDE Welt offenlaesst.
+     *
+     * <p>Hereingegeben und nicht weggelassen: Diese Proben tippen Warpziele und
+     * Rueckwege an. Stuende hier die ECHTE Regel, pruefte eine rote Zeile kuenftig
+     * den Zutritt statt des Warps - und niemand saehe, welche der zwei Sachen
+     * kaputt ist. Dass der Riegel GREIFT, haelt {@code ZutrittsregelTest} und
+     * {@code ReiseZutrittTest}.
+     */
+    private static final Reise.Zutritt ALLES_OFFEN =
+            (wer, welt) -> java.util.Optional.empty();
+
     private static final String NETHER = "minecraft:world_nether";
     private static final String ENDE = "minecraft:world_the_end";
 
@@ -83,7 +95,7 @@ class WarpBefehlTest {
         // Name in der Datei steht und die Welt nicht entstanden ist.
         Map<String, World> welten = Map.of("nether", nether);
         Reise reise = new Reise(Logger.getLogger("WarpBefehlTest"), new Rueckweg(),
-                null, Sprachprobe.spracheAusDemJar());
+                null, Sprachprobe.spracheAusDemJar(), ALLES_OFFEN);
         // Ohne Freistadtbuch und ohne Freistaedtewelt: Diese Probe tippt den WELT-Zweig
         // durch. Der Stadtzweig muss dann seine eigene Absage senden, und genau das
         // prueft 41e.
@@ -180,7 +192,8 @@ class WarpBefehlTest {
         buch.gruende(FREISTAEDTE, Spielerprobe.kennungAus(90), "neustadt", 9);
         buch.gruende(FREISTAEDTE, Spielerprobe.kennungAus(91), "altdorf", 9);
         Reise reise = new Reise(Logger.getLogger("WarpBefehlTest"), new Rueckweg(),
-                sofortigeAufwaermzeit(), Sprachprobe.spracheAusDemJar());
+                sofortigeAufwaermzeit(), Sprachprobe.spracheAusDemJar(),
+                ALLES_OFFEN);
         WarpBefehle befehle = new WarpBefehle(
                 Warpverzeichnis.ausWelten(List.of("nether", "ende")),
                 Map.of("nether", nether), reise, Sprachprobe.spracheAusDemJar(),
@@ -323,7 +336,8 @@ class WarpBefehlTest {
                 buch.plan().ersteZelle(stadt.x()),
                 buch.plan().ersteZelle(stadt.z())), besucher, 5_000L);
         Reise reise = new Reise(Logger.getLogger("WarpBefehlTest"), new Rueckweg(),
-                sofortigeAufwaermzeit(), Sprachprobe.spracheAusDemJar());
+                sofortigeAufwaermzeit(), Sprachprobe.spracheAusDemJar(),
+                ALLES_OFFEN);
         WarpBefehle befehle = new WarpBefehle(
                 Warpverzeichnis.ausWelten(List.of("nether", "ende")),
                 Map.of("nether", nether), reise, Sprachprobe.spracheAusDemJar(),
@@ -400,7 +414,8 @@ class WarpBefehlTest {
         buch.gibGrundstuecke(new SpeicherGrundstuecke());
         buch.gruende(FREISTAEDTE, Spielerprobe.kennungAus(90), "neustadt", 9);
         Reise reise = new Reise(Logger.getLogger("WarpBefehlTest"), new Rueckweg(),
-                sofortigeAufwaermzeit(), Sprachprobe.spracheAusDemJar());
+                sofortigeAufwaermzeit(), Sprachprobe.spracheAusDemJar(),
+                ALLES_OFFEN);
         WarpBefehle befehle = new WarpBefehle(
                 Warpverzeichnis.ausWelten(List.of("nether", "ende")),
                 Map.of("nether", nether), reise, Sprachprobe.spracheAusDemJar(),

@@ -320,7 +320,11 @@ class GrenzeTest {
             // Teil C: die zwei Beitrittszeilen und die Zeilen des taeglichen
             // Laufs - alle durch dasselbe private sende().
             "Mietwache.java",
-            "ParzellenBefehle.java", "Portalwache.java",
+            "ParzellenBefehle.java",
+            // /portal [25.11.2026]: EINE Sendestelle fuer jede Antwort, dazu die
+            // Konsolenabsage - jene kann nicht durch sende() laufen, weil es dort
+            // keinen Player gibt. Dieselben zwei wie bei EinsichtBefehle.
+            "PortalBefehle.java", "Portalwache.java",
             // /hilfe [21.11.2026]: EINE Sendestelle fuer die ganze Liste - sie geht
             // als Liste von Zeilen heraus, nicht Zeile fuer Zeile.
             "HilfeBefehle.java",
@@ -494,7 +498,7 @@ class GrenzeTest {
     private static final Map<String, Integer> SENDESTELLEN = Map.ofEntries(
             Map.entry("AnfragenBefehle.java", 12),
             Map.entry("Anmeldeformular.java", 1),
-            Map.entry("Ankunftswache.java", 2),
+            Map.entry("Ankunftswache.java", 3),
             Map.entry("Aufwaermzeit.java", 2),
             // EINS, und das ist eine Entscheidung: Alle fuenf Zweige von /beruf laufen
             // durch denselben Sendeweg. Der Listenzweig sendete anfangs selbst - dann
@@ -565,7 +569,7 @@ class GrenzeTest {
             // Raenge" gehen durch dasselbe private sende(). Eine Zwei hier heisst, dass
             // sich ein Zweig seinen eigenen Weg gebaut hat.
             Map.entry("RangBefehle.java", 1),
-            Map.entry("Reise.java", 7),
+            Map.entry("Reise.java", 8),
             Map.entry("RueckwegBefehle.java", 1),
             Map.entry("Schutzwache.java", 1),
             // Plan 7.4: ZWEI, und beide sind eine Entscheidung. Die erste ist das private
@@ -612,6 +616,10 @@ class GrenzeTest {
             // Konsole. Letztere geht an den Sender und nicht an einen Spieler
             // - darum kann sie nicht durch sende() laufen.
             Map.entry("EinsichtBefehle.java", 2),
+            // NACHGEZAEHLT und nicht abgeschrieben: eine Zeile in sende(), eine in
+            // nurSpieler(). Jene geht an den Sender und nicht an einen Player,
+            // denn von der Konsole gibt es keinen.
+            Map.entry("PortalBefehle.java", 2),
             Map.entry("Einsichtswache.java", 1));
 
     /**
@@ -830,7 +838,8 @@ class GrenzeTest {
             Map.entry("sendeKeinPlatzAmErscheinungspunkt", 1),
             Map.entry("sendeNichtGeklappt", 1),
             Map.entry("sendeSchonDa", 1),
-            Map.entry("zuSchnellZeilen", 1));
+            Map.entry("zuSchnellZeilen", 1),
+            Map.entry("zutrittZeilen", 1));
 
     /** Dasselbe fuer {@code Aufwaermzeit} - zwei Saetze, zwei Sendewege. */
     private static final Map<String, Integer> AUFRUFE_IN_AUFWAERMZEIT = Map.ofEntries(
@@ -1163,6 +1172,7 @@ class GrenzeTest {
             "SCHUTZ_WOLKE_FREI -> HANDBALKEN",
             "ANKUNFT_KEIN_SPAWNPUNKT -> SATZ",
             "ANKUNFT_ABENTEUER -> SATZ",
+            "ANKUNFT_HEIMGEHOLT -> SATZ",
             "PORTAL_KEIN_AUSGANG -> SATZ");
 
     /**
@@ -1214,6 +1224,7 @@ class GrenzeTest {
             "BEFEHL_MELDUNG -> WORT", "BEFEHL_STRAFE -> WORT",
             "BEFEHL_BANNLISTE -> WORT",
             "BEFEHL_EINSEHEN -> WORT",
+            "BEFEHL_PORTAL -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",
@@ -3449,6 +3460,18 @@ class GrenzeTest {
      * ({@code Rangzahl.hoechsteAus}), statt zu fragen, ob er eines hat. Sie
      * gehoeren darum nicht in {@code plugin.yml} - und was man nicht anmelden kann, darf
      * eine Probe nicht verlangen.
+     *
+     * <p><b>Seit dem 25.11.2026 sind nicht mehr alle davon WERTE</b>:
+     * {@code freimarken.welt.} und {@code freimarken.stufe.} werden GEFRAGT
+     * ({@code Zutrittsregel}). Anmelden lassen sie sich trotzdem nicht - der Teil
+     * dahinter ist ein frei gewaehlter Schluessel der {@code config.yml}
+     * ({@code welten.<name>}, {@code raenge.leiter.<name>}), und eine
+     * {@code plugin.yml} kann nicht aufzaehlen, was der Betreiber morgen eintraegt.
+     * Die Folge ist gemessen und milder, als sie klingt: {@code DEFAULT_PERMISSION}
+     * ist {@code OP}, ein unangemeldetes Recht gilt also fuer Operatoren als
+     * gesetzt. Wer es zugeteilt bekommt, kommt durch; jeder OPERATOR kommt durch,
+     * auch ohne Zuteilung - und darum sieht ein Spieltest mit Operatorrechten von
+     * diesen zwei Riegeln nichts.
      */
     private static final List<String> RECHTE_VORSILBEN = List.of(
             "freimarken.gruppe.", "freimarken.parzellen.",
@@ -3463,7 +3486,13 @@ class GrenzeTest {
             // Teil H: die Freistaedte. Dieselbe Bauart, derselbe Grund - und hier war
             // die Vorsilbe bis zum 20.11.2026 die EINZIGE, die niemand las: Der Riegel
             // nahm allein die Zahl aus der config.yml.
-            "freimarken.freistaedte.", "freimarken.extra.freistaedte.");
+            "freimarken.freistaedte.", "freimarken.extra.freistaedte.",
+            // 25.11.2026: Die zwei GEFRAGTEN Vorsilben - siehe den Klassenkopf
+            // oben. freimarken.stufe. und NICHT freimarken.rang.: Jenes ist schon
+            // das angemeldete Recht von /rang, und 31cy liesse mit dieser Vorsilbe
+            // jedes Stufenrecht ungeprueft durch (sie beginnt dann mit einem
+            // angemeldeten Recht plus Punkt).
+            "freimarken.welt.", "freimarken.stufe.");
 
     @Test
     @DisplayName("31am - jeder Sprungschluessel steht in der ausgelieferten config.yml")
@@ -4259,6 +4288,16 @@ class GrenzeTest {
         for (String recht : genannt) {
             if (angemeldet.contains(recht)
                     || RECHTE_VORSILBEN.contains(recht + ".")) {
+                continue;
+            }
+            // UNTER einer Vorsilbe steht ein frei gewaehlter Schluessel der
+            // config.yml, und eine ausgelieferte Datei darf ihn NENNEN: Der
+            // Kommentar bei welten.premium sagt "fuer vogtei also
+            // freimarken.welt.vogtei", und das ist die Zeile, die der Betreiber
+            // kopiert. Geprueft werden kann hier nur die Vorsilbe - was dahinter
+            // steht, weiss erst die Datei, die die Welten fuehrt. Dass vogtei
+            // DORT wirklich steht, haelt WeltenlisteTest mit der Namensliste.
+            if (RECHTE_VORSILBEN.stream().anyMatch(recht::startsWith)) {
                 continue;
             }
             ohneLeser.add(recht);

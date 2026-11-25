@@ -896,6 +896,47 @@ stehen mit URL im Lauf `w2b3suror`.
   spawn."* Inhalt steht: Holz-, Tier- und Monsterfarmen *"gerne noch zusaetzliche wie
   tiere oder pflanzen usw."*
 
+### ~~DREI BEFUNDE zur Vogtei~~ - GEBAUT am 25.11.2026
+
+- ~~Kein Zugangsrecht je Welt~~ - `welten.<welt>.premium: true` verlangt
+  `freimarken.welt.<welt>`, `welten.<welt>.ab-rang: siedler` verlangt
+  `freimarken.stufe.siedler`. Beides gilt UND. Regel in `Zutrittsregel`,
+  Stufenrechte aus `Rechtebuendel` (erreichte Stufe und jede darunter).
+- ~~/tpa ist die Umgehung~~ - der Riegel steht in `Reise.fuehre` VOR allem
+  anderen und deckt damit jeden Weg: Tor, /warp, /tpa, /zurueck,
+  Parzellensprung, Meldungssprung, Wolkenheimweg.
+- ~~Gattung der Vogtei~~ - Farmwelt ohne Besitz wie Kornmark (entschieden).
+- Dazu gebaut: Rettung beim Beitritt (wer drinsteht und sein Recht verliert,
+  kommt heim), Klage beim Start ueber eine `ab-rang`-Stufe, die es nicht gibt,
+  und eine Startzeile, die JEDE Schranke samt Recht nennt.
+- Werkswerte: `nether` ab `siedler`, `end` ab `buerger`, `vogtei` premium,
+  `stollenberg` offen. Startwerte 110926008 und 110926009.
+
+### ~~Tore nur von Hand in der YAML~~ - `tore.yml` und `/portal`, 25.11.2026
+
+- Die acht Torquader sind aus `welten.<welt>.tor` in die eigene Datei
+  `tore.yml` gezogen; das Plugin schreibt sie selbst. Eine
+  zurueckgebliebene `tor:`-Zeile in der `config.yml` wirkt NICHT und wird beim
+  Start einzeln beklagt (auf dem Probeserver nachgewiesen).
+- `/portal ecke` merkt zwei Ecken, `/portal setzen <welt>` macht daraus das
+  Tor, dazu `liste`, `entfernen <welt>`, `neuladen`. Recht
+  `freimarken.portal` (default op), bei der Rolle `verwalter`.
+- Vor dem Schreiben laeuft DIESELBE Pruefung wie beim Start (unbekannte Welt,
+  Tor nach nebenan, ausserhalb der Grenze, gemeinsame Bloecke). Ein
+  abgelehntes Tor laesst die Datei unberuehrt.
+- Die Torwache fragt das Buch bei jedem Schritt - ein gesetztes Tor wirkt
+  ohne Neustart.
+
+**Offen geblieben:**
+
+- **Kein Tor fuer Vogtei und Stollenberg**: Alle acht Nischen der vier
+  Torhaeuser sind belegt. Bis ein fuenftes Torhaus steht, fuehrt `/warp` hin.
+- **Anzeigenamen der Welten** (`"Vogtei - Farmwelt der Foerderer"`): Die
+  Absage nennt heute den Weltschluessel, nicht einen Anzeigenamen.
+- **`farmen`** - wartet auf die Map.
+
+Die drei Befunde selbst, zum Nachlesen:
+
 ### DREI BEFUNDE zur Vogtei - sie ist NICHT nur ein Eintrag in der config.yml
 
 Nachgesehen am 25.11.2026, und das korrigiert meine eigene Einschaetzung von vorhin:
@@ -1018,6 +1059,23 @@ steht ueberhaupt noch keine Prueffolge im TODO - sie ist vorher aufzuschreiben w
 Schritt 10.
 
 ## Schritt 16a: Moderation
+
+### Sichtung 25.11.2026: was in 16a noch offen ist
+
+- Offen, im Quelltext selbst benannt: `zurueckgeben` fehlt - eine Meldung in `IN_ARBEIT`
+  hat keinen Rueckweg (`Meldestand.java:30`). Ein Moderator, der aufhoert, laesst sie
+  stehen.
+- Offen, im Quelltext selbst benannt: die **Verwarnung** als vierte Strafart
+  (`Strafart.java:23`). Drei Stellen aendern sich mit: Konstante, `ausWort`, Recht je Art.
+- Offen, im Quelltext selbst benannt: mehrteilige Strafdauer (`1d12h`) gibt es nicht
+  (`Strafdauer.java:144`) - der Umweg ist `36h`.
+- Offen: **das Blockbuch hat keine Managerseite.** Der Moderator liest es im Spiel
+  (`config.yml:4017` gibt der Rolle das Recht), im Manager ist nur der
+  Einstellungsabschnitt verortet (`freimarken_felder.yml:30`); die Tabelle `blockbuch`
+  zeigt keine Seite.
+- Offen: die Katalogtafel des Managers fordert nur **Abschnitte** der `config.yml` ein,
+  nicht **Tabellen**. 22 von 30 Plugin-Tabellen haben weder Seite noch Begruendung -
+  darunter `grundstuecke` und `blockbuch`.
 
 ### Teil E: Moderation im Manager - 25.11.2026
 
@@ -1607,6 +1665,7 @@ Schritt 10.
 - GEBAUT: zweite Stufe `STUFE_SUPER_ADMIN` in `process_service`, an derselben Engstelle, durch die alle fuenf Sendewege gehen. `stufe_fuer_befehl` beantwortet WELCHE Stufe, `braucht_admin` bleibt die Frage "braucht das eine erhoehte Stufe" und behaelt seine vier Aufrufer.
 - Das Kuerzel `fm` steht mit in der Liste. Ohne es waere `/fm geld` der offene Weg - derselbe Grund, aus dem `pardon-ip` neben `pardon` steht.
 - OFFENE LUECKE, bewusst: Der Hauptname des Befehls kommt aus der Sprachdatei des Servers (`BundSatz.BEFEHL_FREIMARKEN`). Wer ihn dort umbenennt, steht nicht mehr in der Liste. Umbenennen kann nur, wer Serverdateien schreiben darf - dieselbe Vollmacht, gegen die hier nicht geschuetzt wird.
+- OFFEN, FUND 25.11.: `team` steht NICHT in `SUPER_ADMIN_ZWEIGE` (`process_service.py:1850`). Wer im Manager Konsolenrecht hat, aber kein Super-Admin ist, schickt `/freimarken team gib <sich> verwalter` und hat damit `freimarken.besitz` im Spiel - genau das Recht, das in der Liste zwei Zeilen hoeher steht. Im Spiel traegt der Weg zwei Riegel (`freimarken.team.vergeben` und "nur, wessen Rechte man selbst hat"), an der Konsole keinen: sie ist `null` und darf alles.
 - OFFEN: Die Konsole gibt NIE eine Antwort zurueck. `send_console_command` liefert hart `(True, "Befehl gesendet.")`, auch bei `UNBEKANNTER_SPIELER`, `NICHTS_ZU_BUCHEN` oder `NICHT_GEDECKT`. Eine Konten-Seite, die Erfolg meldet, meldet ihn also auch fuer eine nicht erfolgte Korrektur. Der Ausgang steht nur als Textzeile im Serverlog, hinter dem Wort `Ausgang `.
 - OFFEN, nur noch halb: Als Absender steht `CONSOLE` im Plugin-Protokoll, der Mensch nur im Manager-Audit. Das WARUM steht aber nicht mehr nirgends - `_sende` schreibt Befehl, Grund und "gesendet: ja/nein" ins Audit. Plan 12a.2 Regel 3 faellt auf zwei Buecher auseinander, aber keines fehlt.
 - ~~OFFEN: Goldmark laesst sich nicht korrigieren.~~ 23.11. GEBAUT: `/freimarken goldgeld <spieler> <betrag>`, zwei neue Gruende (`betreiber_goldgutschrift`/`-goldabzug`) im Goldbuch, Schranke eine Million statt einer Milliarde. Der Riegel ist der PARAMETERTYP (`bucheGold(Goldkasse ...)`), nicht ein zweiter Wurf. Im Manager: Waehrungsfeld auf der Kontenseite und `goldgeld` in SUPER_ADMIN_ZWEIGE unter BEIDEN Schluesseln - ohne das Kuerzel `fm` waere es ein Gelddruckrecht zum 800fachen Wert. Nebenbefund zur alten Zeile: `pruefeWaehrung` warf nie, weil kein Aufrufer die Goldkasse hereingab - der Wurf war die Mauer, nicht der Fehler.

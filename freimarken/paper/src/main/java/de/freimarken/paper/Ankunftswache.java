@@ -62,6 +62,7 @@ final class Ankunftswache implements Listener {
     private final Map<String, Weltangabe> nachSchluessel;
     private final Kasse kasse;
     private final Logger protokoll;
+    private final Nachher nachher;
 
     /**
      * Die Saetze dieses Plugins - verdrahtet, bevor der erste Satz umzieht.
@@ -79,12 +80,30 @@ final class Ankunftswache implements Listener {
      * @param kasse          um das Konto beim ersten Beitritt zu eroeffnen
      */
     Ankunftswache(World ankunftswelt, Map<String, Weltangabe> nachSchluessel, Kasse kasse,
-                  Logger protokoll, Sprache sprache) {
+                  Logger protokoll, Sprache sprache, Nachher nachher) {
         this.sprache = sprache;
         this.ankunftswelt = ankunftswelt;
         this.nachSchluessel = nachSchluessel;
         this.kasse = kasse;
         this.protokoll = protokoll;
+        this.nachher = nachher;
+    }
+
+    /**
+     * Etwas einen Tick spaeter tun - im Hauptfaden.
+     *
+     * <p><b>Warum ein Tick und nicht gleich</b> [25.11.2026]: Die Rechte eines
+     * Spielers setzt {@link Rangwache} selbst erst beim Beitritt
+     * ({@code PlayerJoinEvent}, {@code MONITOR}). Zwei Zuhoerer auf derselben
+     * Stufe laufen in unbestimmter Reihenfolge; wer vorher fragt, sieht die
+     * Rechtemenge von GESTERN. Ein Tick spaeter sind alle Zuhoerer durch - ohne
+     * dass diese Wache etwas ueber jene wissen muss.
+     *
+     * <p>Als Schnittstelle und nicht als {@code Plugin}-Feld: In einer Probe
+     * laeuft es sofort, und damit laeuft die Rettung dort ueberhaupt.
+     */
+    interface Nachher {
+        void gleichDanach(Runnable was);
     }
 
     /**
@@ -174,6 +193,45 @@ final class Ankunftswache implements Listener {
     public void beimBeitritt(PlayerJoinEvent ereignis) {
         eroeffneKonto(ereignis.getPlayer());
         richteSpielmodus(ereignis.getPlayer());
+        Player wer = ereignis.getPlayer();
+        nachher.gleichDanach(() -> holeHeim(wer));
+    }
+
+    /**
+     * Holt heim, wer in einer Welt steht, die ihm nicht mehr offensteht.
+     *
+     * <p><b>Der Fall, den {@link Zutrittsregel} allein nicht abdeckt</b>
+     * [25.11.2026]: Jene sitzt in {@link Reise} und sieht jeden Weg DORTHIN. Wer
+     * aber in der Vogtei abgemeldet hat und seine Mitgliedschaft verliert, reist
+     * nicht - er ist schon da. Dasselbe gilt, wenn ein Betreiber einer Welt
+     * nachtraeglich {@code premium: true} oder {@code ab-rang:} gibt: Alle, die
+     * gerade drin stehen, duerften bleiben.
+     *
+     * <p>Nicht in {@link #beimErscheinen}, obwohl das der frueheste Haken waere:
+     * Der laeuft VOR dem Beitritt und in einem anderen Faden, und die Rechte
+     * stehen dort noch nicht. Eine Welt zu laden kostet hier nichts - alle
+     * eigenen Welten stehen seit dem Start.
+     */
+    private void holeHeim(Player wer) {
+        if (!wer.isOnline()) {
+            return;
+        }
+        World welt = wer.getWorld();
+        if (welt.equals(ankunftswelt)) {
+            return;
+        }
+        Weltangabe angabe = nachSchluessel.get(welt.key().asString());
+        var absage = Zutrittsregel.pruefe(angabe, wer::hasPermission);
+        if (absage.isEmpty()) {
+            return;
+        }
+        wer.teleportAsync(ankunftswelt.getSpawnLocation(),
+                org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.PLUGIN);
+        heimgeholtZeilen(sprache, welt.key().asString(),
+                ankunftswelt.key().asString()).forEach(wer::sendMessage);
+        protokoll.info(wer.getName() + " stand in " + welt.key().asString()
+                + ", durfte dort aber nicht mehr sein (" + absage.get().grund()
+                + ") - heimgeholt nach " + ankunftswelt.key().asString() + ".");
     }
 
     /**
@@ -232,6 +290,12 @@ final class Ankunftswache implements Listener {
      * Umbruch im Quelltext ist keiner im Chat. Dass es eine bleibt, haelt
      * {@code SendewegTest} 33ak.
      */
+    static List<Component> heimgeholtZeilen(Sprache sprache, String welt,
+                                           String ziel) {
+        return sprache.bau(WacheSatz.ANKUNFT_HEIMGEHOLT, 1L,
+                Einsatz.von("welt", welt).mit("ziel", ziel));
+    }
+
     static List<Component> keinSpawnpunktZeilen(Sprache sprache) {
         return sprache.bau(WacheSatz.ANKUNFT_KEIN_SPAWNPUNKT, 1L, Einsatz.keine());
     }

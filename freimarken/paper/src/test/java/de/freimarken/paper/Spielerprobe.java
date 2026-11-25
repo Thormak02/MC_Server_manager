@@ -339,6 +339,10 @@ final class Spielerprobe {
                         gefuehrt.add("/" + werte[0]);
                         yield Boolean.TRUE;
                     }
+                    // IMMER angemeldet: Die Rettung der Ankunftswache laeuft einen
+                    // Tick nach dem Beitritt und fragt, ob er noch da ist. In einer
+                    // Probe gibt es diesen Tick nicht, also ist er es.
+                    case "isOnline" -> Boolean.TRUE;
                     case "toString" -> "Spielerprobe " + name;
                     case "hashCode" -> kennung.hashCode();
                     case "equals" -> eigen == (werte == null ? null : werte[0]);

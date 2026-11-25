@@ -1,0 +1,86 @@
+# ============================================================================
+# DIE TORE AM BUNDESMARKT
+# ============================================================================
+# Jedes Tor ist ein Quader in der Ankunftswelt (reisen.ankunftswelt, also
+# Altfurt). Wer hineintritt, reist in die Welt, deren Namen der Eintrag traegt.
+#
+# DIESE DATEI SCHREIBT DAS PLUGIN. /portal setzen <welt> und
+# /portal entfernen <welt> aendern sie im Spiel; dabei wird sie vollstaendig
+# neu geschrieben. Dieser Kopf und die Zeilen wo: bleiben dabei erhalten -
+# jeder ANDERE Kommentar, den du hier eintraegst, ist nach dem naechsten
+# /portal setzen weg. Deshalb ist wo: ein Wert und kein Kommentar: Was zu
+# einem Tor zu sagen ist, gehoert in diese Zeile.
+#
+# Von Hand aendern geht weiter. Die Datei wird beim Start gelesen, und
+# /portal neuladen liest sie erneut, ohne den Server zu stoppen.
+#
+# WARUM DIE TORE NICHT MEHR IN DER config.yml STEHEN [25.11.2026]: Sie standen
+# bis dahin bei welten.<welt>.tor, also an der Zielwelt. Das war richtig,
+# solange ein Tor nur von Hand eingetragen wurde - eine neue Welt blieb "ein
+# Eintrag plus Generator". Sobald das Plugin selbst Tore setzt, muesste es die
+# config.yml neu schreiben, und dabei gingen deren 4000 Zeilen Kommentar
+# verloren. Eine eigene Datei kann das Plugin verantworten.
+#
+# WO DIE ACHT AUSGELIEFERTEN TORE STEHEN: Es sind die Nischen der vier
+# Torhaeuser, je zwei - sie stehen in der config.yml unter bauten.torhaeuser,
+# und Torhausplan rechnet daraus die Quader. Altfurt ist art: flach, der Boden
+# also ueberall auf y -61 und der erste freie Block auf y -60. Darum ist jeder
+# Torquader drei Bloecke hoch von y -60 bis -58.
+#
+# DAS MAUERWERK IST VON HAND ZU BAUEN (Plan 2.1 nennt die Gebaeude). Bis dahin
+# ist ein Tor eine unsichtbare Tuer; das Protokoll sagt beim Start, durch welche
+# Tore niemand gehen kann - im Berg, in der Luft oder im Wasser.
+#
+# ZU JEDEM EINTRAG:
+#   wo:   eine Notiz, die das Plugin nicht auswertet - bei den ausgelieferten
+#         Toren ist es die Nische, aus der der Quader gerechnet ist. Die
+#         Nischen selbst stehen in der config.yml unter bauten.torhaeuser.
+#   von:  die eine Ecke, drei ganze Zahlen [x, y, z], eingeschlossen
+#   bis:  die andere Ecke, ebenso eingeschlossen
+#
+# WAS DER START PRUEFT - und bei einem Fund das BETROFFENE Tor verwirft, nicht
+# alle:
+#   1. Die Welt muss es geben (welten: in der config.yml).
+#   2. Kein Tor fuehrt in die Welt, in der es steht - das waere ein Tor nach
+#      nebenan.
+#   3. Kein Tor liegt ausserhalb der eingetragenen Grenze der Ankunftswelt.
+#      Dort kaeme niemand hin.
+#   4. Keine zwei Tore teilen sich Bloecke. Sonst entschiede die Reihenfolge
+#      der Eintraege, wohin ein Spieler reist.
+# /portal setzen prueft dasselbe VORHER und setzt nichts, was der Start
+# verwerfen wuerde.
+# ============================================================================
+
+tore:
+  marktstadt:
+    wo: "Osttorhaus, nordliche Nische - gerechnet von Torhausplan"
+    von: [106, -60, -4]
+    bis: [108, -58, -4]
+  freistaedte:
+    wo: "Osttorhaus, suedliche Nische - gerechnet von Torhausplan"
+    von: [106, -60, 4]
+    bis: [108, -58, 4]
+  hafenwerder:
+    wo: "Hafen von Altfurt (Plan 2.1) - Suedtorhaus, westliche Nische"
+    von: [-4, -60, 106]
+    bis: [-4, -58, 108]
+  wolkenwerder:
+    wo: "Suedtorhaus, oestliche Nische - gerechnet von Torhausplan"
+    von: [4, -60, 106]
+    bis: [4, -58, 108]
+  hochwald:
+    wo: "Forsttor (Plan 2.1) - Nordtorhaus, westliche Nische"
+    von: [-4, -60, -108]
+    bis: [-4, -58, -106]
+  kornmark:
+    wo: "Kornpforte (Plan 2.1) - Nordtorhaus, oestliche Nische"
+    von: [4, -60, -108]
+    bis: [4, -58, -106]
+  nether:
+    wo: "Westtorhaus, nordliche Nische - gerechnet von Torhausplan"
+    von: [-108, -60, -4]
+    bis: [-106, -58, -4]
+  end:
+    wo: "Westtorhaus, suedliche Nische - gerechnet von Torhausplan"
+    von: [-108, -60, 4]
+    bis: [-106, -58, 4]

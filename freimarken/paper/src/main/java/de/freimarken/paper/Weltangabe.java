@@ -20,11 +20,15 @@ import org.bukkit.World;
  * @param kante            Wunschkante der Weltgrenze in Bloecken; 0 heisst: keine setzen
  * @param sprungBestaetigt der Text, der einen Sprung ueber das Doppelte freigibt
  * @param spielmodus       in welchem Modus ein Spieler diese Welt betritt
- * @param tor              das Tor am Bundesmarkt, das HIERHER fuehrt - oder {@code null}
+ * @param premium          ob diese Welt nur Mitgliedern offensteht; dann wird das
+ *                         Recht {@code freimarken.welt.<name>} verlangt
+ * @param abRang           ab welcher Rangstufe diese Welt offensteht, oder
+ *                         {@code ""} fuer keine Schranke; dann wird das Recht
+ *                         {@code freimarken.stufe.<abRang>} verlangt
  */
 record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
                   Long startwert, int kante, String sprungBestaetigt,
-                  GameMode spielmodus, Quader tor) {
+                  GameMode spielmodus, boolean premium, String abRang) {
 
     /**
      * Woher die Bloecke kommen.
@@ -189,15 +193,31 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
         };
     }
 
+    // EIN TOR GEHOERT SEIT DEM 25.11.2026 NICHT MEHR HIERHER [Torbuch].
+    //
+    // Es stand bis dahin am Eintrag der ZIELwelt, und der Grund dafuer war gut:
+    // Eine neue Welt blieb damit "ein Eintrag plus Generator" und war nicht ein
+    // Eintrag plus ein vergessenes Tor (Plan 4.3). Was den Umzug erzwungen hat, ist
+    // nicht die Ordnung, sondern das SCHREIBEN: /portal setzen muesste sonst die
+    // config.yml neu schreiben, und Bukkits Schreiber wirft jeden Kommentar weg -
+    // hier sind das 4000 Zeilen Anleitung.
+    //
+    // Die Abweichung, vor der der alte Satz schuetzte, faengt jetzt eine Pruefung:
+    // Ein Tor in eine Welt, die unter welten: nicht steht, wird beim Start
+    // verworfen und beklagt (Torbuch.pruefe, Fall 1).
+
     /**
-     * Ob ein Tor am Bundesmarkt hierher fuehrt.
+     * Ob diese Welt eine Rangschranke fuehrt.
      *
-     * <p>Das Tor steht am Eintrag der ZIELwelt und nicht in einer eigenen Liste. Plan 4.3
-     * verlangt genau das: Eine neue Welt bleibt „ein Eintrag plus Generator" und ist nicht
-     * ein Eintrag plus ein vergessenes Tor. Und die Tore koennen so nicht von der
-     * Weltenliste abweichen - es gibt nur eine Liste.
+     * <p>Leer und nicht {@code null} fuer "keine" - wie bei
+     * {@link #sprungBestaetigt} und aus demselben Grund: Der Leser trimmt, und
+     * eine fehlende Zeile und eine leere Zeile sind derselbe Fall. Wer hier gegen
+     * {@code null} fragte, haette den zweiten uebersehen.
+     *
+     * <p>Was die Stufe BEDEUTET, steht nicht hier, sondern in
+     * {@link Zutrittsregel}: Diese Angabe ist das, was in der Datei steht.
      */
-    boolean hatTor() {
-        return tor != null;
+    boolean hatRangschranke() {
+        return abRang != null && !abRang.isBlank();
     }
 }

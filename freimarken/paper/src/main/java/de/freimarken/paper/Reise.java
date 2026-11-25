@@ -68,12 +68,35 @@ final class Reise {
      */
     private final Sprache sprache;
 
+    /**
+     * Ob dieser Spieler in diese Welt darf - eine Zeile, keine Weltenliste.
+     *
+     * <p>{@code Weltangabe} kommt in dieser Klasse nicht vor, und das soll so
+     * bleiben: Eine Reise weiss, wohin sie geht, nicht wie die Welt eingetragen
+     * ist. Der Aufrufer gibt die Frage herein (im Plugin ein Blick in
+     * {@code nachSchluessel}, in einer Probe ein Lambda), und damit laeuft jede
+     * Rechtelage ohne Server durch.
+     */
+    private final Zutritt zutritt;
+
     Reise(Logger protokoll, Rueckweg rueckweg, Aufwaermzeit aufwaermzeit,
-          Sprache sprache) {
+          Sprache sprache, Zutritt zutritt) {
         this.sprache = sprache;
         this.protokoll = protokoll;
         this.rueckweg = rueckweg;
         this.aufwaermzeit = aufwaermzeit;
+        this.zutritt = zutritt;
+    }
+
+    /**
+     * Die Zutrittsfrage, wie {@link Reise} sie stellt.
+     *
+     * <p>Antwortet mit einer {@link Zutrittsregel.Absage} oder mit nichts. Die
+     * REGEL steht in {@link Zutrittsregel} und ist dort ohne Server pruefbar;
+     * diese Schnittstelle traegt nur die zwei Dinge hinein, die eine Reise hat.
+     */
+    interface Zutritt {
+        Optional<Zutrittsregel.Absage> absage(Player spieler, World welt);
     }
 
     /**
@@ -130,6 +153,33 @@ final class Reise {
         // Tor eine zweite Reise anstossen, die dann an der Abklingzeit scheitert - zwei
         // Meldungen fuer einen Schritt.
         if (aufwaermzeit.laeuft(spieler.getUniqueId())) {
+            return;
+        }
+        // DIE ZUTRITTSFRAGE ZUERST, und das aus drei Gruenden - der dritte ist
+        // gemessen und der eigentliche:
+        //
+        // 1. Wer dort nicht hin darf, soll ueber den Zustand des Ziels nichts
+        //    erfahren. "Dort ist kein Platz zum Stehen mehr" ist eine Auskunft
+        //    ueber eine Welt, in die er nicht gehoert.
+        // 2. Vor der Abklingzeit, damit eine abgewiesene Reise sie nicht
+        //    verbraucht - dieselbe Reihenfolge wie bei den Hindernissen.
+        // 3. HINTER pruefe waere dieser Riegel in keiner Probe erreichbar: pruefe
+        //    fragt ueber Ankunftspunkt.taugt den Boden, und Material.isSolid geht in
+        //    die Bukkit-Registry - die wirft ohne laufenden Server. Genau daran ist
+        //    die Probe 41k in WarpBefehlTest gescheitert. Ein Riegel, dessen WIRKUNG
+        //    keine Probe sehen kann, ist eine Zusage im Quelltext und kein Zeuge.
+        //
+        // EINMAL gefragt und nicht wie pruefe zweimal: Jene laeuft wieder, weil sich
+        // in drei Sekunden der Boden am Ziel aendern kann. Ein Recht aendert sich in
+        // dieser Zeit nicht von selbst, und wer es waehrend des Aufwaermens verliert,
+        // hat den Weg vorher begonnen.
+        //
+        // ziel kann null sein (pruefe faengt es zwei Zeilen weiter) - dann gibt es
+        // keine Welt und keine Schranke, und die Absage kommt von dort.
+        Optional<Zutrittsregel.Absage> absage =
+                zutritt.absage(spieler, ziel == null ? null : ziel.getWorld());
+        if (absage.isPresent()) {
+            zutrittZeilen(sprache, absage.get(), name).forEach(spieler::sendMessage);
             return;
         }
         Optional<Hindernis> klage = pruefe(spieler, ziel);
@@ -330,6 +380,26 @@ final class Reise {
                     ReiseSatz.HINDERNIS_AUSSERHALB_DER_WELTGRENZE;
             case KEIN_PLATZ_MEHR -> ReiseSatz.HINDERNIS_KEIN_PLATZ_MEHR;
         }, 1L, Einsatz.keine());
+    }
+
+    /**
+     * Der Satz zu einer {@link Zutrittsregel.Absage} - die EINE Stelle.
+     *
+     * <p>{@code ziel} ist der Name, unter dem die Reise angetreten wurde - bei
+     * {@code /tpa} also ein Spielername. Das ist Absicht: Wer Anna folgen will und
+     * abgewiesen wird, soll "zu Anna" lesen und nicht den Schluessel der Welt, in
+     * der sie gerade steht.
+     */
+    static List<Component> zutrittZeilen(Sprache sprache,
+                                        Zutrittsregel.Absage absage, String ziel) {
+        return switch (absage.grund()) {
+            case NUR_FUER_MITGLIEDER -> sprache.bau(
+                    ReiseSatz.ZUTRITT_NUR_FUER_MITGLIEDER, 1L,
+                    Einsatz.von("ziel", ziel));
+            case RANG_ZU_NIEDRIG -> sprache.bau(
+                    ReiseSatz.ZUTRITT_RANG_ZU_NIEDRIG, 1L,
+                    Einsatz.von("ziel", ziel).mit("rang", absage.rang()));
+        };
     }
 
     /** Keine Absage - die Reise laeuft danach weiter. Nur bei Weltwechsel MIT Tier. */

@@ -97,6 +97,16 @@ enum BundSatz implements Satz {
     /** Die Beschreibung von {@code /einsehen} in der Befehlsliste [Schritt 16a Teil D]. */
     BEFEHL_EINSEHEN("befehl.beschreibung.einsehen", Art.WORT),
 
+    /**
+     * {@code /portal} - das Betreiberwerkzeug fuer die Tore am Bundesmarkt.
+     *
+     * <p>Auch dieser Name steht in der Sprachdatei, obwohl ihn nur ein Verwalter
+     * tippt: Die Hausregel kennt keine Ausnahme fuer Betreiberbefehle, und ein
+     * deutscher Server, auf dem ein Befehl englisch heisst, hat genau dort einen
+     * Bruch.
+     */
+    BEFEHL_PORTAL("befehl.beschreibung.portal", Art.WORT),
+
     // --- Das nackte /freimarken: vier oder fuenf Chatzeilen -----------------
     STAND_KOPF("stand.kopf", Art.SATZ),
     STAND_VERSION("stand.version", Art.SATZ, "version", "java", "minecraft"),

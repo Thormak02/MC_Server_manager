@@ -525,6 +525,17 @@ class BildGleichTest {
                         "&#d9564dDorthin geht es nicht - der Ort liegt ausserhalb der Weltgrenze."),
                 new Zeile(ReiseSatz.HINDERNIS_KEIN_PLATZ_MEHR, 1L, Einsatz.keine(),
                         "&#d9564dDort ist kein Platz zum Stehen mehr."),
+                // Die zwei Zutrittssaetze. Sie gehoeren NICHT zu den fuenf
+                // Hindernissen darueber: Jene sagen, dass es dort gerade nicht
+                // geht, diese, dass es fuer DICH nicht geht. Beide tragen {ziel},
+                // und {ziel} ist bei /tpa ein SPIELERname - darum steht hier Bert
+                // und nicht kornmark.
+                new Zeile(ReiseSatz.ZUTRITT_NUR_FUER_MITGLIEDER, 1L,
+                        Einsatz.von("ziel", "Bert"),
+                        "&#d9564dDie Reise nach Bert geht nicht - diese Welt steht nur Mitgliedern offen."),
+                new Zeile(ReiseSatz.ZUTRITT_RANG_ZU_NIEDRIG, 1L,
+                        Einsatz.von("ziel", "Bert").mit("rang", "siedler"),
+                        "&#d9564dDie Reise nach Bert geht noch nicht - diese Welt verlangt den Rang siedler."),
                 new Zeile(ReiseSatz.LEINE_REISST, 1L, Einsatz.keine(),
                         "&#e3c57eAngeleinte Tiere bleiben zurueck - eine Leine reisst beim Weltwechsel."),
                 new Zeile(ReiseSatz.NICHT_GEKLAPPT, 1L, Einsatz.von("ziel", "Bert"),
@@ -704,6 +715,12 @@ class BildGleichTest {
                 new Zeile(WacheSatz.ANKUNFT_ABENTEUER, 1L, Einsatz.keine(),
                         "&#a5b4bfHier ist Abenteuer: ansehen und benutzen, aber nicht abbauen."
                                 + " Gebaut wird in der Marktstadt."),
+                // Die Rettung: EIN Satz fuer beide Gruende, und darum nennt er
+                // keinen. Welcher es war, steht im Serverprotokoll.
+                new Zeile(WacheSatz.ANKUNFT_HEIMGEHOLT, 1L,
+                        Einsatz.von("welt", "freimarken:vogtei")
+                                .mit("ziel", "freimarken:altfurt"),
+                        "&#d9564dfreimarken:vogtei steht dir nicht mehr offen - du bist jetzt in freimarken:altfurt."),
                 // Und der Gegenfall: ZWEI Chatzeilen aus EINEM Schluessel, rot und
                 // grau. Der Schwanz " - oder durch ein Tor am Bundesmarkt." steht
                 // damit zum zweiten Mal in dieser Tabelle - oben in
@@ -2975,7 +2992,80 @@ class BildGleichTest {
                 new Zeile(EinsichtSatz.NUR_SEHEN, 1L, Einsatz.keine(),
                         "&#d9564dEinsehen heisst hinsehen - nehmen kannst du hier nichts."),
                 new Zeile(EinsichtSatz.NUR_SPIELER, 1L, Einsatz.keine(),
-                        "&#d9564dEinsehen kann ein Spieler - die Konsole klickt nicht in Kisten."));
+                        "&#d9564dEinsehen kann ein Spieler - die Konsole klickt nicht in Kisten."),
+                // /portal [25.11.2026]. Die Zahlen sind NACKT und ohne
+                // Tausenderpunkt - sie werden mit der F3-Anzeige verglichen, und
+                // die zeigt auch keinen. Darum stehen hier echte Koordinaten aus
+                // Altfurt (y -60 bis -58) und keine runden Zahlen.
+                new Zeile(PortalSatz.ERSTE_ECKE, 1L,
+                        Einsatz.von("x", "106").mit("y", "-60").mit("z", "-4"),
+                        "&#e3c57eErste Ecke gemerkt bei 106/-60/-4. Jetzt an die andere stellen und /portal ecke noch einmal."),
+                // DER SATZ MIT DER MASKIERTEN KLAMMER: In der Vorlage steht
+                // \\<welt>, im Chat steht <welt>. Ohne die Maskierung laedt die
+                // ganze Datei nicht - MiniMessage liest <welt> als Farbrolle und
+                // reisst jede Probe mit, die die Vorlage laedt (gemessen am
+                // 25.11.2026: 930 rote Proben aus EINER Zeile).
+                new Zeile(PortalSatz.ZWEITE_ECKE, 1L,
+                        Einsatz.von("von", "106/-60/-4").mit("bis", "108/-58/-4")
+                                .mit("bloecke", 9L),
+                        "&#e3c57eQuader gemerkt: 106/-60/-4 bis 108/-58/-4, 9 Bloecke. Jetzt /portal setzen <welt>."),
+                new Zeile(PortalSatz.ECKE_FALSCHE_WELT, 1L,
+                        Einsatz.von("welt", "kornmark").mit("ankunftswelt", "altfurt"),
+                        "&#d9564dHier nicht - du stehst in kornmark, die Tore stehen in altfurt."),
+                new Zeile(PortalSatz.OHNE_ECKEN, 1L, Einsatz.keine(),
+                        "&#d9564dErst zwei Ecken merken: stell dich in die eine, /portal ecke, dann in die andere und noch einmal."),
+                new Zeile(PortalSatz.UNBEKANNTE_WELT, 1L, Einsatz.von("welt", "vogtei"),
+                        "&#d9564dDie Welt vogtei gibt es nicht - unter welten: in der config.yml steht kein solcher Eintrag."),
+                // {grund} ist die Klage des PROGRAMMS - hier gekuerzt, im Spiel
+                // nennt sie Zahlen. Genau darum steht sie nicht in der Vorlage.
+                new Zeile(PortalSatz.ABGELEHNT, 1L,
+                        Einsatz.von("grund", "Tor nach nebenan."),
+                        "&#d9564dDas Tor wird nicht gesetzt: Tor nach nebenan."),
+                new Zeile(PortalSatz.GESETZT, 1L,
+                        Einsatz.von("welt", "vogtei").mit("von", "106/-60/-4")
+                                .mit("bis", "108/-58/-4"),
+                        "&#e3c57eTor nach vogtei gesetzt: 106/-60/-4 bis 108/-58/-4. Es wirkt sofort."),
+                new Zeile(PortalSatz.NICHT_GESCHRIEBEN, 1L,
+                        Einsatz.von("datei", "tore.yml"),
+                        "&#d9564dtore.yml liess sich nicht schreiben - das Tor gilt bis zum naechsten Start und danach nicht mehr. Der Grund steht im Serverprotokoll."),
+                // DREI Zeilen je gezaehltem Satz - 1, 2 UND 0. Die Null faengt
+                // den Fall, in dem die Mehrzahlform mit 0 ankommt: "0 Tore" ist
+                // richtig, "0 Tor" waere es nicht. Im Spiel kann /portal liste
+                // die Null nicht erreichen (dann kommt liste.leer), aber die
+                // Tafel prueft den SATZ und nicht den Weg dorthin.
+                new Zeile(PortalSatz.LISTE_KOPF, 1L, Einsatz.von("anzahl", 1L),
+                        "&#a5b4bfAm Bundesmarkt steht 1 Tor:"),
+                new Zeile(PortalSatz.LISTE_KOPF, 2L, Einsatz.von("anzahl", 2L),
+                        "&#a5b4bfAm Bundesmarkt stehen 2 Tore:"),
+                new Zeile(PortalSatz.LISTE_KOPF, 0L, Einsatz.von("anzahl", 0L),
+                        "&#a5b4bfAm Bundesmarkt stehen 0 Tore:"),
+                new Zeile(PortalSatz.LISTE_ZEILE, 1L,
+                        Einsatz.von("welt", "marktstadt").mit("von", "106/-60/-4")
+                                .mit("bis", "108/-58/-4")
+                                .mit("wo", "Osttorhaus, nordliche Nische"),
+                        "&#a5b4bfmarktstadt&#6e7a82 - 106/-60/-4 bis 108/-58/-4 (Osttorhaus, nordliche Nische)"),
+                new Zeile(PortalSatz.LISTE_LEER, 1L, Einsatz.keine(),
+                        "&#a5b4bfAm Bundesmarkt steht kein Tor - gereist wird nur mit /warp."),
+                new Zeile(PortalSatz.ENTFERNT, 1L, Einsatz.von("welt", "vogtei"),
+                        "&#e3c57eTor nach vogtei entfernt. Dorthin kommt man jetzt nur mit /warp."),
+                new Zeile(PortalSatz.KEIN_TOR, 1L, Einsatz.von("welt", "vogtei"),
+                        "&#d9564dNach vogtei fuehrt kein Tor."),
+                new Zeile(PortalSatz.NEU_GELESEN, 1L, Einsatz.von("anzahl", 1L),
+                        "&#e3c57etore.yml neu gelesen - 1 Tor."),
+                new Zeile(PortalSatz.NEU_GELESEN, 2L, Einsatz.von("anzahl", 2L),
+                        "&#e3c57etore.yml neu gelesen - 2 Tore."),
+                // Die Null IST hier erreichbar: Wer das letzte Tor entfernt und
+                // dann neu laedt, liest sie.
+                new Zeile(PortalSatz.NEU_GELESEN, 0L, Einsatz.von("anzahl", 0L),
+                        "&#e3c57etore.yml neu gelesen - 0 Tore."),
+                new Zeile(PortalSatz.NEULADEN_KLAGT, 1L, Einsatz.von("anzahl", 1L),
+                        "&#d9564dtore.yml neu gelesen, aber 1 Klage steht im Serverprotokoll."),
+                new Zeile(PortalSatz.NEULADEN_KLAGT, 2L, Einsatz.von("anzahl", 2L),
+                        "&#d9564dtore.yml neu gelesen, aber 2 Klagen stehen im Serverprotokoll."),
+                new Zeile(PortalSatz.NEULADEN_KLAGT, 0L, Einsatz.von("anzahl", 0L),
+                        "&#d9564dtore.yml neu gelesen, aber 0 Klagen stehen im Serverprotokoll."),
+                new Zeile(PortalSatz.NUR_SPIELER, 1L, Einsatz.keine(),
+                        "&#d9564d/portal geht nur im Spiel - die Konsole steht nirgends."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

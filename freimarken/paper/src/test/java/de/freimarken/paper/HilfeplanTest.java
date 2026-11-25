@@ -213,7 +213,8 @@ class HilfeplanTest {
                         // Schritt 16a Teil D: /einsehen traegt sein eigenes
                         // Recht. Kein JEDER wie /melden: Wer es tippen kann,
                         // oeffnet damit fremde Behaelter.
-                        Map.entry("einsehen", EinsichtBefehle.RECHT))),
+                        Map.entry("einsehen", EinsichtBefehle.RECHT),
+                        Map.entry("portal", PortalBefehle.RECHT))),
                 gebaut, "Ein Eintrag traegt ein anderes Recht als sein Befehl.");
     }
 

@@ -28,7 +28,7 @@ class WeltenlisteTest {
     private static Weltenliste.Ergebnis lies(String yaml) {
         return Weltenliste.ausKonfiguration(
                 YamlConfiguration.loadConfiguration(new java.io.StringReader(yaml))
-                        .getConfigurationSection("welten"), "marktstadt", "altfurt",
+                        .getConfigurationSection("welten"), "marktstadt",
                 "freistaedte", "hafenwerder", "wolkenwerder");
     }
 
@@ -425,7 +425,7 @@ class WeltenlisteTest {
             var datei = YamlConfiguration.loadConfiguration(new java.io.InputStreamReader(
                     strom, java.nio.charset.StandardCharsets.UTF_8));
             var ergebnis = Weltenliste.ausKonfiguration(
-                    datei.getConfigurationSection("welten"), "marktstadt", "altfurt",
+                    datei.getConfigurationSection("welten"), "marktstadt",
                 "freistaedte", "hafenwerder", "wolkenwerder");
 
             assertTrue(ergebnis.klagen().isEmpty(),
@@ -469,7 +469,7 @@ class WeltenlisteTest {
             // Stelle, an der er vorher auffaellt.
             assertEquals(java.util.List.of("marktstadt", "altfurt", "freistaedte",
                             "hafenwerder", "wolkenwerder", "hochwald", "kornmark",
-                            "nether", "end"),
+                            "nether", "end", "vogtei", "stollenberg"),
                     ergebnis.welten().stream().map(Weltangabe::name).toList(),
                     "die Weltnamen aus Plan Abschnitt 4");
 
@@ -481,120 +481,31 @@ class WeltenlisteTest {
                     .filter(w -> w.name().equals("altfurt")).findFirst().orElseThrow();
             assertEquals(GameMode.ADVENTURE, altfurt.spielmodus(),
                     "Plan Abschnitt 4 fuehrt Altfurt als Abenteuer");
-            assertTrue(!altfurt.hatTor(), "in Altfurt stehen die Tore, keines fuehrt hinein");
-            assertEquals(8, ergebnis.welten().stream().filter(Weltangabe::hatTor).count(),
-                    "acht Ziele, acht Tore - Wolkenwerder ist seit dem 18.11.2026 das achte");
-            ergebnis.welten().stream().filter(w -> !w.name().equals("altfurt"))
-                    .forEach(w -> assertTrue(w.hatTor(),
-                            "ohne Tor kaeme man nur mit /warp hin: " + w.name()));
+
+            // Die Zugangsfelder der ausgelieferten Datei [25.11.2026]. Ohne diese
+            // vier Zeilen stuende die Entscheidung "Nether ab Siedler, Ende ab
+            // Buerger, Vogtei nur fuer Mitglieder" nur in einer YAML-Zeile, die
+            // ein Umbau stumm verlieren kann - premium: fehlt heisst OFFEN.
+            var nachName = ergebnis.welten().stream()
+                    .collect(java.util.stream.Collectors.toMap(Weltangabe::name,
+                            w -> w));
+            assertEquals("siedler", nachName.get("nether").abRang());
+            assertEquals("buerger", nachName.get("end").abRang());
+            assertTrue(nachName.get("vogtei").premium(),
+                    "die Vogtei ist die Mitgliederwelt");
+            assertTrue(!nachName.get("stollenberg").premium(),
+                    "der Stollenberg steht jedem offen");
+            assertEquals(1, ergebnis.welten().stream()
+                            .filter(Weltangabe::premium).count(),
+                    "genau EINE Premiumwelt - jede weitere ist eine Entscheidung");
+            assertEquals(2, ergebnis.welten().stream()
+                            .filter(Weltangabe::hatRangschranke).count(),
+                    "genau ZWEI Rangschranken: Nether und Ende");
+            // DIE TORE STEHEN SEIT DEM 25.11.2026 NICHT MEHR HIER [Torbuch].
+            // Welche Welt ein Tor hat, welche keines, und dass jedes in der Nische
+            // seines Torhauses liegt, prueft TorbuchTest gegen tore.yml - samt der
+            // Begruendung, warum vogtei und stollenberg keines haben koennen.
         }
-    }
-
-    @Test
-    @DisplayName("Jedes Tor der ausgelieferten Datei liegt in der Nische seines Torhauses")
-    void dieToreLiegenInDenNischen() throws Exception {
-        // WARUM ES DIESE TAFEL GIBT [18.11.2026, neu gefasst 23.11.2026]. Mit
-        // Wolkenwerder kam ein achtes Tor in die ausgelieferte Datei, und es fiel aus der
-        // Reihe: Die Wand am Bundesmarkt war 32 Bloecke breit, acht Durchgaenge brauchen
-        // aber 33. Keine Probe hat das gesehen - die Probe darueber prueft, dass die
-        // Datei klaglos liest und dass acht Welten ein Tor haben. Das ist alles wahr und
-        // sagt ueber den ORT der Tore nichts.
-        //
-        // WAS SICH GEAENDERT HAT: Die Tore stehen nicht mehr in EINER Wand. Der
-        // Betreiber hat am 23.11.2026 entschieden, dass die Stadtmauer GESCHLOSSEN ist
-        // und die Weltportale in den vier TORHAEUSERN stehen - je zwei, links und rechts
-        // im Durchgang, mit dem Diorama der Zielwelt dahinter. Die alte Zusage "eine
-        // Wand, Schritt 4" ist damit falsch geworden; sie durfte nicht einfach
-        // verschwinden, sondern musste durch die staerkere ersetzt werden:
-        //
-        // JEDES TOR MUSS IN DER NISCHE LIEGEN, DIE SEIN TORHAUS BAUT. Der Quader steht in
-        // welten:, die Nische rechnet Torhausplan. Weichen sie ab, steht das Portal in
-        // einer Wand - ein Torhaus mit einer Nische, in der nichts passiert. Das faellt
-        // im Spiel erst auf, wenn jemand hineinlaeuft und nicht reist; hier faellt es
-        // beim Bauen auf.
-        var ergebnis = ausgelieferteListe();
-        assertTrue(ergebnis.klagen().isEmpty(),
-                "die ausgelieferte Datei klagt: " + ergebnis.klagen());
-
-        var datei = ausgelieferteKonfiguration();
-        var klagen = new java.util.ArrayList<String>();
-        var torhaeuser = Torhausliste.ausKonfiguration(datei, klagen);
-        assertEquals(List.of(), klagen,
-                "die Torhaeuser der ausgelieferten Datei muessen sauber lesen: " + klagen);
-        var stadt = Stadtliste.ausKonfiguration(datei, 800, klagen).plan();
-        assertNotNull(stadt, "die ausgelieferte Datei baut eine Stadt");
-        assertEquals(List.of(), klagen, "und auch sie liest sauber: " + klagen);
-
-        int geprueft = 0;
-        for (var seite : de.freimarken.kern.Richtung.values()) {
-            var haus = torhaeuser.tor(seite);
-            assertNotNull(haus, "die ausgelieferte Datei hat je Seite ein Torhaus - "
-                    + seite.wort() + " fehlt");
-            var plan = de.freimarken.kern.Torhausplan.inDerMauer(stadt, seite);
-            for (boolean links : new boolean[] {true, false}) {
-                String name = links ? haus.links() : haus.rechts();
-                assertNotNull(name, seite.wort() + ": die Nische "
-                        + (links ? "links" : "rechts") + " hat keine Welt");
-                var angabe = ergebnis.welten().stream()
-                        .filter(w -> w.name().equals(name)).findFirst().orElse(null);
-                assertNotNull(angabe, seite.wort() + ": die Welt \"" + name
-                        + "\" steht nicht im Abschnitt welten:");
-                assertEquals(plan.nische(links), angabe.tor(),
-                        "das Tor nach " + name + " muss in der Nische des "
-                                + seite.wort() + "-Torhauses liegen");
-                geprueft++;
-            }
-        }
-        // GEGEN DIE ZAHL UND NICHT GEGEN "NICHT LEER": Vier Torhaeuser mit je zwei
-        // Nischen sind acht Tore, und acht Ziele hat die Datei. Ein Filter, der aus
-        // Versehen alles wegwirft, liesse die Schleife ins Leere laufen.
-        assertEquals(8, geprueft, "acht Tore in vier Torhaeusern");
-        assertEquals(geprueft, ergebnis.welten().stream().filter(Weltangabe::hatTor)
-                .count(), "und kein Tor steht ausserhalb eines Torhauses");
-
-        // DIE FORM BLEIBT EINE TUER UND KEIN GANG: drei hoch, drei breit, EINEN Block
-        // dick. Welche Achse die dicke ist, haengt jetzt an der Seite - an Nord und Sued
-        // steht die Nische in einer Wand, die laengs x laeuft, an Ost und West quer dazu.
-        int gemessen = 0;
-        for (var welt : ergebnis.welten()) {
-            if (!welt.hatTor()) {
-                continue;
-            }
-            var q = welt.tor();
-            int kx = q.bisX() - q.vonX() + 1;
-            int ky = q.bisY() - q.vonY() + 1;
-            int kz = q.bisZ() - q.vonZ() + 1;
-            assertEquals(3, ky, "Tuerhoehe 3 - das Tor nach " + welt.name());
-            assertTrue((kx == 1 && kz == 3) || (kx == 3 && kz == 1),
-                    "ein Tor ist eine Tuer und kein Gang: das Tor nach " + welt.name()
-                            + " ist " + kx + " x " + kz + " in der Ebene");
-            assertEquals(Stadtplan.BODEN_Y + 1, q.vonY(),
-                    "es beginnt auf der Lauf-Ebene - wer hineingeht, springt nicht: "
-                            + welt.name());
-            gemessen++;
-        }
-        assertEquals(8, gemessen, "jeder Quader ist angesehen");
-
-        // UND KEIN TOR TEILT EINEN BLOCK MIT EINEM ANDEREN. Hier wird nichts geglaubt:
-        // Jedes Paar wird gegeneinander gehalten, und die Zahl der Paare ist
-        // nachgerechnet - sonst liesse ein Filter, der alles wegwirft, die Schleife ins
-        // Leere laufen. Zwei Tore auf demselben Block hiessen: Welches Ziel man
-        // erreicht, entscheidet die Reihenfolge der Eintraege.
-        var tore = ergebnis.welten().stream().filter(Weltangabe::hatTor).toList();
-        int gemessenePaare = 0;
-        for (int i = 0; i < tore.size(); i++) {
-            for (int j = i + 1; j < tore.size(); j++) {
-                gemessenePaare++;
-                assertFalse(tore.get(i).tor().schneidet(tore.get(j).tor()),
-                        "die Tore nach " + tore.get(i).name() + " ("
-                                + tore.get(i).tor().alsText() + ") und "
-                                + tore.get(j).name() + " ("
-                                + tore.get(j).tor().alsText()
-                                + ") haben Bloecke gemeinsam");
-            }
-        }
-        assertEquals(tore.size() * (tore.size() - 1) / 2, gemessenePaare,
-                "jedes Paar ist gegeneinander gehalten");
     }
 
     @Test
@@ -833,7 +744,7 @@ class WeltenlisteTest {
         eigene.setDefaults(vorgabe);
 
         var ergebnis = Weltenliste.ausKonfiguration(
-                eigene.getConfigurationSection("welten"), "marktstadt", "altfurt",
+                eigene.getConfigurationSection("welten"), "marktstadt",
                 "freistaedte", "hafenwerder", "wolkenwerder");
 
         assertEquals(java.util.List.of("marktstadt"),
@@ -879,8 +790,60 @@ class WeltenlisteTest {
     }
 
     @Test
-    @DisplayName("Ein Tor steht am Eintrag der Zielwelt")
-    void torAmEintragDerZielwelt() {
+    @DisplayName("premium: ja gilt als GESPERRT und wird beklagt - nicht stumm als offen")
+    void premiumMitFalschemWort() {
+        // DER VERTIPPER, DER GEMEINT IST: YAML liest jedes Wort ausser true als
+        // false. Ohne diese Klage stuende eine Mitgliederwelt fuer alle offen, und
+        // nichts in der Datei saehe falsch aus. Der Rueckfall macht ZU und nicht
+        // auf: Wer premium schreibt, hat etwas gemeint.
+        var ergebnis = lies("""
+                welten:
+                  altfurt:
+                    art: gewoehnlich
+                  vogtei:
+                    art: gewoehnlich
+                    premium: ja
+                """);
+
+        assertEquals(1, ergebnis.klagen().size(), ergebnis.klagen().toString());
+        assertTrue(ergebnis.klagen().get(0).contains("welten.vogtei.premium"),
+                ergebnis.klagen().get(0));
+        assertTrue(ergebnis.klagen().get(0).contains("weder true noch false"),
+                ergebnis.klagen().get(0));
+        assertTrue(ergebnis.welten().get(1).premium(),
+                "der sichere Rueckfall ist ZU - sonst waere der Vertipper schlimmer als die Klage");
+    }
+
+    @Test
+    @DisplayName("Eine FEHLENDE premium-Zeile heisst offen - ohne Klage")
+    void ohnePremiumZeileOffen() {
+        // Das Gegenbeispiel, ohne das die Probe darueber auch mit einem Riegel
+        // gruen waere, der JEDE Welt sperrt: Neun von elf Welten haben keine
+        // premium-Zeile, und eine Klage je Welt machte das Startprotokoll
+        // unlesbar.
+        var ergebnis = lies("""
+                welten:
+                  altfurt:
+                    art: gewoehnlich
+                """);
+
+        assertEquals(List.of(), ergebnis.klagen());
+        assertTrue(!ergebnis.welten().get(0).premium());
+        assertTrue(!ergebnis.welten().get(0).hatRangschranke());
+    }
+
+    @Test
+    @DisplayName("Eine tor:-Zeile, die den Umzug verpasst hat, WIRKT NICHT - und sagt es")
+    void zurueckgebliebeneTorzeileKlagt() {
+        // DER SCHLIMMSTE FALL EINER UMSTELLUNG, und darum gibt es diese Probe:
+        // Der Betreiber hat ein Tor eingetragen, es steht in der Datei, es sieht
+        // richtig aus - und es wirkt nicht. Gesucht wuerde dann im Gelaende.
+        //
+        // Die acht Leseproben, die bis zum 25.11.2026 hier standen, pruefen jetzt
+        // dieselben Faelle in TorbuchTest gegen tore.yml: halbes Tor, Ecke ohne
+        // drei ganze Zahlen, jenseits der Weltkoordinaten, Tor nach nebenan, Tor
+        // ausserhalb der Grenze, zwei Tore mit gemeinsamen Bloecken, Tore ohne
+        // Ankunftswelt. Keine dieser Zusagen ist weggefallen.
         var ergebnis = lies("""
                 welten:
                   altfurt:
@@ -893,154 +856,15 @@ class WeltenlisteTest {
                       bis: [76, 73, 0]
                 """);
 
-        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
-        assertTrue(!ergebnis.welten().get(0).hatTor(), "Altfurt selbst hat keines");
-        assertEquals(new Quader(74, 71, 0, 76, 73, 0), ergebnis.welten().get(1).tor());
-    }
-
-    @Test
-    @DisplayName("Ein halbes Tor gibt es nicht")
-    void halbesTor() {
-        // Mit einer geratenen zweiten Ecke staende irgendwo in Altfurt ein Tor, das
-        // niemand dort haben wollte - und es wuerde ausloesen.
-        var ergebnis = lies("""
-                welten:
-                  altfurt:
-                    art: gewoehnlich
-                    kante: 800
-                  kornmark:
-                    art: gewoehnlich
-                    tor:
-                      von: [74, 71, 0]
-                """);
-
-        assertEquals(2, ergebnis.welten().size(), "die Welten bleiben");
-        assertTrue(!ergebnis.welten().get(1).hatTor());
-        assertEquals(1, ergebnis.klagen().size());
-        assertTrue(ergebnis.klagen().get(0).contains("tor.bis fehlt"),
+        assertEquals(2, ergebnis.welten().size(), "die Welten bleiben beide");
+        assertEquals(1, ergebnis.klagen().size(), ergebnis.klagen().toString());
+        assertTrue(ergebnis.klagen().get(0).contains("welten.kornmark.tor wirkt NICHT"),
                 ergebnis.klagen().get(0));
-    }
-
-    @Test
-    @DisplayName("Eine Torecke braucht drei ganze Zahlen")
-    void torEckeBrauchtDreiGanzeZahlen() {
-        var ergebnis = lies("""
-                welten:
-                  altfurt:
-                    art: gewoehnlich
-                    kante: 800
-                  kornmark:
-                    art: gewoehnlich
-                    tor:
-                      von: [74, 71]
-                      bis: [76, 73, 0]
-                  nether:
-                    art: gewoehnlich
-                    umgebung: nether
-                    tor:
-                      von: [78, 71.5, 0]
-                      bis: [80, 73, 0]
-                """);
-
-        assertTrue(!ergebnis.welten().get(1).hatTor());
-        assertTrue(!ergebnis.welten().get(2).hatTor());
-        assertEquals(2, ergebnis.klagen().size());
-        assertTrue(ergebnis.klagen().get(0).contains("genau drei Zahlen"),
-                ergebnis.klagen().get(0));
-        assertTrue(ergebnis.klagen().get(1).contains("keine ganze Zahl"),
-                ergebnis.klagen().get(1));
-    }
-
-    @Test
-    @DisplayName("Ein Tor in der Ankunftswelt selbst ist ein Tor nach nebenan")
-    void torInDerAnkunftsweltSelbst() {
-        var ergebnis = lies("""
-                welten:
-                  altfurt:
-                    art: gewoehnlich
-                    kante: 800
-                    tor:
-                      von: [58, 71, 0]
-                      bis: [60, 73, 0]
-                """);
-
-        assertEquals(1, ergebnis.welten().size());
-        assertTrue(!ergebnis.welten().get(0).hatTor());
-        assertEquals(1, ergebnis.klagen().size());
-        assertTrue(ergebnis.klagen().get(0).contains("nach nebenan"),
-                ergebnis.klagen().get(0));
-    }
-
-    @Test
-    @DisplayName("Ein Tor hinter der Grenze der Ankunftswelt fehlt sonst stumm")
-    void torAusserhalbDerGrenze() {
-        // Altfurt hat die Kante 800 um 0/0, also Bloecke -400..399. Ein Tor bei 500
-        // steht dort, wo niemand hinkommt - und ohne diese Klage merkt das niemand.
-        var ergebnis = lies("""
-                welten:
-                  altfurt:
-                    art: gewoehnlich
-                    kante: 800
-                  kornmark:
-                    art: gewoehnlich
-                    tor:
-                      von: [500, 71, 0]
-                      bis: [502, 73, 0]
-                """);
-
-        assertTrue(!ergebnis.welten().get(1).hatTor());
-        assertEquals(1, ergebnis.klagen().size());
-        assertTrue(ergebnis.klagen().get(0).contains("ausserhalb der eingetragenen Grenze"),
-                ergebnis.klagen().get(0));
-    }
-
-    @Test
-    @DisplayName("Zwei Tore mit gemeinsamen Bloecken werden beide verworfen")
-    void toreDuerfenSichNichtSchneiden() {
-        // Sonst entscheidet die Reihenfolge der Eintraege, wohin ein Spieler reist. Beide
-        // zu verwerfen ist richtig: Welches von zwei vertippten Toren das gemeinte war,
-        // weiss das Programm nicht.
-        var ergebnis = lies("""
-                welten:
-                  altfurt:
-                    art: gewoehnlich
-                    kante: 800
-                  kornmark:
-                    art: gewoehnlich
-                    tor:
-                      von: [74, 71, 0]
-                      bis: [76, 73, 0]
-                  hochwald:
-                    art: gewoehnlich
-                    tor:
-                      von: [76, 71, 0]
-                      bis: [78, 73, 0]
-                """);
-
-        assertEquals(3, ergebnis.welten().size(), "die Welten bleiben alle");
-        assertTrue(!ergebnis.welten().get(1).hatTor());
-        assertTrue(!ergebnis.welten().get(2).hatTor());
-        assertEquals(1, ergebnis.klagen().size());
-        assertTrue(ergebnis.klagen().get(0).contains("Bloecke gemeinsam"),
-                ergebnis.klagen().get(0));
-    }
-
-    @Test
-    @DisplayName("Tore ohne Ankunftswelt haetten keinen Ort")
-    void toreOhneAnkunftswelt() {
-        var ergebnis = lies("""
-                welten:
-                  kornmark:
-                    art: gewoehnlich
-                    tor:
-                      von: [74, 71, 0]
-                      bis: [76, 73, 0]
-                """);
-
-        assertTrue(!ergebnis.welten().get(0).hatTor());
-        assertEquals(1, ergebnis.klagen().size());
-        assertTrue(ergebnis.klagen().get(0).contains("steht nicht in der Liste"),
-                ergebnis.klagen().get(0));
+        assertTrue(ergebnis.klagen().get(0).contains("tore.yml"),
+                "die Klage muss sagen, WOHIN das Tor gehoert: "
+                        + ergebnis.klagen().get(0));
+        assertTrue(ergebnis.klagen().get(0).contains("/portal setzen kornmark"),
+                "und wie es dorthin kommt: " + ergebnis.klagen().get(0));
     }
 
     @Test
@@ -1072,7 +896,7 @@ class WeltenlisteTest {
     private static Weltenliste.Ergebnis ausgelieferteListe() throws Exception {
         return Weltenliste.ausKonfiguration(
                 ausgelieferteKonfiguration().getConfigurationSection("welten"),
-                "marktstadt", "altfurt", "freistaedte", "hafenwerder", "wolkenwerder");
+                "marktstadt", "freistaedte", "hafenwerder", "wolkenwerder");
     }
 
 }

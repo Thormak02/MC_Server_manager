@@ -322,7 +322,11 @@ class TeamlisteTest {
                 // Schritt 16a Teil D: das Einsehen. Moderator UND Verwalter
                 // tragen es - Plan 12c.2 nennt das Einsehen von Grundstuecken
                 // als Moderationswerkzeug und nicht als Verwaltungssache.
-                "freimarken.einsehen");
+                "freimarken.einsehen",
+                // 25.11.2026: /portal. Nur der Verwalter traegt es - ein neues
+                // Tor ist ein neuer Weg in eine Welt, auch in eine mit
+                // Rangschranke, und das ist keine Moderation.
+                "freimarken.portal");
 
         assertEquals(List.of(),
                 Teamliste.unbekannteRechte(Teamwerte.VORGABE, angemeldet),

@@ -195,7 +195,15 @@ record Hilfeplan(List<Gruppe> gruppen) {
                     // auf fremdes Eigentum, und wer ihn nicht hat, soll die Zeile
                     // nicht lesen - sonst tippt er den Befehl und liest eine Absage.
                     new Eintrag("einsehen", EinsichtBefehle.RECHT,
-                            BundSatz.BEFEHL_EINSEHEN)))));
+                            BundSatz.BEFEHL_EINSEHEN),
+                    // /portal [25.11.2026] mit seinem Recht davor - dasselbe
+                    // Muster wie bei /einsehen: Wer keine Tore setzen darf, soll
+                    // die Zeile nicht lesen. Sie steht hier und nicht im
+                    // Hauptmenue (Menuetafel.HAUPT): Ein Menuefach fuer ein
+                    // Werkzeug, das elf von elf Spielern nie brauchen, nimmt
+                    // einem anderen den Platz.
+                    new Eintrag("portal", PortalBefehle.RECHT,
+                            BundSatz.BEFEHL_PORTAL)))));
 
     /** Jeder Befehl des Plans, in der Reihenfolge der Anzeige - fuer die Tafeln. */
     List<String> befehle() {

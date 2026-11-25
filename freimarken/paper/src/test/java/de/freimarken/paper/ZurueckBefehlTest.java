@@ -28,6 +28,18 @@ import org.junit.jupiter.api.Test;
  */
 class ZurueckBefehlTest {
 
+    /**
+     * Eine Zutrittsfrage, die JEDE Welt offenlaesst.
+     *
+     * <p>Hereingegeben und nicht weggelassen: Diese Proben tippen Warpziele und
+     * Rueckwege an. Stuende hier die ECHTE Regel, pruefte eine rote Zeile kuenftig
+     * den Zutritt statt des Warps - und niemand saehe, welche der zwei Sachen
+     * kaputt ist. Dass der Riegel GREIFT, haelt {@code ZutrittsregelTest} und
+     * {@code ReiseZutrittTest}.
+     */
+    private static final Reise.Zutritt ALLES_OFFEN =
+            (wer, welt) -> java.util.Optional.empty();
+
     private static final String WELT = "minecraft:marktstadt";
 
     private World welt;
@@ -44,7 +56,7 @@ class ZurueckBefehlTest {
         welt = Serverprobe.welt(WELT);
         rueckweg = new Rueckweg();
         Reise reise = new Reise(Logger.getLogger("ZurueckBefehlTest"), rueckweg, null,
-                Sprachprobe.spracheAusDemJar());
+                Sprachprobe.spracheAusDemJar(), ALLES_OFFEN);
         RueckwegBefehle befehle = new RueckwegBefehle(rueckweg, reise,
                 Sprachprobe.spracheAusDemJar());
         baum = new Befehlsprobe(List.of(befehle.zurueck()));

@@ -990,6 +990,29 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private AnfragenBefehle anfragenBefehle;
     /** Die eine Stelle, durch die jeder Teleport laeuft - auch /freimarken parzelle. */
     private Reise reise;
+
+    /**
+     * Die Tore am Bundesmarkt - EIN Buch fuer Start, Torwache und {@code /portal}.
+     *
+     * <p>Ein Feld und nicht eine oertliche Veraenderliche: Es wird in drei
+     * Abschnitten des Starts gebraucht (anlegen und lesen, gegen die Welten pruefen,
+     * an die Bautenliste geben) und danach von der Torwache und vom Befehl. Zwei
+     * Buecher waeren zwei Wahrheiten - und die eine davon wuerde nicht neu geladen.
+     */
+    private Torbuch torbuch;
+
+    /** Die Wache am Tor - als Feld, damit {@code /portal} sie nach dem Stand fragt. */
+    private Torwache torwache;
+
+    /**
+     * Der NAME der Ankunftswelt, wie er in {@code reisen.ankunftswelt} steht.
+     *
+     * <p>Als Feld, weil {@code /portal} ihn braucht und erst im
+     * Befehlsereignis gebaut wird - lange nach {@code onEnable}. Der Name und
+     * nicht die {@code World}: Das Torbuch fuehrt Weltnamen aus der
+     * {@code config.yml}, nicht Schluesseltexte.
+     */
+    private String ankunftsweltName = "";
     private Aufwaermzeit aufwaermzeit;
     private boolean fluechtig;
     /**
@@ -1019,6 +1042,19 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // laufenden Server nie.
         Sprachliste.schreibeVorlage(this);
         Sprachliste.legeEigeneAn(this);
+        // tore.yml HIER und nicht spaeter: Die Bautenliste bekommt weiter unten die
+        // Quader aller Tore, damit kein Platzhalterbau einen Durchgang zumauert.
+        // Laeuft dieser Leser erst danach, prueft sie gegen eine leere Torliste -
+        // und der Fehler faellt erst beim naechsten Start auf, als Mauer.
+        //
+        // Nur die FORM wird hier beklagt. Ob ein Tor in eine Welt fuehrt, die es
+        // gibt, weiss erst die Weltenliste - diese Pruefung steht darum dort, wo
+        // beide Quellen beisammen sind.
+        if (!new java.io.File(getDataFolder(), Torbuch.DATEI).isFile()) {
+            saveResource(Torbuch.DATEI, false);
+        }
+        torbuch = new Torbuch(new java.io.File(getDataFolder(), Torbuch.DATEI));
+        torbuch.lade().forEach(getLogger()::severe);
         try {
             ausgelieferteSaetze = Sprachliste.ausDemJar();
         } catch (RuntimeException bauunfall) {
@@ -1131,6 +1167,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // warum - die uebrigen entstehen trotzdem.
         String ankunftswelt = getConfig()
                 .getString("reisen.ankunftswelt", ANKUNFTSWELT_VORGABE).trim();
+        // Fuer /portal gemerkt: Jener Befehl wird erst im Befehlsereignis gebaut
+        // und kann diese oertliche Veraenderliche dann nicht mehr sehen.
+        ankunftsweltName = ankunftswelt;
         // Der Name der Freistaedtewelt VOR dem Lesen der Welten: Weltenliste bindet
         // die Art an ihn, genau wie beim Raster an den Marktstadtnamen.
         freistadtwelt = Freistadtliste.ausKonfiguration(getConfig()).welt();
@@ -1143,9 +1182,28 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Und derselbe Griff fuer Wolkenwerder [Schritt 11].
         wolkenwelt = Wolkenliste.ausKonfiguration(getConfig()).welt();
         var liste = Weltenliste.ausKonfiguration(
-                getConfig().getConfigurationSection("welten"), MARKTSTADT, ankunftswelt,
+                getConfig().getConfigurationSection("welten"), MARKTSTADT,
                 freistadtwelt, inselwelt, wolkenwelt);
         liste.klagen().forEach(getLogger()::severe);
+        // Die Tore gegen die Welten - erst hier liegen beide vor. Die Kante kommt
+        // aus der ANGABE der Ankunftswelt und nicht aus der geladenen Welt: Diese
+        // Pruefung faengt den Vertipper in der Datei, und die Datei ist, was der
+        // Betreiber aendert.
+        torbuch.pruefeUndVerwirf(ankunftswelt,
+                        liste.welten().stream().map(Weltangabe::name)
+                                .collect(java.util.stream.Collectors.toSet()),
+                        liste.welten().stream()
+                                .filter(w -> w.name().equals(ankunftswelt))
+                                .map(Weltangabe::kante).findFirst().orElse(null))
+                .forEach(getLogger()::severe);
+        // Gegen die Rangleiter und nicht beim Lesen der Welten: Dort liegt die Leiter
+        // nicht vor. Eine erfundene Stufe sperrt die Welt fuer JEDEN, und im Spiel
+        // sieht das aus wie eine kaputte Welt - darum severe und nicht warning.
+        Zutrittsregel.unbekannteStufen(liste.welten(), wirtschaft.werte().raenge())
+                .forEach(getLogger()::severe);
+        // Und WAS gilt - nicht nur, was falsch ist: Eine gesperrte Welt sieht im
+        // Spiel aus wie eine kaputte, und diese Zeile ist die Antwort darauf.
+        Zutrittsregel.bericht(liste.welten()).forEach(getLogger()::info);
         var gebaut = new Weltenbau(this, generator, stadtfelder, inseln, wolken,
                 getLogger()).baueAlle(liste.welten());
         welten.putAll(gebaut.welten());
@@ -1175,15 +1233,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // DIE PLATZHALTERBAUTEN [Plan 2.1]: hier und nicht an einer eigenen Stelle, aus
         // demselben Grund wie der Rundgang - dieselben Kanten, dieselbe Welt. Dazu
         // bekommt dieser Leser die Quader aller TORE: Ein Bau wird GESETZT, und einer
-        // ueber einem Tor mauerte den Durchgang zu. Die Tore kommen aus derselben Liste,
-        // aus der die Welten entstanden sind; ein zweites Lesen waere eine zweite
-        // Wahrheit.
-        List<Quader> torquader = new ArrayList<>();
-        liste.welten().forEach(angabe -> {
-            if (angabe.tor() != null) {
-                torquader.add(angabe.tor());
-            }
-        });
+        // ueber einem Tor mauerte den Durchgang zu. Die Tore kommen aus dem Torbuch,
+        // also aus der Datei, die auch die Torwache fragt; ein zweites Lesen waere
+        // eine zweite Wahrheit. Und sie kommen NACH der Pruefung oben: Ein
+        // verworfenes Tor darf keinen Bau verhindern.
+        List<Quader> torquader = torbuch.quader();
         Bautenliste.Ergebnis bauten =
                 Bautenliste.ausKonfiguration(getConfig(), kanten, torquader);
         bauten.klagen().forEach(getLogger()::severe);
@@ -2502,6 +2556,38 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     /**
+     * Baut den Befehlsbaum von {@code /portal} - im Ereignis, nicht im onEnable.
+     *
+     * <p>Die LAGE kommt als drei Fragen herein und nicht als halbes Plugin: Was
+     * der Befehl braucht, steht seit dem Start fest - die Ankunftswelt, die Namen
+     * der Welten und die Kante der Ankunftswelt. Mit diesen drei laeuft jeder
+     * Zweig in einer Probe durch, ohne Server.
+     *
+     * <p>Das TORBUCH ist dasselbe Exemplar, das die Torwache fragt. Zwei Buecher
+     * waeren zwei Wahrheiten: Ein gesetztes Tor stuende in der Datei und wirkte
+     * nicht.
+     */
+    private PortalBefehle portalBefehle() {
+        return new PortalBefehle(torbuch, new PortalBefehle.Lage() {
+            @Override
+            public String ankunftswelt() {
+                return ankunftsweltName;
+            }
+
+            @Override
+            public java.util.Set<String> welten() {
+                return java.util.Set.copyOf(angaben.keySet());
+            }
+
+            @Override
+            public Integer kanteDerAnkunftswelt() {
+                Weltangabe angabe = angaben.get(ankunftsweltName);
+                return angabe == null ? null : angabe.kante();
+            }
+        }, sprache, getLogger());
+    }
+
+    /**
      * Baut den Befehlsbaum von {@code /einsehen} - im Ereignis, nicht im onEnable.
      *
      * <p>Er braucht wenig: den Stand, die Sprache, die Uhr und die Zone. Keine Ablage,
@@ -2761,6 +2847,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
             angemeldet.addAll(verzeichnis.register(einsichtBefehle().einsehen(),
                     sprache.wort(BundSatz.BEFEHL_EINSEHEN, Einsatz.keine()),
                     List.of()));
+            // /portal [25.11.2026] - ein eigener Wurzelbefehl und kein Zweig von
+            // /freimarken: Er wird IM SPIEL getippt, an dem Ort, an dem das Tor
+            // stehen soll. Ein Verwaltungszweig, den man nur mit einem Ort tippen
+            // kann, waere an der falschen Stelle.
+            if (torbuch != null) {
+                angemeldet.addAll(verzeichnis.register(portalBefehle().portal(),
+                        sprache.wort(BundSatz.BEFEHL_PORTAL, Einsatz.keine()),
+                        List.of()));
+            }
             if (strafablage != null) {
                 StrafBefehle strafen = strafBefehle();
                 angemeldet.addAll(verzeichnis.register(strafen.strafe(),
@@ -3605,7 +3700,28 @@ public final class FreimarkenPlugin extends JavaPlugin {
         var offeneAnfragen = new Anfragen(ANFRAGE_GUELTIG);
         aufwaermzeit = new Aufwaermzeit(this, sprache);
         getServer().getPluginManager().registerEvents(aufwaermzeit, this);
-        reise = new Reise(getLogger(), rueckweg, aufwaermzeit, sprache);
+        // Nach dem Schluesseltext und nicht nach dem Namen aus der Datei: Eine Hauptwelt
+        // des Servers, die zufaellig "altfurt" heisst, traegt sonst Altfurts Spielmodus.
+        Map<String, Weltangabe> nachSchluessel = new LinkedHashMap<>();
+        welten.forEach((name, w) -> {
+            Weltangabe angabe = angaben.get(name);
+            if (angabe != null) {
+                nachSchluessel.put(w.key().asString(), angabe);
+            }
+        });
+        // Die Karte steht VOR der Reise und nicht wie bis zum 25.11.2026 hinter dem
+        // Riegel gegen die fehlende Ankunftswelt: Die Reise bekommt die Zutrittsfrage
+        // im Konstruktor, und drei Befehle bekommen die Reise zwei Zeilen spaeter.
+        // Ohne Ankunftswelt bricht diese Methode ab - die Karte waere dann nie
+        // gebaut, und jede Welt stuende jedem offen.
+        //
+        // welt == null kann der Riegel in Reise.pruefe nicht durchlassen; gefragt wird
+        // es trotzdem, damit diese Zeile fuer sich richtig ist und nicht erst im
+        // Zusammenspiel mit einer anderen Datei.
+        reise = new Reise(getLogger(), rueckweg, aufwaermzeit, sprache,
+                (wer, welt) -> Zutrittsregel.pruefe(
+                        welt == null ? null : nachSchluessel.get(welt.key().asString()),
+                        wer::hasPermission));
         warpBefehle = new WarpBefehle(warpverzeichnis, welten, reise, sprache,
                 freistadtbuch, welten.get(freistadtwelt));
         rueckwegBefehle = new RueckwegBefehle(rueckweg, reise, sprache);
@@ -3638,28 +3754,24 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     + " bleibt in der Weltdatei stehen; zum Zuruecknehmen die vorige Welt"
                     + " in reisen.ankunftswelt eintragen.");
         }
-        // Nach dem Schluesseltext und nicht nach dem Namen aus der Datei: Eine Hauptwelt
-        // des Servers, die zufaellig "altfurt" heisst, traegt sonst Altfurts Spielmodus.
-        Map<String, Weltangabe> nachSchluessel = new LinkedHashMap<>();
-        welten.forEach((name, w) -> {
-            Weltangabe angabe = angaben.get(name);
-            if (angabe != null) {
-                nachSchluessel.put(w.key().asString(), angabe);
-            }
-        });
         getServer().getPluginManager().registerEvents(
                 new Ankunftswache(ankunftswelt, nachSchluessel, kasse, getLogger(),
-                        sprache), this);
+                        sprache, was -> getServer().getScheduler().runTask(this, was)),
+                this);
 
-        var torwache = new Torwache(ankunftswelt, welten,
-                List.copyOf(angaben.values()), reise);
+        // IMMER angemeldet, auch ohne ein einziges Tor [25.11.2026]: Mit
+        // /portal setzen kann im Spiel eines dazukommen, und eine Wache, die beim
+        // Start nicht angemeldet wurde, bemerkt es nie. Der Zuhoerer kostet bei
+        // leerem Buch drei Vergleiche je Blockwechsel.
+        torwache = new Torwache(ankunftswelt, welten, torbuch, reise);
+        getServer().getPluginManager().registerEvents(torwache, this);
         if (torwache.hatTore()) {
-            getServer().getPluginManager().registerEvents(torwache, this);
-            long tore = angaben.values().stream().filter(Weltangabe::hatTor).count();
-            getLogger().info(tore + " Tore in " + ankunftswelt.key().asString() + ".");
+            getLogger().info(torbuch.anzahl() + " Tore in "
+                    + ankunftswelt.key().asString() + " (" + Torbuch.DATEI + ").");
             pruefeTore(ankunftswelt);
         } else {
-            getLogger().info("Keine Tore eingetragen - gereist wird nur mit /warp.");
+            getLogger().info("Keine Tore in " + Torbuch.DATEI + " - gereist wird"
+                    + " nur mit /warp, bis eines mit /portal setzen dazukommt.");
         }
         World ladenweltOder = welten.get(ladenwelt);
         if (ladenverzeichnis.leer()) {
@@ -4314,7 +4426,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * wird.
      *
      * <p><b>Eine Naht zwischen Datei und Rechnung</b>: Der Quader steht in
-     * {@code welten:}, die Nische rechnet {@code Torhausplan}. Stimmen sie nicht
+     * {@code tore.yml}, die Nische rechnet {@code Torhausplan}. Stimmen sie nicht
      * ueberein, steht das Portal in einer Wand - und der Spieler sieht ein Torhaus mit
      * einer Nische, in der nichts passiert. Die Klage nennt die Zahlen, die in der Datei
      * stehen muessten.
@@ -4333,19 +4445,23 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     + " Abschnitt welten: - in dieser Nische passiert nichts.");
             return;
         }
-        if (angabe.tor() == null) {
-            klagen.add(wo + ": die Welt \"" + welt + "\" hat kein tor:. Trag bei"
-                    + " welten." + welt + ".tor ein: von [" + soll.vonX() + ", "
-                    + soll.vonY() + ", " + soll.vonZ() + "] bis [" + soll.bisX() + ", "
-                    + soll.bisY() + ", " + soll.bisZ() + "] - das ist die Nische, die"
-                    + " dort gebaut wird.");
+        Quader ist = torbuch.tor(welt);
+        if (ist == null) {
+            klagen.add(wo + ": die Welt \"" + welt + "\" hat kein Tor. Setz es im"
+                    + " Spiel mit /portal setzen " + welt + " (dort stehen, wo die"
+                    + " Nische ist) oder trag in " + Torbuch.DATEI + " unter "
+                    + Torbuch.ABSCHNITT + "." + welt + " ein: von [" + soll.vonX()
+                    + ", " + soll.vonY() + ", " + soll.vonZ() + "] bis ["
+                    + soll.bisX() + ", " + soll.bisY() + ", " + soll.bisZ() + "] -"
+                    + " das ist die Nische, die dort gebaut wird.");
             return;
         }
-        if (!angabe.tor().equals(soll)) {
+        if (!ist.equals(soll)) {
             klagen.add(wo + ": das Tor nach \"" + welt + "\" liegt bei "
-                    + angabe.tor().alsText() + ", die Nische des Torhauses aber bei "
-                    + soll.alsText() + ". Trag bei welten." + welt + ".tor ein: von ["
-                    + soll.vonX() + ", " + soll.vonY() + ", " + soll.vonZ() + "] bis ["
+                    + ist.alsText() + ", die Nische des Torhauses aber bei "
+                    + soll.alsText() + ". Trag in " + Torbuch.DATEI + " unter "
+                    + Torbuch.ABSCHNITT + "." + welt + " ein: von [" + soll.vonX()
+                    + ", " + soll.vonY() + ", " + soll.vonZ() + "] bis ["
                     + soll.bisX() + ", " + soll.bisY() + ", " + soll.bisZ() + "] -"
                     + " sonst steht das Portal in einer Wand.");
         }
@@ -4705,16 +4821,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
      */
     private void pruefeTore(World ankunftswelt) {
         var griff = Ankunftspunkt.griffAuf(ankunftswelt);
-        for (Weltangabe angabe : angaben.values()) {
-            if (!angabe.hatTor()) {
-                continue;
-            }
-            String klage = Ankunftspunkt.torklage(griff, angabe.tor());
+        torbuch.alle().forEach((welt, tor) -> {
+            String klage = Ankunftspunkt.torklage(griff, tor.quader());
             if (klage != null) {
-                getLogger().severe("Tor nach " + angabe.name() + " ("
-                        + angabe.tor().alsText() + "): " + klage);
+                getLogger().severe("Tor nach " + welt + " ("
+                        + tor.quader().alsText() + "): " + klage);
             }
-        }
+        });
     }
 
     /**

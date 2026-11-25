@@ -352,6 +352,17 @@ enum WacheSatz implements Satz {
      */
     ANKUNFT_ABENTEUER("wache.ankunft.abenteuer", Art.SATZ),
 
+    /**
+     * Er stand in einer Welt, die ihm nicht mehr offensteht - und ist jetzt daheim.
+     *
+     * <p><b>EIN Satz und nicht einer je Grund</b> [25.11.2026]: Der Spieler wird
+     * umgesetzt, gleich ob ihm die Mitgliedschaft oder der Rang fehlt, und
+     * {@link Reise#zutrittZeilen} passt hier nicht - jene Saetze sagen "die Reise
+     * geht nicht", und er hat keine angetreten. Welcher Grund es war, steht im
+     * Serverprotokoll; das ist eine Frage an den Betreiber, nicht an ihn.
+     */
+    ANKUNFT_HEIMGEHOLT("wache.ankunft.heimgeholt", Art.SATZ, "welt", "ziel"),
+
     // --- Die Portalwache: eine Absage aus zwei Chatzeilen ----------------------
 
     /**

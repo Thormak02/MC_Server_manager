@@ -145,6 +145,33 @@ enum ReiseSatz implements Satz {
      */
     HINDERNIS_KEIN_PLATZ_MEHR("reise.hindernis.kein-platz-mehr", Art.SATZ),
 
+    // --- Wem die Welt nicht offensteht -----------------------------------------
+
+    /**
+     * Die Welt steht nur Mitgliedern offen - an den Reisenden.
+     *
+     * <p><b>Eine eigene Familie und kein sechstes {@code HINDERNIS_}</b>
+     * [25.11.2026]: Die fuenf Hindernisse sagen, dass es dort gerade nicht geht -
+     * die Welt ist entladen, der Boden weg. Diese zwei sagen, dass es fuer DICH
+     * nicht geht, und das ist ein anderer Sachverhalt. Praktisch haengt daran
+     * mehr als ein Wort: {@link Reise.Hindernis} ist eine nackte Aufzaehlung, und
+     * {@code hindernisZeilen} setzt {@code Einsatz.keine()} ein. Ein Satz, der die
+     * verlangte Stufe NENNT, kann von dort nicht kommen.
+     */
+    ZUTRITT_NUR_FUER_MITGLIEDER("reise.zutritt.nur-fuer-mitglieder", Art.SATZ,
+            "ziel"),
+
+    /**
+     * Die Welt verlangt eine hoehere Rangstufe - an den Reisenden.
+     *
+     * <p>Mit {@code {rang}}, und das ist keine Bequemlichkeit: Die Stufen sind
+     * frei benannte Schluessel der {@code config.yml}. Ein Satz je Stufe waere
+     * eine Zeile, die beim Umbenennen eines Rangs liegen bleibt - und dann liest
+     * der Spieler den Pfad statt eines Satzes.
+     */
+    ZUTRITT_RANG_ZU_NIEDRIG("reise.zutritt.rang-zu-niedrig", Art.SATZ,
+            "ziel", "rang"),
+
     // --- Was auf dem Weg noch gesagt wird --------------------------------------
 
     /**

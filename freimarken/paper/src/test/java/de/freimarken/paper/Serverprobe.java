@@ -427,6 +427,11 @@ final class Serverprobe {
                     case "getMaxHeight" -> 320;
                     case "getUID" -> java.util.UUID.nameUUIDFromBytes(
                             schluessel.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    // Der Erscheinungspunkt: 0/64/0 und nicht der echte - eine
+                    // Probe, die ihn braucht (die Rettung der Ankunftswache),
+                    // prueft, WELCHE Welt er traegt, nicht welche Koordinate.
+                    case "getSpawnLocation" ->
+                            new org.bukkit.Location((World) eigen, 0.5, 64, 0.5);
                     case "toString" -> "Weltprobe " + schluessel;
                     case "hashCode" -> schluessel.hashCode();
                     case "equals" -> eigen == (werte == null ? null : werte[0]);

@@ -455,6 +455,9 @@ befehl:
     meldung: "Offene Meldungen ansehen, annehmen und erledigen"
     strafe: "Stummschalten, hinauswerfen, sperren - mit Dauer und Grund"
     bannliste: "Wer gesperrt ist, warum und bis wann"
+    # /portal - das Betreiberwerkzeug fuer die Tore am Bundesmarkt. Dieser Text
+    # steht in der Vervollstaendigung hinter dem Befehlsnamen.
+    portal: "Tore am Bundesmarkt setzen und entfernen"
     einsehen: "In fremde Behaelter sehen, ohne etwas zu nehmen"
 
 parzelle:
@@ -1185,6 +1188,21 @@ reise:
     # oben, ist aber ein anderer Fall: dort eine ganze Welt, hier ein einzelner Ort.
     kein-platz-mehr: "<warnung>Dort ist kein Platz zum Stehen mehr.</warnung>"
 
+  # WEM DIE WELT NICHT OFFENSTEHT. Zwei Zeilen, und beide werden - anders als die
+  # fuenf darueber - nur EINMAL geprueft: Der Boden am Ziel kann sich in drei
+  # Sekunden aendern, ein Recht nicht von selbst. {ziel} ist der Name, unter dem die
+  # Reise angetreten wurde, bei /tpa also ein SPIELERname - darum die Wendung "die
+  # Reise nach {ziel}" wie bei nicht-geklappt und nicht "diese Welt" vorn.
+  zutritt:
+    # Die Welt steht nur Mitgliedern offen - gefragt wird das Recht
+    # freimarken.welt.<welt>. Nenne hier KEINEN Preis und keinen Rang: Was eine
+    # Mitgliedschaft kostet, steht an einer Stelle, und das ist nicht diese.
+    nur-fuer-mitglieder: "<warnung>Die Reise nach {ziel} geht nicht - diese Welt steht nur Mitgliedern offen.</warnung>"
+    # {rang} - die verlangte Stufe, so wie sie unter raenge.leiter heisst. Nenne sie
+    # im Satz, nicht im Kommentar: Die Stufen sind frei benannt, und ein Satz ohne
+    # {rang} laesst den Spieler raten, was ihm fehlt.
+    rang-zu-niedrig: "<warnung>Die Reise nach {ziel} geht noch nicht - diese Welt verlangt den Rang {rang}.</warnung>"
+
   # Die einzige Zeile des Reisens in hinweis, und die einzige, nach der es WEITERGEHT: Die
   # Reise laeuft danach durch. Nur bei einem Weltwechsel mit einem angeleinten Tier -
   # ohne Weltwechsel und ohne Tier sagt niemand etwas.
@@ -1522,6 +1540,11 @@ wache:
     # WELCHE Welten Abenteuer sind, steht in der config.yml und nicht hier; heute ist es
     #   allein Altfurt. Dieser Satz gilt fuer jede davon - schreib also nichts hinein,
     #   was nur fuer eine stimmt.
+    # {welt} UND {ziel} - er stand in einer Welt, die ihm nicht mehr offensteht
+    # (premium: oder ab-rang:), und ist jetzt in der Ankunftswelt. Nenne KEINEN
+    # Grund: Es ist ein Satz fuer beide Faelle, und welcher es war, steht im
+    # Serverprotokoll.
+    heimgeholt: "<warnung>{welt} steht dir nicht mehr offen - du bist jetzt in {ziel}.</warnung>"
     abenteuer: "<fliesstext>Hier ist Abenteuer: ansehen und benutzen, aber nicht abbauen. Gebaut wird in der Marktstadt.</fliesstext>"
   # DAS PORTAL. Ein selbstgebautes Nether- oder Endportal fuehrt nirgends hin: Es laesst
   # sich nicht anzuenden, und ein bestehendes laesst niemanden durch. Ohne diese Absage
@@ -3704,3 +3727,66 @@ einsehen:
   # Wie ein Zeitpunkt geschrieben wird. OHNE Datum: Die Einsicht gilt Minuten,
   #   und ein Datum davor waere Platz ohne Auskunft.
   zeit-muster: "HH:mm:ss"
+
+# ============================================================================
+# /PORTAL - DIE TORE AM BUNDESMARKT SETZEN
+# ============================================================================
+# Ein Betreiberwerkzeug. Wer es tippt, steht in der Ankunftswelt und merkt
+# zwei Ecken; daraus wird der Quader des Tores. Die Zahlen in diesen Saetzen
+# sind NACKT und ohne Tausenderpunkt - sie werden mit der F3-Anzeige
+# verglichen, und die zeigt auch keinen.
+portal:
+  ecke:
+    # {x} {y} {z} - die erste Ecke ist gemerkt. Nenne die Zahlen: Wer sie
+    # liest, vergleicht sie mit F3 und merkt den Fehler VOR dem Setzen.
+    erste: "<hinweis>Erste Ecke gemerkt bei {x}/{y}/{z}. Jetzt an die andere stellen und /portal ecke noch einmal.</hinweis>"
+    # {von} {bis} {bloecke} - beide Ecken sind gemerkt, der Quader steht.
+    # {bloecke} ist die Zahl der Bloecke darin; ein Tor hat neun.
+    zweite: "<hinweis>Quader gemerkt: {von} bis {bis}, {bloecke} Bloecke. Jetzt /portal setzen \\<welt>.</hinweis>"
+    # {welt} {ankunftswelt} - er steht in der falschen Welt. Die Tore stehen
+    # ALLE in der Ankunftswelt; ein Tor anderswo wuerde nie ausloesen.
+    falsche-welt: "<warnung>Hier nicht - du stehst in {welt}, die Tore stehen in {ankunftswelt}.</warnung>"
+  setzen:
+    # Es sind nicht zwei Ecken gemerkt.
+    ohne-ecken: "<warnung>Erst zwei Ecken merken: stell dich in die eine, /portal ecke, dann in die andere und noch einmal.</warnung>"
+    # {welt} - diese Welt steht nicht im Abschnitt welten: der config.yml.
+    unbekannte-welt: "<warnung>Die Welt {welt} gibt es nicht - unter welten: in der config.yml steht kein solcher Eintrag.</warnung>"
+    # {grund} - die Klage KOMMT AUS DEM PROGRAMM und nennt gemessene Zahlen:
+    # welches Tor sich mit welchem schneidet, wo die Grenze liegt. Lass sie
+    # stehen; ein eigener Text hier waere eine zweite, aermere Begruendung.
+    abgelehnt: "<warnung>Das Tor wird nicht gesetzt: {grund}</warnung>"
+    # {welt} {von} {bis} - gesetzt und in tore.yml geschrieben.
+    gesetzt: "<hinweis>Tor nach {welt} gesetzt: {von} bis {bis}. Es wirkt sofort.</hinweis>"
+    # {datei} - die Datei liess sich nicht schreiben. Der Grund steht im
+    # Serverprotokoll; im Spiel ist nur wichtig, dass das Tor den naechsten
+    # Start NICHT ueberlebt.
+    nicht-geschrieben: "<warnung>{datei} liess sich nicht schreiben - das Tor gilt bis zum naechsten Start und danach nicht mehr. Der Grund steht im Serverprotokoll.</warnung>"
+  liste:
+    # {anzahl} ZAEHLT die Tore.
+    kopf:
+      eins: "<fliesstext>Am Bundesmarkt steht {anzahl} Tor:</fliesstext>"
+      viele: "<fliesstext>Am Bundesmarkt stehen {anzahl} Tore:</fliesstext>"
+    # {welt} {von} {bis} {wo} - eine Zeile je Tor. {wo} ist die Notiz aus
+    # tore.yml, bei den ausgelieferten Toren die Nische.
+    zeile: "<fliesstext>{welt}</fliesstext><gedaempft> - {von} bis {bis} ({wo})</gedaempft>"
+    # Es steht kein Tor.
+    leer: "<fliesstext>Am Bundesmarkt steht kein Tor - gereist wird nur mit /warp.</fliesstext>"
+  entfernen:
+    # {welt} - entfernt und geschrieben.
+    entfernt: "<hinweis>Tor nach {welt} entfernt. Dorthin kommt man jetzt nur mit /warp.</hinweis>"
+    # {welt} - in diese Welt fuehrt gar kein Tor.
+    kein-tor: "<warnung>Nach {welt} fuehrt kein Tor.</warnung>"
+  neuladen:
+    # {anzahl} ZAEHLT die Tore, die jetzt stehen.
+    gelesen:
+      eins: "<hinweis>tore.yml neu gelesen - {anzahl} Tor.</hinweis>"
+      viele: "<hinweis>tore.yml neu gelesen - {anzahl} Tore.</hinweis>"
+    # {anzahl} ZAEHLT die Klagen. Sie selbst stehen im Serverprotokoll: Sie
+    # nennen Pfade und Zahlen und sind an den Betreiber am Protokoll
+    # gerichtet, nicht an den Chat.
+    klagt:
+      eins: "<warnung>tore.yml neu gelesen, aber {anzahl} Klage steht im Serverprotokoll.</warnung>"
+      viele: "<warnung>tore.yml neu gelesen, aber {anzahl} Klagen stehen im Serverprotokoll.</warnung>"
+  # Von der Konsole geht es nicht - /portal ecke braucht einen Ort, und die
+  # Konsole steht nirgends.
+  nur-spieler: "<warnung>/portal geht nur im Spiel - die Konsole steht nirgends.</warnung>"

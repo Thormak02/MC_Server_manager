@@ -54,7 +54,7 @@ final class Sprachschluessel {
             MenueSatz.class, RegelnSatz.class, HilfeSatz.class,
             AnmeldeSatz.class, RundgangSatz.class, LotterieSatz.class,
             WettbewerbSatz.class, TeamSatz.class, MeldeSatz.class,
-            StrafSatz.class, EinsichtSatz.class);
+            StrafSatz.class, EinsichtSatz.class, PortalSatz.class);
 
     /** Alle Saetze, aus ALLEN Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();

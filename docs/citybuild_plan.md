@@ -152,7 +152,9 @@ schieben, nach innen nicht — deshalb jetzt etwas Luft.
 | `wolkenwerder` | Raster | — | Überleben | Leerwelt, **eigene Skyblock-Mechaniken** |
 | `hochwald` | 2.500 | 5.000 | Überleben | Freibau, Sicherung kostet |
 | `kornmark` | 1.000 | 2.000 | Überleben | Reset je Minecraft-Version |
-| `nether`, `end` | 1.000 | 2.000 | Überleben | Farmen |
+| `nether`, `end` | 1.000 | 2.000 | Überleben | Farmen, **ab Rang**: Nether ab Siedler, Ende ab Bürger |
+| `vogtei` | 1.000 | 2.000 | Überleben | Farmwelt **nur für Mitglieder**, Reset je Minecraft-Version |
+| `stollenberg` | 1.000 | 2.000 | Überleben | Bergbauwelt, für jeden offen |
 
 \* Die Einstellung nennt weiter den Wunsch **3.000**; das Plugin rundet ihn auf ganze
 Rasterzellen ab (71 = 64 + 7) und auf eine gerade Zellenzahl. Daraus werden 42 Parzellen
@@ -277,6 +279,37 @@ statt nur anders auszusehen. [empfohlen]
   Plugin setzt sie bei jedem Start neu, ein Verlust heilt sich also — aber nur, solange
   die Einstellung stimmt.
 
+### 4.2a Wer in welche Welt darf [gebaut 25.11.2026]
+
+Zwei Schalter je Welt, und beide gelten **UND**:
+
+- **`premium: true`** — die Welt steht nur offen, wer das Recht
+  `freimarken.welt.<welt>` hat. Das ist der Weg für eine Mitgliederwelt
+  (`vogtei`); das Recht vergibt die Rechteverwaltung des Servers, der Manager
+  zeigt die Zeile zum Kopieren.
+- **`ab-rang: siedler`** — die Welt steht nur offen, wer diese Rangstufe
+  **erreicht** hat. Gefragt wird `freimarken.stufe.<stufe>`, und das vergibt
+  das Plugin beim Beitritt für die erreichte Stufe **und jede darunter**.
+
+**Warum ein RECHT und nicht der Rangstand aus der Datenbank:** Ein Recht kostet
+je Teleport keinen Lesevorgang, und eine Ausnahme für *einen* Spieler ist eine
+Rechtezeile statt einer Änderung an der Rangleiter. Dieselbe Trennung wie bei
+den Teamrollen — der Riegel hängt am Recht, nicht am Namen.
+
+**Der Riegel steht an EINER Stelle**, in `Reise.führe`, und zwar vor allem
+anderen. Damit deckt er jeden Weg in eine Welt: Tor, `/warp`, `/tpa`,
+`/zurück`, Parzellensprung, Meldungssprung, Wolkenheimweg. `/tpa` war die
+Umgehung, gegen die der Grundsatz *alle Wege zur selben Tat* geschrieben ist:
+Ein Mitglied hätte sonst einen Nicht-Mitglied in die Vogtei geholt.
+
+**Dazu zwei Dinge, die ein Riegel am Weg allein nicht leistet:** Wer in der
+Welt **steht** und sein Recht verliert, wird beim nächsten Beitritt in die
+Ankunftswelt geholt — er reist nicht, also sieht ihn kein Reiseriegel. Und eine
+`ab-rang`-Zeile, die auf eine Stufe zeigt, die es in `raenge.leiter` nicht gibt,
+**sperrt die Welt für jeden**; darum nennt der Start sie einzeln. Was gilt,
+steht ebenfalls im Startprotokoll — eine gesperrte Welt sieht im Spiel aus wie
+eine kaputte.
+
 ### 4.3 Wie man zwischen den Welten reist [entschieden 02.11.2026]
 
 Acht Welten stehen, und ohne diesen Abschnitt kommt niemand hin. In eine **Welt** führen
@@ -303,6 +336,25 @@ Kategorie kennen. Damit es trägt, gilt:
   Weltenliste in der `config.yml`, nicht aus einer zweiten Liste. Eine neue Welt ist damit
   weiter *ein Eintrag plus Generator* ([4.2](#42-erweiterbar-und-portierbar-entschieden))
   und nicht ein Eintrag plus ein vergessener Warp.
+
+**Die Torquader stehen seit dem 25.11.2026 in einer eigenen Datei `tore.yml`**
+und nicht mehr bei `welten.<welt>.tor`. Der Grund ist das **Schreiben**:
+`/portal setzen <welt>` setzt ein Tor im Spiel, und dafür müsste das Plugin
+sonst die `config.yml` neu schreiben — Bukkits Schreiber wirft dabei jeden
+Kommentar weg, und das sind dort 4.000 Zeilen Anleitung. Eine Datei, die das
+Plugin allein verantwortet, kann es auch neu schreiben.
+
+Was dabei **nicht** verloren geht: Die Abweichung, vor der der alte Platz am
+Eintrag der Zielwelt schützte, fängt jetzt eine Prüfung — ein Tor in eine Welt,
+die unter `welten:` nicht steht, wird beim Start verworfen und benannt. Eine
+`tor:`-Zeile, die in der `config.yml` stehen bleibt, **wirkt nicht** und wird
+beim Start einzeln beklagt; stillschweigend übersprungen wird sie nicht.
+
+`/portal ecke` merkt zwei Ecken, `/portal setzen <welt>` macht daraus das Tor.
+Vor dem Schreiben läuft **dieselbe** Prüfung wie beim Start (unbekannte Welt,
+Tor nach nebenan, außerhalb der Grenze der Ankunftswelt, gemeinsame Blöcke) —
+was der Start verwerfen würde, kommt nicht in die Datei. Die Torwache fragt die
+Liste bei jedem Schritt, ein gesetztes Tor wirkt also ohne Neustart.
 - Die Vervollständigung zeigt zuerst die Welten, dann die eigenen Warps. Wer `/warp k`
   tippt, meint fast immer Kornmark.
 

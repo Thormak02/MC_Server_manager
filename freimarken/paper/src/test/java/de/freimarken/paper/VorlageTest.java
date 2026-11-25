@@ -346,7 +346,7 @@ class VorlageTest {
                 // Schritt 16a Teil D: die Saetze von /einsehen. Der erste
                 // Bereich, dessen wichtigster Satz eine ABSAGE ist: Ein Klick,
                 // der nichts tut, sieht aus wie ein Fehler des Servers.
-                "EinsichtSatz"));
+                "EinsichtSatz", "PortalSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));

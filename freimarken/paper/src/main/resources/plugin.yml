@@ -375,6 +375,18 @@ permissions:
     # einen Modus nicht.
     description: Darf in fremde Behaelter sehen, ohne etwas zu nehmen
     default: op
+  freimarken.portal:
+    # DIE TORE AM BUNDESMARKT [25.11.2026]: /portal ecke merkt zwei Ecken,
+    # /portal setzen <welt> macht daraus das Tor dorthin, und das Plugin
+    # schreibt tore.yml. Vor dem Schreiben laeuft DIESELBE Pruefung wie beim
+    # Start - was der Start verwerfen wuerde, kommt nicht in die Datei.
+    #
+    # default: op und nicht die Verwalterrolle allein: Ein Tor zu setzen
+    # heisst, einen Weg in eine Welt zu oeffnen - auch in eine mit
+    # Rangschranke. Wer das darf, umgeht damit mittelbar jede
+    # Zugangsregel, und das ist eine Betreibersache.
+    description: Darf die Tore am Bundesmarkt setzen und entfernen
+    default: op
   freimarken.bannliste:
     # default: true - Plan 12c.4 macht die Bannliste ausdruecklich oeffentlich: "Sie
     # zwingt zu Begruendungen, die standhalten, und genau deshalb gehoert sie dazu."

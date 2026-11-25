@@ -97,6 +97,7 @@ class HilfeBefehlTest {
                         // Liste - es haengt an freimarken.einsehen, und wer
                         // das nicht hat, soll nicht lesen, dass es das gibt.
                         "&#e3c57e/einsehen&#6e7a82 - &#a5b4bfIn fremde Behaelter sehen, ohne etwas zu nehmen",
+                        "&#e3c57e/portal&#6e7a82 - &#a5b4bfTore am Bundesmarkt setzen und entfernen",
                         "&#6e7a82Jeder Befehl ohne Zusatz zeigt, was er kann.");
 
     /** Was ein Spieler OHNE jedes Recht sieht: drei Befehle in zwei Gruppen. */
@@ -230,7 +231,7 @@ class HilfeBefehlTest {
                 + Hilfeplan.ALLE.eintraege().size();
 
         assertEquals(erwartet, ALLES.size());
-        assertEquals(37, ALLES.size());
+        assertEquals(38, ALLES.size());
     }
 
     @Test

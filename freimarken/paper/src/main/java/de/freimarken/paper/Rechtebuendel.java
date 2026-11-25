@@ -83,7 +83,48 @@ final class Rechtebuendel {
         // Kann nicht null sein, solange greift() gilt - die Leiter ist dann nicht leer.
         // Trotzdem gefragt: Eine spaetere Aenderung an greift() soll hier keinen Absturz
         // beim Beitritt ergeben.
-        return stufe == null ? Set.of()
-                : Rangzahl.knoten(raenge.buendel(stufe.schluessel()));
+        if (stufe == null) {
+            return Set.of();
+        }
+        Set<String> rechte =
+                new LinkedHashSet<>(Rangzahl.knoten(raenge.buendel(stufe.schluessel())));
+        rechte.addAll(stufenrechte(raenge, stufe));
+        return Collections.unmodifiableSet(rechte);
+    }
+
+    /**
+     * Die erreichte Stufe und JEDE DARUNTER als Recht - {@code freimarken.stufe.*}.
+     *
+     * <p><b>Wofuer:</b> Eine Welt mit {@code ab-rang: siedler} fragt
+     * {@code freimarken.stufe.siedler} ({@link Zutrittsregel}). Ein Buerger steht
+     * ueber dem Siedler und muss dort hinein - darum nicht nur die erreichte Stufe,
+     * sondern die ganze Strecke von unten.
+     *
+     * <p><b>Warum hier und nicht in {@code Rangwerte.buendel}</b> [25.11.2026]: Das
+     * Buendel ist das Spiegelbild der Datei - was dort steht, hat der Betreiber
+     * eingetragen. Diese Rechte hat niemand eingetragen; sie entstehen aus der
+     * Leiter. Stuenden sie im Buendel, wuerde {@link Rangliste#unbekannteRechte} sie
+     * mit "ist kein Recht dieses Plugins" beklagen. Dazu kommt ein gemessener
+     * Grund: {@code Quellen.alle()} liest nur das Modul {@code paper}. Eine Vorsilbe
+     * als Literal im Kern ist fuer {@code GrenzeTest} 31al unsichtbar - die Zusage
+     * "jedes gefragte Recht ist angemeldet oder eine bekannte Vorsilbe" waere dann
+     * nur scheinbar gehalten.
+     *
+     * <p>Steht HINTER dem Riegel in {@link #rangrechte}: Ohne Rangleiter gibt es
+     * keine Stufe, und eine Welt mit Schranke bliebe sonst fuer jeden gesperrt,
+     * obwohl die Raenge aus sind.
+     */
+    private static Set<String> stufenrechte(Rangwerte raenge,
+                                            Rangwerte.Stufe erreicht) {
+        int bis = raenge.nummer(erreicht.schluessel());
+        if (bis < 0) {
+            return Set.of();
+        }
+        Set<String> namen = new LinkedHashSet<>();
+        java.util.List<String> leiter = raenge.schluessel();
+        for (int stelle = 0; stelle <= bis && stelle < leiter.size(); stelle++) {
+            namen.add(Zutrittsregel.stufenrecht(leiter.get(stelle)));
+        }
+        return namen;
     }
 }
