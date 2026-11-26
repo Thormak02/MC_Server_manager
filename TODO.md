@@ -1176,6 +1176,34 @@ Lehre dieser Runde:
 
 **22 Einspritzungen, am Ende 22 gefangen** (nach drei Probenverbesserungen).
 
+### FUND 26.11.2026 (vom Betreiber, auf FRIEDRICHS-SERV): drei Suchorte waren
+toter Code
+
+Erster echter Versuch auf dem Serverrechner: **`Werkzeug: None`** - obwohl dort eine
+MariaDB als Dienst laeuft.
+
+Die Suche benutzte `Path(ort).parent.glob(Path(ort).name)`, und das interpretiert
+nur das MUSTER, nicht den Basispfad. Gemessen:
+
+```
+Path("C:/Program Files/MariaDB*").glob("bin")  ->  []
+Path("C:/xampp/mysql").glob("bin")             ->  [.../bin]
+```
+
+Damit waren die zwei Suchorte **mit Stern** wirkungslos - und genau die treffen eine
+per winget installierte MariaDB, die ihre Fassung in den Ordnernamen schreibt. Dass
+es auf dem Entwicklungsrechner lief, lag allein an XAMPP: kein Stern, kein Fehler.
+
+**Warum keine der 18 Proben es fand:** Keine prueft die SUCHORTE. Eine prueft die
+Umgebungsvariable, keine die Liste. Jetzt geht eine parametrisierte Probe **jeden
+Ort einzeln** durch - mit seinem eigenen Stern, nachgestellt unter `tmp_path` -,
+eine zweite haelt die LAENGE der Liste (sonst waere sie auch gruen, wenn jemand sie
+kuerzt), und eine dritte, dass bei zwei Fassungen nebeneinander immer dieselbe
+gewinnt. Die Einspritzung des alten Zustands macht genau die Orte 0 und 1 rot - die
+mit Stern.
+
+Behoben mit `glob.glob`, das Sterne an jeder Stelle des Pfades aufloest.
+
 OFFEN: Der Abzug laeuft gegen die Anlage, die in `datenbank.properties` unter `url`
 steht - auf diesem Entwicklungsrechner gibt es sie nicht (die Plugin-Datenbank
 laeuft auf FRIEDRICHS). **Der erste echte Abzug muss dort gezogen werden**, und die

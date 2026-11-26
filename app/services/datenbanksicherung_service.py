@@ -82,18 +82,38 @@ def _gefunden(namen: tuple[str, ...], variable: str) -> Path | None:
         imPfad = shutil.which(name)
         if imPfad:
             return Path(imPfad)
+    # DAS glob-MODUL und NICHT Path.glob [Fund 26.11.2026 auf dem Serverrechner]:
+    #
+    # Hier stand ``Path(ort).parent.glob(Path(ort).name)``, und das interpretiert nur
+    # das MUSTER - nicht den Basispfad. Bei "C:/Program Files/MariaDB*/bin" ist die
+    # Basis "C:/Program Files/MariaDB*", also ein Verzeichnis mit einem Stern im
+    # Namen, das es nicht gibt. Gemessen:
+    #
+    #     Path("C:/Program Files/MariaDB*").glob("bin")  ->  []
+    #     Path("C:/xampp/mysql").glob("bin")             ->  [.../bin]
+    #
+    # Damit waren die zwei Suchorte MIT Stern wirkungslos - und genau die treffen
+    # eine per winget installierte MariaDB, die ihre Fassung in den Ordnernamen
+    # schreibt. Dass es auf dem Entwicklungsrechner trotzdem lief, lag allein an
+    # XAMPP: kein Stern, also kein Fehler. Der Betreiber sah auf dem Serverrechner
+    # "Werkzeug: None", obwohl dort eine MariaDB als Dienst laeuft.
+    #
+    # glob.glob loest Sterne an JEDER Stelle des Pfades auf. Die Treffer werden
+    # sortiert, damit bei zwei Fassungen nebeneinander immer dieselbe gewinnt - eine
+    # Suche, die heute 11.4 und morgen 10.11 nimmt, ist keine.
+    import glob as globmuster
+
     for ort in SUCHORTE:
         for name in namen:
-            # glob auf dem ELTERNTEIL, weil die Suchorte einen Stern tragen koennen
-            # (MariaDB legt je Fassung einen eigenen Ordner an).
-            try:
-                for ordner in Path(ort).parent.glob(Path(ort).name):
-                    for endung in ("", ".exe"):
-                        kandidat = ordner / (name + endung)
-                        if kandidat.is_file():
-                            return kandidat
-            except (OSError, ValueError, IndexError):
-                continue
+            for endung in ("", ".exe"):
+                try:
+                    treffer = sorted(globmuster.glob(
+                        ort.rstrip("/\\") + "/" + name + endung))
+                except (OSError, ValueError):
+                    continue
+                for kandidat in treffer:
+                    if Path(kandidat).is_file():
+                        return Path(kandidat)
     return None
 
 

@@ -742,3 +742,97 @@ def _sicherung_anlegen(monkeypatch, dienst, backup_service, server_id: int, *,
         backup_service.create_backup(db, server=server,
                                      initiated_by_user_id=None,
                                      backup_scope="full")
+
+
+def test_die_suchortliste_ist_vollstaendig():
+    """Erst die LAENGE, dann die Orte.
+
+    Ohne diesen Satz waere die Probe darunter auch gruen, wenn jemand ``SUCHORTE``
+    auf einen einzigen Eintrag kuerzt - sie geht ja nur durch, was dasteht.
+    """
+    from app.services import datenbanksicherung_service as d
+
+    assert len(d.SUCHORTE) >= 6, (
+        "Sechs Orte waren es am 26.11.2026: zwei fuer MariaDB und MySQL unter"
+        " Program Files, XAMPP, und drei unter Unix. Weniger heisst, dass einer"
+        f" verschwunden ist: {d.SUCHORTE}")
+    mit_stern = [o for o in d.SUCHORTE if "*" in o]
+    assert len(mit_stern) >= 2, (
+        "Mindestens zwei Orte tragen einen Stern (MariaDB und MySQL schreiben ihre"
+        " Fassung in den Ordnernamen). Genau die waren bis zum 26.11.2026 toter"
+        f" Code: {d.SUCHORTE}")
+
+
+@pytest.mark.parametrize("nummer", range(6))
+def test_jeder_suchort_wird_wirklich_durchsucht(monkeypatch, tmp_path, nummer):
+    """DER FEHLER, GEGEN DEN DIESE PROBE GEBAUT IST [gefunden 26.11.2026 auf dem
+    Serverrechner, vom Betreiber]: ``Werkzeug: None``, obwohl dort eine MariaDB als
+    Dienst lief.
+
+    Die Suche benutzte ``Path(ort).parent.glob(Path(ort).name)``, und das
+    interpretiert nur das MUSTER - nicht den Basispfad. Bei
+    ``C:/Program Files/MariaDB*/bin`` ist die Basis ein Verzeichnis mit einem Stern
+    im Namen, das es nicht gibt; das glob gab nichts. Die zwei Suchorte MIT Stern
+    waren damit wirkungslos, und genau die treffen eine per winget installierte
+    MariaDB. Auf dem Entwicklungsrechner fiel es nicht auf, weil XAMPP keinen Stern
+    im Pfad hat.
+
+    GEPRUEFT WIRD JEDER ORT EINZELN, mit seinem eigenen Stern - nicht "einer von
+    ihnen". Nachgestellt wird er unter ``tmp_path``: Laufwerk und Wurzel fallen weg,
+    der Stern bleibt stehen und wird durch einen Fassungsnamen ersetzt, damit ein
+    echter Ordner entsteht. Gefunden werden muss er trotzdem ueber das Muster.
+    """
+    from app.services import datenbanksicherung_service as d
+
+    if nummer >= len(d.SUCHORTE):
+        pytest.skip("so viele Suchorte gibt es nicht - test_die_suchortliste_ist_vollstaendig haelt die Zahl")
+    ort = d.SUCHORTE[nummer]
+
+    # Den Ort unter tmp_path nachstellen: Laufwerksbuchstabe und Wurzel weg.
+    relativ = ort.replace(chr(92), "/").lstrip("/")
+    if ":" in relativ:
+        relativ = relativ.split(":", 1)[1].lstrip("/")
+    muster = tmp_path / relativ
+    # Der Stern wird zu einem echten Namen - so sieht eine winget-Installation aus.
+    echt = Path(str(muster).replace("*", "11.4"))
+    echt.mkdir(parents=True, exist_ok=True)
+    werkzeugdatei = echt / "mariadb-dump.exe"
+    werkzeugdatei.write_bytes(b"x")
+
+    monkeypatch.setattr(d, "SUCHORTE", (str(muster),))
+    monkeypatch.delenv(d.UMGEBUNGSVARIABLE, raising=False)
+
+    gefunden = d.werkzeug()
+
+    assert gefunden is not None, (
+        "Der Suchort " + ort + " findet nichts. Nachgestellt als " + str(muster)
+        + ", die Datei liegt in " + str(werkzeugdatei) + ".")
+    assert Path(gefunden) == werkzeugdatei, (
+        str(gefunden) + " statt " + str(werkzeugdatei))
+
+
+def test_bei_zwei_fassungen_gewinnt_immer_dieselbe(monkeypatch, tmp_path):
+    """Eine Suche, die heute 11.4 und morgen 10.11 nimmt, ist keine.
+
+    MariaDB legt je Fassung einen eigenen Ordner an, und nach einem Update stehen
+    zwei nebeneinander. Ohne Sortierung haengt die Wahl an der Reihenfolge des
+    Dateisystems - und dann zieht der Abzug heute mit einem anderen Werkzeug als
+    gestern, ohne dass sich etwas geaendert hat.
+    """
+    from app.services import datenbanksicherung_service as d
+
+    for fassung in ("10.11", "11.4"):
+        ordner = tmp_path / ("MariaDB " + fassung) / "bin"
+        ordner.mkdir(parents=True)
+        (ordner / "mariadb-dump.exe").write_bytes(b"x")
+    monkeypatch.setattr(d, "SUCHORTE", (str(tmp_path / "MariaDB*" / "bin"),))
+    monkeypatch.delenv(d.UMGEBUNGSVARIABLE, raising=False)
+
+    erst = d.werkzeug()
+    noch_einmal = d.werkzeug()
+
+    assert erst == noch_einmal, (
+        "zwei Aufrufe, zwei Antworten: " + str(erst) + " / " + str(noch_einmal))
+    assert "10.11" in str(erst), (
+        "sortiert gewinnt die erste - und das ist eine ENTSCHEIDUNG, nicht der"
+        f" Zufall des Dateisystems: {erst}")
