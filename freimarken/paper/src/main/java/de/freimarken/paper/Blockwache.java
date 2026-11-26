@@ -15,7 +15,9 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 
@@ -171,7 +173,7 @@ final class Blockwache implements Listener {
         // Bei einem Eimer Wasser ist das Wasser der Block, und das ist die Angabe, die
         // jemand sucht, der eine geflutete Parzelle vor sich hat.
         halteFest(ereignis.getPlayer(), ereignis.getBlockPlaced(), Blocktat.SETZEN,
-                !ereignis.isCancelled());
+                !ereignis.isCancelled(), ueberbautenZustandVon(ereignis));
     }
 
     /**
@@ -184,7 +186,7 @@ final class Blockwache implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void beimAbbauen(BlockBreakEvent ereignis) {
         halteFest(ereignis.getPlayer(), ereignis.getBlock(), Blocktat.ABBAUEN,
-                !ereignis.isCancelled());
+                !ereignis.isCancelled(), zustandVon(ereignis.getBlock()));
     }
 
     /**
@@ -225,8 +227,79 @@ final class Blockwache implements Listener {
         // Rechtsklick auf Erde eine Zeile, und wer mit einem Block in der Hand baut,
         // erzeugte beides: einen Rechtsklick UND eine Setzung, also zwei Zeilen fuer
         // eine Tat.
+        // Ohne Vorzustand: Ein Benutzen AENDERT den Block nicht, es gibt also
+        // nichts zurueckzustellen. Ein Zustand hier waere eine Spalte voller
+        // Zeichen in der haeufigsten Tat des Buches, fuer nichts.
         halteFest(ereignis.getPlayer(), block, Blocktat.BENUTZEN,
-                ereignis.useInteractedBlock() != Event.Result.DENY);
+                ereignis.useInteractedBlock() != Event.Result.DENY, "");
+    }
+
+    /**
+     * Eine Sprengung durch ein Wesen - TNT, Creeper, Feuerkugel, Kristall.
+     *
+     * <p><b>Der wichtigste Zuhoerer fuer den Rueckweg</b>: Ein gegriefter Bau ist
+     * meist gesprengt und nicht abgebaut. Bis zum 26.11.2026 schrieb dieses Buch
+     * davon keine einzige Zeile - ein TNT-Grief in einer fremden Parzelle wurde
+     * weder verhindert noch aufgeschrieben.
+     *
+     * <p><b>Der Taeter, wenn er sich ermitteln laesst</b>: Bei einem geschuerten
+     * TNT-Block kennt Bukkit den Zuender ({@code TNTPrimed.getSource()}), und das
+     * ist die Angabe, die die Moderation sucht. Ein Creeper gehoert niemandem -
+     * dann steht {@link Blockzeile#NIEMAND} in der Zeile und nicht der Spieler,
+     * der zufaellig in der Naehe stand.
+     *
+     * <p><b>Eine Zeile JE BLOCK</b>, und das ist die teure Entscheidung: Eine
+     * Ladung TNT schreibt hunderte Zeilen in einem Augenblick. Billiger waere
+     * eine Zeile je Sprengung mit einer Blockliste - aber dann traegt eine Zeile
+     * mehrere Orte, und die Abfrage "was ist an DIESEM Block geschehen" muesste
+     * jede Liste durchsuchen. Wer die Zeilen nicht will, nimmt {@code sprengen}
+     * aus der Auswahl seiner Welt.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void beimSprengen(EntityExplodeEvent ereignis) {
+        halteSprengungFest(taeterVon(ereignis.getEntity()), ereignis.blockList(),
+                !ereignis.isCancelled());
+    }
+
+    /**
+     * Eine Sprengung durch einen BLOCK - Bett im Nether, Ankerstein im Oberland.
+     *
+     * <p>Ein eigenes Ereignis und kein Sonderfall des anderen: Hier gibt es kein
+     * Wesen, also auch keinen Zuender - der Taeter ist immer
+     * {@link Blockzeile#NIEMAND}. Wer ein Bett im Nether anklickt, ist dieser
+     * Wache nicht bekannt; ihn nennt die Schutzwache, wenn sie es verhindert.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void beimBlocksprengen(BlockExplodeEvent ereignis) {
+        halteSprengungFest(Blockzeile.NIEMAND, ereignis.blockList(),
+                !ereignis.isCancelled());
+    }
+
+    /** Je gesprengter Block eine Zeile - durch denselben Hals wie jede Tat. */
+    private void halteSprengungFest(java.util.UUID wer, java.util.List<Block> bloecke,
+                                    boolean gelungen) {
+        for (Block block : bloecke) {
+            halteFest(wer, block, Blocktat.SPRENGEN, gelungen, zustandVon(block));
+        }
+    }
+
+    /**
+     * Wer die Sprengung ausgeloest hat - oder {@link Blockzeile#NIEMAND}.
+     *
+     * <p>Zwei Wege, und beide sind gemessen noetig: Ein Spieler kann SELBST das
+     * sprengende Wesen sein (eine Feuerkugel, die er geworfen hat, ist keines -
+     * aber ein Spieler mit einem Kristall in der Hand kommt als Wesen daher), und
+     * ein geschuerter TNT-Block kennt seinen Zuender.
+     */
+    private static java.util.UUID taeterVon(org.bukkit.entity.Entity wesen) {
+        if (wesen instanceof Player spieler) {
+            return spieler.getUniqueId();
+        }
+        if (wesen instanceof org.bukkit.entity.TNTPrimed tnt
+                && tnt.getSource() instanceof Player zuender) {
+            return zuender.getUniqueId();
+        }
+        return Blockzeile.NIEMAND;
     }
 
     /**
@@ -243,20 +316,78 @@ final class Blockwache implements Listener {
      * vierhundert Bloecken je Sekunde nichts gegen den Preis einer zweiten
      * Entscheidungsstelle.
      */
-    private void halteFest(Player wer, Block block, Blocktat tat, boolean gelungen) {
+    private void halteFest(Player wer, Block block, Blocktat tat, boolean gelungen,
+                           String vorzustand) {
+        halteFest(wer.getUniqueId(), block, tat, gelungen, vorzustand);
+    }
+
+    /**
+     * Derselbe Hals fuer eine Zeile OHNE Spieler - die Weltursachen.
+     *
+     * <p>Eine zweite Fassung mit der Kennung statt des Spielers, und keine
+     * zweite Entscheidungsstelle: Eine Sprengung hat oft keinen
+     * {@code Player} ({@link Blockzeile#NIEMAND}), muss aber durch dieselbe
+     * Frage gehen wie jede andere Tat.
+     */
+    private void halteFest(java.util.UUID wer, Block block, Blocktat tat,
+                           boolean gelungen, String vorzustand) {
         String welt = block.getWorld().key().asString();
         String name = namenVon(block);
         if (!werte.schreibt(welt, tat, gelungen, name)) {
             return;
         }
-        buch.merke(Blockzeile.neu(uhr.instant(), wer.getUniqueId(),
+        buch.merke(Blockzeile.neu(uhr.instant(), wer,
                 new Blockort(welt, block.getX(), block.getY(), block.getZ()),
-                tat, gelungen, name));
+                tat, gelungen, name, vorzustand));
     }
 
     /** Der Name des Blocks, kleingeschrieben - wie in der Lohnliste. */
     private static String namenVon(Block block) {
         return block.getType().name().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Der Zustand, der an dieser Stelle STEHT - fuer Abbau und Sprengung.
+     *
+     * <p>{@code getAsString()} und nicht {@code getAsString(true)}: Jenes laesst
+     * die Eigenschaften weg, die auf dem Werkswert stehen, und spart damit in der
+     * groessten Tabelle des Projekts bei jeder zweiten Zeile ein paar Dutzend
+     * Zeichen. {@code createBlockData} nimmt beide Formen.
+     *
+     * <p>IM EREIGNIS gelesen, wie der Name: Nach einem Abbau steht dort Luft, und
+     * deren Zustand stellt keine Treppe wieder her.
+     *
+     * <p>Was hier NICHT mitkommt: der Inhalt von Behaeltern, Schildzeilen und
+     * alles andere, was in Minecraft am Blockzustand (NBT) haengt. Der Rueckweg
+     * stellt darum eine leere Truhe an der richtigen Stelle wieder her und nicht
+     * ihren Inhalt - das ist ausdruecklich entschieden und steht im Bauplan.
+     */
+    private static String zustandVon(Block block) {
+        return block.getBlockData().getAsString();
+    }
+
+    /**
+     * Der Zustand, der ueberbaut WURDE - nur fuer die Setzung.
+     *
+     * <p>{@code getBlockReplacedState()} und nicht der Block selbst: Nach dem
+     * Ereignis steht dort der NEUE Block, und der ist nicht das, was ein Rueckweg
+     * wiederherstellt. Bukkit haelt den alten Zustand in diesem Ereignis bereit,
+     * und nur dort - danach ist er weg.
+     *
+     * <p>In den meisten Faellen ist es Luft. Nicht immer: Wer in Wasser baut,
+     * ueberbaut Wasser, und wer eine Blume wegsetzt, ueberbaut die Blume. Mit
+     * einem festen "Luft" waere der Rueckweg genau dort falsch, wo ein Griefer
+     * baut - in einem fertigen Garten.
+     */
+    private static String ueberbautenZustandVon(BlockPlaceEvent ereignis) {
+        // Bukkit gibt hier nie null - der Zustand ist ein Pflichtwert des
+        // Ereignisses. Trotzdem gefragt, und das ist keine Vorsicht ins Blaue:
+        // Diese Methode laeuft auf MONITOR, und eine Ausnahme dort reisst den
+        // ganzen Zweig ab - mit ihm jede andere Wache, die danach kaeme. Ein
+        // leerer Vorzustand ist ein dokumentierter Rueckfall (Rueckrollplan
+        // nimmt dann Luft an), ein geworfener MONITOR-Zweig ist keiner.
+        var ueberbaut = ereignis.getBlockReplacedState();
+        return ueberbaut == null ? "" : ueberbaut.getBlockData().getAsString();
     }
 
     /** Nur fuer die Proben: wie viele Zeilen noch auf dem Stapel liegen. */

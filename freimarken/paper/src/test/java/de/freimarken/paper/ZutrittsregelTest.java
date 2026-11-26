@@ -63,7 +63,7 @@ class ZutrittsregelTest {
     /** Eine Welt, von der nur die zwei Zugangsfelder zaehlen. */
     private static Weltangabe angabe(String name, boolean premium, String abRang) {
         return new Weltangabe(name, World.Environment.NORMAL, Weltangabe.Art.GEWOEHNLICH,
-                null, 0, null, GameMode.SURVIVAL, premium, abRang);
+                null, 0, null, GameMode.SURVIVAL, premium, abRang, false);
     }
 
     /** Eine Rechtelage als Menge - genau dafuer gibt es {@link Rechtefrage}. */

@@ -3703,7 +3703,17 @@ welten:
   # premium:  true oder false (Vorgabe). true heisst: Diese Welt steht nur offen,
   #           wer das Recht freimarken.welt.<welt> hat - fuer vogtei also
   #           freimarken.welt.vogtei. Das Recht vergibt die Rechteverwaltung des
-  #           Servers, nicht diese Datei; der Manager zeigt die Zeile zum Kopieren.
+  #           Servers und nicht diese Datei - also von Hand, etwa
+  #             lp user <spieler> permission set freimarken.welt.vogtei true
+  #           ODER, besser, mit dem Ablauf im Recht selbst:
+  #             lp user <spieler> permission settemp freimarken.welt.vogtei true 30d
+  #           DER MANAGER ZEIGT DIESE ZEILE HEUTE NICHT [gemessen 26.11.2026]: Seine
+  #           Tafel 'Rechte, die gesetzt sein muessen' kennt nur Zuschlaege der Form
+  #           freimarken.extra.parzellen.<n> - eine WELT passt in diese Gestalt
+  #           nicht. Solange das so ist, erfaehrt niemand vom Manager, dass dieses
+  #           Recht zu setzen und beim Ablauf zu entziehen ist. Mit settemp traegt
+  #           das Recht seinen Ablauf selbst, und die Ankunftswache holt den
+  #           Ex-Foerderer beim naechsten Beitritt aus der Welt.
   #           SCHREIB true UND NICHT ja: YAML liest jedes andere Wort als false,
   #           und eine Mitgliederwelt stuende dann fuer alle offen. Das Plugin
   #           klagt beim Start darueber und sperrt die Welt vorsichtshalber.
@@ -3716,6 +3726,20 @@ welten:
   #           jeden - das Protokoll nennt sie beim Start einzeln.
   #           Beides gilt UND: Eine Welt mit premium: true und ab-rang: siedler
   #           verlangt beides.
+  # reset-je-version: true oder false (Vorgabe). true heisst: Diese Welt wird bei
+  #           jeder neuen Minecraft-Fassung neu angelegt - eine Farmwelt, an der
+  #           darum kein Besitz haengt (Plan 4.2 und Abschnitt 13).
+  #           DAS PLUGIN SETZT NICHTS SELBST ZURUECK. Es ERINNERT: Sieht der Start
+  #           veraltete Chunks - das maschinell lesbare Zeichen fuer einen
+  #           Versionswechsel -, nennt die Warnung genau die Welten mit dieser
+  #           Zeile. Ohne sie muesste der Betreiber sich erinnern, und bis zum
+  #           26.11.2026 nannte die Warnung Kornmark als festes Wort - die Vogtei
+  #           fiel still durch.
+  #           An dieser Zeile haengt mehr als eine Erinnerung: Bei einer
+  #           PREMIUMWELT ist sie die Begruendung dafuer, dass eine ablaufende
+  #           Mitgliedschaft harmlos ist (Plan 8.5) - dort bleibt kein Gebautes,
+  #           WEIL zurueckgesetzt wird. Wer sie bei vogtei herausnimmt, muss 8.5
+  #           neu beantworten.
   #
   # KEIN tor: MEHR. Die Tore am Bundesmarkt stehen seit dem 25.11.2026 in einer
   # eigenen Datei tore.yml, im selben Ordner wie diese. Der Grund ist das
@@ -3888,6 +3912,7 @@ welten:
     art: gewoehnlich
     startwert: 110926005
     kante: 2000
+    reset-je-version: true
 
   # Der Nether erst ab siedler: Ein Spieler, der eine Stunde alt ist, verliert dort
   # seine erste Ausruestung, und der Rueckweg ist weiter als der Hinweg. Die Stufe
@@ -3921,6 +3946,10 @@ welten:
     startwert: 110926008
     kante: 2000
     premium: true
+    # Der Reset ist hier keine Aufraeumarbeit, sondern die Begruendung: Weil die
+    # Welt zurueckgesetzt wird, bleibt in ihr kein Besitz - und darum ist das
+    # Auslaufen einer Mitgliedschaft harmlos (Plan 8.5).
+    reset-je-version: true
 
   # Bergbauwelt, fuer jeden offen. Eigener Startwert und eigene Grenze, damit die
   # Stollen nicht in der Welt liegen, in der gebaut wird.

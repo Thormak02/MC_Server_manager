@@ -1624,6 +1624,45 @@ public final class Datenbank implements AutoCloseable {
               KEY idx_strafe_liste
                   (art, aufgehoben_am, laeuft_ab_am, verhaengt_am)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // DER RUECKWEG [26.11.2026]: zwei Spalten an blockbuch, und beide
+            // sind unverzichtbar.
+            //
+            // vorzustand traegt, was an der Stelle stand, BEVOR die Tat geschah -
+            // als Vanilla-Text, etwa minecraft:oak_stairs[facing=east,half=bottom].
+            // VOR der Tat und nicht danach, und das ist die Entscheidung, an der
+            // alles haengt: Bei einem Abbau ist es der Block selbst, bei einer
+            // SETZUNG das, was ueberbaut wurde (Luft, Wasser, Gras). Mit dem
+            // Zustand NACH der Tat waere eine Setzung ueberhaupt nicht
+            // zurueckzunehmen - der Rueckweg setzte den gesetzten Block noch
+            // einmal. OHNE SIE kommt ein
+            // zurueckgerollter Bau falsch zusammen: Treppen zeigen in die falsche
+            // Richtung, Tueren haengen an der anderen Seite, Truhen stehen
+            // einzeln statt als Doppeltruhe. Das sieht nach einem Rueckweg aus
+            // und ist keiner. 255 Zeichen, weil ein Zustandstext mit allen
+            // Eigenschaften (etwa ein Zaun mit vier Richtungen plus waterlogged)
+            // darunter bleibt; der laengste in Vanilla liegt bei rund 180.
+            //
+            // zurueckgenommen ist der Riegel gegen den zweiten Lauf. Ohne ihn
+            // rollt derselbe Grief beim zweiten Aufruf ein zweites Mal zurueck -
+            // und macht damit die Reparatur weg, die jemand danach gebaut hat.
+            // GEMERKT und nicht geloescht: Das Blockbuch ist ein Protokoll, und
+            // ein geloeschter Grief laesst sich beim Wiederholungstaeter nicht
+            // mehr nachweisen.
+            //
+            // ANGEHAENGT und nicht in den CREATE oben geschrieben: Auf einem
+            // Server, der schon lief, steht die Tabelle - ein geaendertes CREATE
+            // TABLE IF NOT EXISTS liefe dort wirkungslos durch, und die Spalten
+            // fehlten stumm. Zwei getrennte Schritte, weil ein Schemaschritt
+            // entweder ganz oder gar nicht laeuft.
+            """
+            ALTER TABLE blockbuch
+              ADD COLUMN IF NOT EXISTS vorzustand VARCHAR(255) NOT NULL DEFAULT ''
+            """,
+            """
+            ALTER TABLE blockbuch
+              ADD COLUMN IF NOT EXISTS zurueckgenommen TINYINT(1) NOT NULL DEFAULT 0
             """);
 
     /**

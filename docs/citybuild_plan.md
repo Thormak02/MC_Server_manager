@@ -665,9 +665,29 @@ kein Server des Freimarkenbunds ist je direkt erreichbar.
 ist der spätere Umstieg reine Zusatzarbeit. MariaDB direkt. Die Abstraktion bleibt trotzdem,
 sie kostet nichts und hält dir die Tür offen.
 
-**Zu E8:** Weil dein Code keine GPL-Klassen importiert, gehört dein Plugin dir allein —
-beliebige Lizenz, keine Veröffentlichungspflicht, keine Altlast. Der Preis ist, dass große
-Blockoperationen selbst geschrieben werden. Endliche Arbeit statt dauerhafter Bindung.
+**Zu E8** [berichtigt 26.11.2026]: Die Folge stimmt, die Begründung stand falsch da.
+Sie lautete *"weil dein Code keine GPL-Klassen importiert"* — das trifft nur auf
+`core/` und `daten/` zu. Das Modul `paper/` importiert in 137 Dateien `org.bukkit`
+und `io.papermc`, und Paper selbst steht unter GPL-3.0; Copyleft ist also längst im
+Haus und nicht erst Nachbarschaft.
+
+Richtig ist die Folge trotzdem, und zwar aus einem anderen Grund: **Diese Lizenzen
+stellen Bedingungen an die WEITERGABE, keine an den Betrieb.** Solange kein fremder
+Quelltext und keine fremde Jar ins Verzeichnis wandert, entsteht keine Pflicht —
+auch aus MIT keine. Der ganze Plugin-Markt arbeitet auf dieser Grundlage: Jedes
+Bukkit-Plugin übersetzt gegen GPL-Schnittstellen, und geladen wird es zur Laufzeit
+von einem Server, der die Klassen mitbringt.
+
+Seit dem 26.11.2026 liegt die eigene Lage ausdrücklich in `LICENSE.md`: offen zu
+lesen, Verwendung durch Dritte untersagt, mit einer Tabelle der fremden Teile, für
+die das NICHT gilt. Vorher gab es keine Lizenzdatei — ein öffentliches Verzeichnis
+ohne Angabe ist nicht gemeinfrei, sondern unklar, und unklar ist die schlechteste
+der drei Lagen.
+
+Der Preis von E8 bleibt, dass große Blockoperationen selbst geschrieben werden.
+Endliche Arbeit statt dauerhafter Bindung — und die Prism-Prüfung vom 26.11.2026
+hat dieselbe Rechnung noch einmal bestätigt, diesmal an einer Fassungsuhr statt an
+einer Lizenz.
 
 ---
 

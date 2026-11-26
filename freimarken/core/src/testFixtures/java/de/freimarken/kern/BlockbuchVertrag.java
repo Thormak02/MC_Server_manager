@@ -325,7 +325,246 @@ public abstract class BlockbuchVertrag {
                 "die gute Zeile davor darf nicht geschrieben sein");
     }
 
+    // -------------------------------------------------- Der Rueckweg [26.11.2026]
+
+    /** Der Kasten um {@link #ORT} - drei Bloecke in jede Richtung. */
+    protected static final Quader KASTEN = new Quader(59, -63, 5, 65, -57, 11);
+
+    /** Ein Fenster, das WANN umschliesst. */
+    protected static final Instant VORHER = WANN.minusSeconds(600);
+
+    /** Ein Fenster, das WANN umschliesst. */
+    protected static final Instant NACHHER = WANN.plusSeconds(600);
+
+    /** Eine Zeile MIT Vorzustand - den braucht der Rueckweg. */
+    protected static Blockzeile tat(Instant wann, UUID wer, Blockort wo, Blocktat was,
+                                    boolean gelungen, String block, String vorzustand) {
+        return Blockzeile.neu(wann, wer, wo, was, gelungen, block, vorzustand);
+    }
+
+    @Test
+    @DisplayName("Der Bereich gibt AELTESTE zuerst - die Umkehrung der Hausregel")
+    void bereichGibtAeltesteZuerst() {
+        // DIE EINE LESEMETHODE, DIE ANDERS SORTIERT, und der Grund steht im Vertrag:
+        // Der Rueckweg stellt je Koordinate den Zustand VOR dem Eingriff her, und das
+        // ist die aelteste Zeile. Mit "neueste zuerst" schnitte die Grenze genau sie
+        // heraus - der Rueckweg stellte dann einen Zwischenstand her, und das sieht wie
+        // Erfolg aus.
+        Blockbuchablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        ablage.schreibe(List.of(
+                tat(WANN, anna, ORT, Blocktat.ABBAUEN, true, "erst", "minecraft:erst"),
+                tat(WANN.plusSeconds(1), anna, ORT, Blocktat.ABBAUEN, true, "dann",
+                        "minecraft:dann"),
+                tat(WANN.plusSeconds(2), anna, ORT, Blocktat.ABBAUEN, true, "zuletzt",
+                        "minecraft:zuletzt")));
+
+        List<Blockzeile> gelesen =
+                ablage.imBereich(ORT.welt(), KASTEN, VORHER, NACHHER, 20);
+
+        assertEquals(List.of("erst", "dann", "zuletzt"), bloecke(gelesen));
+    }
+
+    @Test
+    @DisplayName("Der Bereich nimmt nur, was IM Kasten liegt")
+    void bereichGrenztRaeumlichAb() {
+        Blockbuchablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        Blockort daneben = new Blockort(ORT.welt(), ORT.x() + 100, ORT.y(), ORT.z());
+        Blockort darueber = new Blockort(ORT.welt(), ORT.x(), ORT.y() + 100, ORT.z());
+        ablage.schreibe(List.of(
+                tat(WANN, anna, ORT, Blocktat.ABBAUEN, true, "drin", "minecraft:drin"),
+                tat(WANN, anna, daneben, Blocktat.ABBAUEN, true, "weit",
+                        "minecraft:weit"),
+                // y GEHOERT DAZU, und das ist kein Formalismus: Ein Rueckweg ueber eine
+                // Parzelle darf nicht den Keller mitnehmen, in dem jemand anders baut.
+                tat(WANN, anna, darueber, Blocktat.ABBAUEN, true, "hoch",
+                        "minecraft:hoch")));
+
+        List<Blockzeile> gelesen =
+                ablage.imBereich(ORT.welt(), KASTEN, VORHER, NACHHER, 20);
+
+        assertEquals(List.of("drin"), bloecke(gelesen));
+    }
+
+    @Test
+    @DisplayName("Der Bereich nimmt nur, was IM Zeitfenster liegt - beide Enden eingeschlossen")
+    void bereichGrenztZeitlichAb() {
+        Blockbuchablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        ablage.schreibe(List.of(
+                tat(VORHER.minusSeconds(1), anna, ORT, Blocktat.ABBAUEN, true, "zufrueh",
+                        "minecraft:zufrueh"),
+                // Genau auf der Kante - und die gehoert DAZU. Ein Betreiber, der "die
+                // letzten zehn Minuten" sagt, meint auch die Tat von vor genau zehn
+                // Minuten.
+                tat(VORHER, anna, ORT, Blocktat.ABBAUEN, true, "kanteunten",
+                        "minecraft:kanteunten"),
+                tat(NACHHER, anna, ORT, Blocktat.ABBAUEN, true, "kanteoben",
+                        "minecraft:kanteoben"),
+                tat(NACHHER.plusSeconds(1), anna, ORT, Blocktat.ABBAUEN, true, "zuspaet",
+                        "minecraft:zuspaet")));
+
+        List<Blockzeile> gelesen =
+                ablage.imBereich(ORT.welt(), KASTEN, VORHER, NACHHER, 20);
+
+        assertEquals(List.of("kanteunten", "kanteoben"), bloecke(gelesen));
+    }
+
+    @Test
+    @DisplayName("Der Bereich nimmt nur die EIGENE Welt")
+    void bereichGrenztDieWeltAb() {
+        // Die Koordinaten sind in jeder Welt dieselben. Ohne diese Bedingung rollte ein
+        // Rueckweg in der Marktstadt den Nether mit zurueck.
+        Blockbuchablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        ablage.schreibe(List.of(
+                tat(WANN, anna, ORT, Blocktat.ABBAUEN, true, "hier", "minecraft:hier"),
+                tat(WANN, anna, new Blockort("freimarken:nether", ORT.x(), ORT.y(),
+                        ORT.z()), Blocktat.ABBAUEN, true, "dort", "minecraft:dort")));
+
+        assertEquals(List.of("hier"),
+                bloecke(ablage.imBereich(ORT.welt(), KASTEN, VORHER, NACHHER, 20)));
+    }
+
+    @Test
+    @DisplayName("Der Vorzustand kommt hin und zurueck - sonst dreht sich jede Treppe falsch")
+    void vorzustandHinUndZurueck() {
+        Blockbuchablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        String treppe = "minecraft:oak_stairs[facing=east,half=bottom,shape=straight]";
+        ablage.schreibe(List.of(
+                tat(WANN, anna, ORT, Blocktat.ABBAUEN, true, "oak_stairs", treppe)));
+
+        List<Blockzeile> gelesen =
+                ablage.imBereich(ORT.welt(), KASTEN, VORHER, NACHHER, 20);
+
+        assertEquals(1, gelesen.size());
+        assertEquals(treppe, gelesen.get(0).vorzustand());
+        assertTrue(gelesen.get(0).hatVorzustand());
+    }
+
+    @Test
+    @DisplayName("Eine Zeile OHNE Vorzustand kommt als leerer Text zurueck, nicht als null")
+    void ohneVorzustandLeerUndNichtNull() {
+        // Zeilen aus der Zeit vor dem Rueckweg haben ihn nicht. Ein null hier waere ein
+        // Wurf mitten in der Rueckrollrechnung.
+        Blockbuchablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        ablage.schreibe(List.of(tat(WANN, anna, ORT, Blocktat.ABBAUEN, true, "stone")));
+
+        List<Blockzeile> gelesen =
+                ablage.imBereich(ORT.welt(), KASTEN, VORHER, NACHHER, 20);
+
+        assertEquals("", gelesen.get(0).vorzustand());
+        assertFalse(gelesen.get(0).hatVorzustand());
+    }
+
+    @Test
+    @DisplayName("Was zurueckgenommen ist, kommt NIE wieder im Bereich - sonst rollt es zweimal")
+    void zurueckgenommenesKommtNichtWieder() {
+        // DER RIEGEL GEGEN DEN ZWEITEN LAUF. Ohne ihn rollt derselbe Grief beim zweiten
+        // Aufruf ein zweites Mal zurueck - und macht damit die Reparatur weg, die jemand
+        // danach gebaut hat.
+        Blockbuchablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        ablage.schreibe(List.of(
+                tat(WANN, anna, ORT, Blocktat.ABBAUEN, true, "eins", "minecraft:eins"),
+                tat(WANN.plusSeconds(1), anna, ORT, Blocktat.ABBAUEN, true, "zwei",
+                        "minecraft:zwei")));
+        List<Blockzeile> erst =
+                ablage.imBereich(ORT.welt(), KASTEN, VORHER, NACHHER, 20);
+        assertEquals(2, erst.size());
+
+        assertEquals(1, ablage.merkeZurueckgenommen(List.of(erst.get(0).id())));
+
+        assertEquals(List.of("zwei"),
+                bloecke(ablage.imBereich(ORT.welt(), KASTEN, VORHER, NACHHER, 20)));
+        // UND DIE ANDEREN WEGE SEHEN SIE WEITER: Das Buch ist ein Protokoll. Ein
+        // zurueckgerollter Grief bleibt nachweisbar - sonst waere ein
+        // Wiederholungstaeter beim zweiten Mal wieder unbeschrieben.
+        assertEquals(2, ablage.amOrt(ORT, 20).size(),
+                "amOrt zeigt auch die zurueckgenommene Zeile - sie ist der Nachweis");
+    }
+
+    @Test
+    @DisplayName("Dieselbe Zeile zweimal zu merken zaehlt nur einmal")
+    void zweimalMerkenZaehltEinmal() {
+        Blockbuchablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        ablage.schreibe(List.of(
+                tat(WANN, anna, ORT, Blocktat.ABBAUEN, true, "eins", "minecraft:eins")));
+        long nummer = ablage.imBereich(ORT.welt(), KASTEN, VORHER, NACHHER, 20)
+                .get(0).id();
+
+        assertEquals(1, ablage.merkeZurueckgenommen(List.of(nummer)));
+        assertEquals(0, ablage.merkeZurueckgenommen(List.of(nummer)),
+                "sonst loege die Rueckgabe, und der Befehl meldete dem Betreiber eine"
+                        + " Zahl, die es nicht gibt");
+    }
+
+    @Test
+    @DisplayName("Eine Nummer, die es nicht gibt, wird uebergangen und nicht beklagt")
+    void unbekannteNummerUebergangen() {
+        // Zwischen Lesen und Merken kann der Aufraeumtakt eine alte Zeile weggenommen
+        // haben. Das ist kein Fehler - ein Wurf hier liesse einen halben Rueckweg
+        // stehen, dessen Zeilen niemand gemerkt hat.
+        Blockbuchablage ablage = ablage();
+
+        assertEquals(0, ablage.merkeZurueckgenommen(List.of(999_999L)));
+    }
+
+    @Test
+    @DisplayName("Eine leere Liste zu merken ist erlaubt und tut nichts")
+    void leereListeMerken() {
+        assertEquals(0, ablage().merkeZurueckgenommen(List.of()));
+    }
+
+    @Test
+    @DisplayName("Der Bereich ohne Welt, ohne Kasten, ohne Fenster oder verkehrt wirft")
+    void bereichWirftOhneAngaben() {
+        Blockbuchablage ablage = ablage();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ablage.imBereich(null, KASTEN, VORHER, NACHHER, 20));
+        assertThrows(IllegalArgumentException.class,
+                () -> ablage.imBereich(ORT.welt(), null, VORHER, NACHHER, 20));
+        assertThrows(IllegalArgumentException.class,
+                () -> ablage.imBereich(ORT.welt(), KASTEN, null, NACHHER, 20));
+        assertThrows(IllegalArgumentException.class,
+                () -> ablage.imBereich(ORT.welt(), KASTEN, VORHER, null, 20));
+        assertThrows(IllegalArgumentException.class,
+                () -> ablage.imBereich(ORT.welt(), KASTEN, NACHHER, VORHER, 20),
+                "ein verkehrtes Fenster ist ein Tippfehler und kein leeres Ergebnis");
+        assertThrows(IllegalArgumentException.class,
+                () -> ablage.imBereich(ORT.welt(), KASTEN, VORHER, NACHHER, 0),
+                "die Grenze ist Pflicht - dies ist die groesste Tabelle des Projekts");
+        assertThrows(IllegalArgumentException.class,
+                () -> ablage.merkeZurueckgenommen(null));
+    }
+
+    @Test
+    @DisplayName("Die Grenze des Bereichs schneidet die JUENGSTEN ab, nicht die aeltesten")
+    void grenzeDesBereichsSchneidetJuengste() {
+        // Die Gegenrichtung zu grenzeNimmtDieNeuesten - und sie MUSS anders sein: Hier
+        // ist die aelteste Zeile die wertvolle. Dass die Grenze dann die juengsten
+        // wegschneidet, ist der Grund, warum der Aufrufer um eine Zeile mehr fragt, als
+        // er verarbeiten will: Kommt sie, lehnt er ab.
+        Blockbuchablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        ablage.schreibe(List.of(
+                tat(WANN, anna, ORT, Blocktat.ABBAUEN, true, "eins", "minecraft:eins"),
+                tat(WANN.plusSeconds(1), anna, ORT, Blocktat.ABBAUEN, true, "zwei",
+                        "minecraft:zwei"),
+                tat(WANN.plusSeconds(2), anna, ORT, Blocktat.ABBAUEN, true, "drei",
+                        "minecraft:drei")));
+
+        assertEquals(List.of("eins", "zwei"),
+                bloecke(ablage.imBereich(ORT.welt(), KASTEN, VORHER, NACHHER, 2)));
+    }
+
     /** Die Blocknamen in der Reihenfolge der Antwort - so liest sich eine Erwartung. */
+
     protected static List<String> bloecke(List<Blockzeile> zeilen) {
         List<String> namen = new ArrayList<>();
         for (Blockzeile zeile : zeilen) {

@@ -71,10 +71,11 @@ import java.util.UUID;
 public final class MariaBlockbuch implements Blockbuchablage {
 
     private static final String SPALTEN =
-            "id, zeitpunkt, spieler, welt, x, y, z, tat, gelungen, block";
+            "id, zeitpunkt, spieler, welt, x, y, z, tat, gelungen, block, vorzustand";
 
     private static final String EINFUEGEN = "INSERT INTO blockbuch (zeitpunkt, spieler,"
-            + " welt, x, y, z, tat, gelungen, block) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            + " welt, x, y, z, tat, gelungen, block, vorzustand)"
+            + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     private static final String LESEN_ORT = "SELECT " + SPALTEN + " FROM blockbuch"
             + " WHERE welt = ? AND x = ? AND y = ? AND z = ?"
@@ -85,6 +86,26 @@ public final class MariaBlockbuch implements Blockbuchablage {
 
     private static final String AUFRAEUMEN = "DELETE FROM blockbuch WHERE zeitpunkt < ?"
             + " ORDER BY zeitpunkt LIMIT ?";
+
+    /**
+     * Der Bereich - AELTESTE zuerst, und ohne das schon Zurueckgenommene.
+     *
+     * <p>Der Index {@code ix_blockbuch_ort} traegt {@code (welt, x, y, z,}
+     * {@code zeitpunkt, id)}. Die Bedingung nennt {@code welt} gleich und
+     * {@code x} als Spanne - damit traegt der Index die ersten zwei Stellen, und
+     * y, z und der Zeitpunkt werden auf dem gefundenen Abschnitt gepruefte
+     * Nachfilter. Ein eigener Index waere ein vierter auf der groessten Tabelle
+     * des Projekts, fuer eine Abfrage, die ein Betreiber im Monat ein paar Mal
+     * tippt.
+     */
+    private static final String LESEN_BEREICH = "SELECT " + SPALTEN + " FROM blockbuch"
+            + " WHERE welt = ? AND x BETWEEN ? AND ? AND y BETWEEN ? AND ?"
+            + " AND z BETWEEN ? AND ? AND zeitpunkt BETWEEN ? AND ?"
+            + " AND zurueckgenommen = 0"
+            + " ORDER BY zeitpunkt ASC, id ASC LIMIT ?";
+
+    private static final String MERKEN = "UPDATE blockbuch SET zurueckgenommen = 1"
+            + " WHERE id = ? AND zurueckgenommen = 0";
 
     private final Datenbank datenbank;
 
@@ -126,6 +147,7 @@ public final class MariaBlockbuch implements Blockbuchablage {
                 anfrage.setString(7, zeile.tat().schluessel());
                 anfrage.setBoolean(8, zeile.gelungen());
                 anfrage.setString(9, zeile.block());
+                anfrage.setString(10, zeile.vorzustand());
                 anfrage.addBatch();
             }
             int[] je = anfrage.executeBatch();
@@ -196,6 +218,73 @@ public final class MariaBlockbuch implements Blockbuchablage {
         }
     }
 
+    @Override
+    public List<Blockzeile> imBereich(String welt, de.freimarken.kern.Quader kasten,
+                                      Instant von, Instant bis, int hoechstens) {
+        if (welt == null || welt.isBlank()) {
+            throw new IllegalArgumentException("Ohne Welt gibt es keinen Bereich");
+        }
+        if (kasten == null) {
+            throw new IllegalArgumentException("Ohne Kasten gibt es keinen Bereich");
+        }
+        if (von == null || bis == null) {
+            throw new IllegalArgumentException("Ein Rueckweg ohne Zeitfenster waere"
+                    + " die ganze Geschichte der Welt");
+        }
+        if (bis.isBefore(von)) {
+            throw new IllegalArgumentException("Das Fenster liegt verkehrt: " + von
+                    + " bis " + bis);
+        }
+        pruefeGrenze(hoechstens);
+        try (PreparedStatement anfrage =
+                     datenbank.verbindung().prepareStatement(LESEN_BEREICH)) {
+            anfrage.setString(1, welt);
+            anfrage.setInt(2, kasten.vonX());
+            anfrage.setInt(3, kasten.bisX());
+            anfrage.setInt(4, kasten.vonY());
+            anfrage.setInt(5, kasten.bisY());
+            anfrage.setInt(6, kasten.vonZ());
+            anfrage.setInt(7, kasten.bisZ());
+            // Derselbe Kalender wie beim Schreiben. Ohne ihn waere das Fenster um
+            // den Zonenversatz verschoben - und ein Rueckweg, der eine Stunde
+            // daneben greift, stellt den falschen Zustand her.
+            anfrage.setTimestamp(8, Timestamp.from(von), Datenbank.utcKalender());
+            anfrage.setTimestamp(9, Timestamp.from(bis), Datenbank.utcKalender());
+            anfrage.setInt(10, hoechstens);
+            return gelesen(anfrage);
+        } catch (SQLException fehler) {
+            throw new IllegalStateException("Blockbuch nicht bereichsweise lesbar ("
+                    + welt + " " + kasten.alsText() + ", " + von + " bis " + bis
+                    + ")", fehler);
+        }
+    }
+
+    @Override
+    public int merkeZurueckgenommen(List<Long> nummern) {
+        if (nummern == null) {
+            throw new IllegalArgumentException("Ohne Liste gibt es nichts zu merken");
+        }
+        if (nummern.isEmpty()) {
+            return 0;
+        }
+        try (PreparedStatement anfrage =
+                     datenbank.verbindung().prepareStatement(MERKEN)) {
+            for (Long nummer : nummern) {
+                if (nummer == null) {
+                    continue;
+                }
+                anfrage.setLong(1, nummer);
+                anfrage.addBatch();
+            }
+            // zurueckgenommen = 0 steht IN der Bedingung: So zaehlt ein zweiter
+            // Aufruf dieselbe Zeile nicht erneut, und die Rueckgabe bleibt wahr.
+            return getroffen(anfrage.executeBatch());
+        } catch (SQLException fehler) {
+            throw new IllegalStateException("Ruecknahme nicht merkbar ("
+                    + nummern.size() + " Zeilen)", fehler);
+        }
+    }
+
     private static List<Blockzeile> gelesen(PreparedStatement anfrage)
             throws SQLException {
         List<Blockzeile> gefunden = new ArrayList<>();
@@ -233,7 +322,11 @@ public final class MariaBlockbuch implements Blockbuchablage {
                         zeile.getInt("y"), zeile.getInt("z")),
                 tat,
                 zeile.getBoolean("gelungen"),
-                zeile.getString("block"));
+                zeile.getString("block"),
+                // Eine Zeile aus der Zeit vor dem 26.11.2026 hat hier den
+                // Werkswert der Spalte, also einen leeren Text - und keinen
+                // null. Der Record nimmt beides und macht daraus "".
+                zeile.getString("vorzustand"));
     }
 
     /**
@@ -253,6 +346,37 @@ public final class MariaBlockbuch implements Blockbuchablage {
             }
         }
         return geschrieben;
+    }
+
+    /**
+     * Wie viele Zeilen ein Stapel von UPDATE wirklich GETROFFEN hat.
+     *
+     * <p><b>Eine zweite Zaehlung neben {@link #gezaehlt}, und der Vertrag hat sie
+     * erzwungen</b> [26.11.2026]: Jene zaehlt JEDE Anweisung, die nicht gescheitert
+     * ist, als eine Zeile - und fuer ein INSERT ist das richtig, denn ein
+     * geglueckter Einfuegebefehl schreibt genau eine Zeile. Ein UPDATE, das NICHTS
+     * trifft, ist dagegen auch geglueckt und gibt 0 zurueck. Mit jener Zaehlung
+     * meldete das Merken einer Nummer, die es nicht gibt, eine zurueckgenommene
+     * Zeile - und der Befehl sagte dem Betreiber eine Zahl, die es nicht gibt.
+     *
+     * <p>Gefunden hat das der {@code BlockbuchVertrag}: Auf der Speicherfassung war
+     * die Zusage gruen, auf MariaDB rot - genau die Stelle, fuer die es ihn gibt.
+     *
+     * <p>{@code SUCCESS_NO_INFO} zaehlt als EINE getroffene Zeile. Das ist die
+     * einzige Naeherung hier, und sie ist unvermeidlich - der Treiber sagt dann
+     * nicht, wie viele es waren. MariaDB gibt bei einem Stapel echte Zahlen
+     * zurueck; der Fall tritt dort nicht ein.
+     */
+    private static int getroffen(int[] je) {
+        int summe = 0;
+        for (int ergebnis : je) {
+            if (ergebnis == java.sql.Statement.SUCCESS_NO_INFO) {
+                summe++;
+            } else if (ergebnis > 0) {
+                summe += ergebnis;
+            }
+        }
+        return summe;
     }
 
     private static void pruefeGrenze(int hoechstens) {

@@ -5271,10 +5271,28 @@ public final class FreimarkenPlugin extends JavaPlugin {
                                 + " - /freimarken vorgenerieren nennt die Befehle dazu.");
                     }
                     if (!veraltet.isEmpty()) {
-                        getLogger().warning("Veraltete Chunks: " + String.join(", ", veraltet)
-                                + " - erzeugt mit einer aelteren Minecraft-Fassung. Fuer"
-                                + " Kornmark ist damit das Zuruecksetzen faellig"
-                                + " (Plan Abschnitt 13).");
+                        // DIE WELTEN AUS DER LISTE und nicht "Kornmark" als festes
+                        // Wort [26.11.2026]: Seit der Vogtei gibt es zwei Farmwelten
+                        // mit Reset, und die Vogtei fiel durch diese Zeile stumm
+                        // durch. An ihrem Reset haengt die Begruendung, dass eine
+                        // ablaufende Mitgliedschaft harmlos ist - dort bleibt kein
+                        // Besitz, WEIL zurueckgesetzt wird.
+                        List<String> zurueck = veraltet.stream()
+                                .filter(kurz -> {
+                                    Weltangabe angabe = angaben.get(kurz);
+                                    return angabe != null && angabe.resetJeVersion();
+                                })
+                                .toList();
+                        getLogger().warning("Veraltete Chunks: "
+                                + String.join(", ", veraltet)
+                                + " - erzeugt mit einer aelteren Minecraft-Fassung."
+                                + (zurueck.isEmpty()
+                                        ? " Keine davon ist eine Welt mit"
+                                                + " reset-je-version - zurueckzusetzen"
+                                                + " ist nichts (Plan Abschnitt 13)."
+                                        : " Zuruecksetzen faellig fuer: "
+                                                + String.join(", ", zurueck)
+                                                + " (Plan Abschnitt 13)."));
                     }
                 });
     }

@@ -194,6 +194,25 @@ class BlockraeumungTest {
                 zaehler[0]++;
                 return buch.raeumeAuf(aelterAls, hoechstens);
             }
+            // DIESE ATTRAPPE KENNT DEN RUECKWEG NICHT. Ein stilles List.of()
+            // liesse eine kuenftige Probe gruen durchlaufen, die ihn meint -
+            // dieselbe Bauart wie Serverprobe und Spielerprobe.
+            @Override
+            public List<Blockzeile> imBereich(String welt,
+                                              de.freimarken.kern.Quader kasten,
+                                              Instant von, Instant bis,
+                                              int hoechstens) {
+                throw new UnsupportedOperationException("Diese Attrappe beantwortet"
+                        + " imBereich nicht - der Zweig, den du durchlaeufst,"
+                        + " braucht sie, also gehoert eine Antwort hierher.");
+            }
+
+            @Override
+            public int merkeZurueckgenommen(java.util.List<Long> nummern) {
+                throw new UnsupportedOperationException("Diese Attrappe beantwortet"
+                        + " merkeZurueckgenommen nicht.");
+            }
+
         };
         Blockraeumung raeumung = new Blockraeumung(zaehlende, werte(30, 500),
                 stand(), Clock.fixed(JETZT, ZoneOffset.UTC),
@@ -235,6 +254,25 @@ class BlockraeumungTest {
                 versuche[0]++;
                 throw new IllegalStateException("Datenbank weg");
             }
+            // DIESE ATTRAPPE KENNT DEN RUECKWEG NICHT. Ein stilles List.of()
+            // liesse eine kuenftige Probe gruen durchlaufen, die ihn meint -
+            // dieselbe Bauart wie Serverprobe und Spielerprobe.
+            @Override
+            public List<Blockzeile> imBereich(String welt,
+                                              de.freimarken.kern.Quader kasten,
+                                              Instant von, Instant bis,
+                                              int hoechstens) {
+                throw new UnsupportedOperationException("Diese Attrappe beantwortet"
+                        + " imBereich nicht - der Zweig, den du durchlaeufst,"
+                        + " braucht sie, also gehoert eine Antwort hierher.");
+            }
+
+            @Override
+            public int merkeZurueckgenommen(java.util.List<Long> nummern) {
+                throw new UnsupportedOperationException("Diese Attrappe beantwortet"
+                        + " merkeZurueckgenommen nicht.");
+            }
+
         };
         Blockraeumung raeumung = new Blockraeumung(gestoert, werte(30, 500),
                 stand(), Clock.fixed(JETZT, ZoneOffset.UTC),

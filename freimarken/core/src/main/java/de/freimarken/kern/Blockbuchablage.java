@@ -110,4 +110,57 @@ public interface Blockbuchablage {
      * @throws IllegalStateException wenn nicht geloescht werden konnte
      */
     int raeumeAuf(Instant aelterAls, int hoechstens);
+
+    /**
+     * Jede noch nicht zurueckgenommene Zeile in einem Kasten und Zeitfenster -
+     * <b>AELTESTE zuerst</b>.
+     *
+     * <p><b>Die EINZIGE Lesemethode dieses Buches, die anders sortiert</b>, und
+     * der Grund ist der Rueckweg: Er stellt je Koordinate den Zustand VOR dem
+     * Eingriff wieder her, und das ist die AELTESTE Zeile im Fenster. Mit
+     * "neueste zuerst" und einer Grenze schnitte die Abfrage genau diese Zeilen
+     * heraus - der Rueckweg stellte dann einen Zwischenzustand her, und das waere
+     * schlimmer als gar keiner, denn es sieht wie Erfolg aus.
+     *
+     * <p><b>Die Grenze bleibt Pflicht</b>, aber sie bedeutet hier etwas anderes:
+     * Bei den anderen Methoden schneidet sie die Antwort ab und das ist richtig
+     * ("zeig mir die letzten zwanzig"). Hier darf sie nicht abschneiden - ein
+     * halber Rueckweg ist ein Fehler. Darum fragt der Aufrufer um EINE Zeile mehr,
+     * als er verarbeiten will: Kommen mehr als erwartet zurueck, lehnt er ab und
+     * sagt dem Betreiber, er solle den Kasten oder das Fenster verkleinern.
+     *
+     * <p>Zeilen, die schon zurueckgenommen wurden, kommen NICHT mit. Sonst rollte
+     * derselbe Grief beim zweiten Aufruf ein zweites Mal zurueck und machte eine
+     * Reparatur, die jemand danach gebaut hat, wieder weg.
+     *
+     * @param welt       der Schluesseltext der Welt, etwa {@code freimarken:marktstadt}
+     * @param kasten     der Bereich, beide Ecken eingeschlossen
+     * @param von        ab diesem Zeitpunkt, eingeschlossen
+     * @param bis        bis zu diesem Zeitpunkt, eingeschlossen
+     * @param hoechstens wie viele Zeilen hoechstens - mindestens 1
+     * @throws IllegalArgumentException wenn etwas {@code null} ist, das Fenster
+     *         verkehrt liegt oder die Grenze kleiner als 1 ist
+     * @throws IllegalStateException wenn nicht gelesen werden konnte
+     */
+    List<Blockzeile> imBereich(String welt, Quader kasten, Instant von, Instant bis,
+                               int hoechstens);
+
+    /**
+     * Merkt diese Zeilen als zurueckgenommen - sie zaehlen danach nie wieder.
+     *
+     * <p><b>Warum ein Merker und kein Loeschen</b>: Das Blockbuch ist ein
+     * Protokoll. Wer einen Rueckweg geht, greift in die Welt ein, und genau DAS
+     * gehoert aufgeschrieben - nicht weggeraeumt. Ein geloeschter Grief laesst sich
+     * hinterher nicht mehr nachweisen, und die Frage "war hier schon einmal
+     * jemand" ist bei einem Wiederholungstaeter die wichtigere.
+     *
+     * <p>Eine leere Liste ist erlaubt und tut nichts. Eine Nummer, die es nicht
+     * gibt, wird uebergangen und nicht beklagt: Zwischen Lesen und Merken kann der
+     * Aufraeumtakt eine alte Zeile weggenommen haben, und das ist kein Fehler.
+     *
+     * @return wie viele Zeilen wirklich gemerkt wurden
+     * @throws IllegalArgumentException wenn die Liste {@code null} ist
+     * @throws IllegalStateException wenn nicht geschrieben werden konnte
+     */
+    int merkeZurueckgenommen(List<Long> nummern);
 }

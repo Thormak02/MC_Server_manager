@@ -2,6 +2,10 @@
 
 Web-based management software for multiple Minecraft servers on a Windows host.
 
+> **Open to read, not open to use.** This repository is public so that it can be
+> inspected and reviewed. Any use by third parties is prohibited - see
+> [LICENSE.md](LICENSE.md). If you need something from it, just ask.
+
 ## Features (Phase 1-6)
 
 - Login with roles (`super_admin`, `admin`, `moderator`, `view_only`)

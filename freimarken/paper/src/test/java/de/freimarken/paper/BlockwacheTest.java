@@ -154,7 +154,13 @@ class BlockwacheTest {
      * {@code SuppressWarnings}.
      */
     private BlockPlaceEvent setzen(World welt, int x, int y, int z) {
-        return new BlockPlaceEvent(welt.getBlockAt(x, y, z), null,
+        // DER ZWEITE WERT IST DER UEBERBAUTE ZUSTAND, und er stand hier bis zum
+        // 26.11.2026 auf null. Das Blockbuch liest ihn seit dem Rueckweg: Er
+        // ist, was ein zurueckgenommenes Setzen wiederherstellt. Mit null lief
+        // die Wache in eine NullPointerException - auf MONITOR, also mitten im
+        // Ereignis.
+        return new BlockPlaceEvent(welt.getBlockAt(x, y, z),
+                welt.getBlockAt(x, y, z).getState(),
                 welt.getBlockAt(x, y - 1, z), null, cara().spieler(), true,
                 EquipmentSlot.HAND);
     }
@@ -470,11 +476,12 @@ class BlockwacheTest {
                             + " sucht. Nichts bricht, nichts wird rot; es fehlt nur eine"
                             + " Sorte Zeile.");
         }
-        assertEquals(3, gefunden,
-                "erwartet werden drei Haken - setzen, abbauen, benutzen. Weniger heisst,"
-                        + " dass diese Probe einen Zweig nicht sieht; mehr heisst, dass"
-                        + " ein neuer dazugekommen ist und hier mitgezaehlt werden"
-                        + " muss.");
+        assertEquals(5, gefunden,
+                "erwartet werden FUENF Haken - setzen, abbauen, benutzen und seit dem"
+                        + " 26.11.2026 die zwei Sprengungen (Wesen und Block). Weniger"
+                        + " heisst, dass diese Probe einen Zweig nicht sieht; mehr"
+                        + " heisst, dass ein neuer dazugekommen ist und hier"
+                        + " mitgezaehlt werden muss.");
         assertNotNull(wache, "die Wache aus dem Aufbau wird hier mitgeprueft");
     }
 }

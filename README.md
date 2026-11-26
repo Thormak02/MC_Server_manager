@@ -2,6 +2,11 @@
 
 Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-Host.
 
+> **Offen zu lesen, nicht offen zu benutzen.** Dieses Verzeichnis liegt
+> oeffentlich, damit man es ansehen und nachlesen kann. Jede Verwendung durch
+> Dritte ist untersagt - siehe [LICENSE.md](LICENSE.md). Wer etwas davon braucht,
+> soll fragen.
+
 ## Features (Phase 1-6)
 
 - Login mit Rollenmodell (`super_admin`, `admin`, `moderator`, `view_only`)

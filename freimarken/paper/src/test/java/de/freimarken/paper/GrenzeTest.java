@@ -5609,4 +5609,54 @@ class GrenzeTest {
                         + " nichts mehr zu verhindern");
     }
 
+    @Test
+    @DisplayName("31ec - die Ruecksetz-Erinnerung fragt den SCHALTER, nicht einen Weltnamen")
+    void ruecksetzErinnerungFragtDenSchalter() {
+        // DER FEHLER, GEGEN DEN DIESE TAFEL GEBAUT IST [gefunden 26.11.2026]: Die
+        // Warnung bei veralteten Chunks nannte "Kornmark" als festes Wort. Am
+        // 25.11.2026 kam die Vogtei dazu - dieselbe Gattung, derselbe Reset - und fiel
+        // still durch: Der Betreiber las "Fuer Kornmark ist das Zuruecksetzen faellig"
+        // und setzte die Vogtei nicht zurueck.
+        //
+        // Das ist mehr als eine vergessene Erinnerung. Bei der Vogtei ist der Reset die
+        // BEGRUENDUNG dafuer, dass eine ablaufende Mitgliedschaft harmlos ist
+        // (Plan 8.5): Dort bleibt kein Gebautes, WEIL zurueckgesetzt wird. Eine
+        // Erinnerung, die sie nicht nennt, nimmt dieser Begruendung die Grundlage.
+        //
+        // Dieselbe Bauart wie 31eb: Die Wirkung ist eine Protokollzeile, und die sieht
+        // keine Probe. Was pruefbar bleibt, ist der ANSCHLUSS.
+        String plugin = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("FreimarkenPlugin.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("FreimarkenPlugin.java fehlt")));
+        // ZWEI FENSTER, und das ist nicht Umstand, sondern gemessen [26.11.2026]:
+        // Die erste Fassung dieser Tafel suchte den Weltnamen MIT Anfuehrungszeichen
+        // ("\"" + welt + "\""). Im Quelltext stehen die aber maskiert - aus
+        // \"Kornmark\" wird Backslash-Anfuehrung-K..., und davor steht eben KEINE
+        // nackte Anfuehrung. Eine Einspritzung, die genau diesen Fehler wieder
+        // einbaute, lief an der Tafel vorbei. Jetzt wird der nackte Name gesucht -
+        // und darum muss das Fenster die Kommentare AUSSCHLIESSEN, denn die
+        // Begruendung oben nennt Kornmark und Vogtei zu Recht.
+        int warnung = plugin.indexOf("getLogger().warning(\"Veraltete Chunks: \"");
+        assertTrue(warnung > 0, "die Warnung ueber veraltete Chunks gibt es nicht mehr -"
+                + " dann erfaehrt niemand von einem Versionswechsel");
+
+        // Fenster 1: NUR die Argumente der Warnung - dort steht kein Kommentar.
+        String argumente = plugin.substring(warnung,
+                Math.min(plugin.length(), warnung + 900));
+        for (String welt : new String[] {"Kornmark", "kornmark", "Vogtei", "vogtei"}) {
+            assertTrue(!argumente.contains(welt),
+                    "der Weltname " + welt + " steht im Text der Warnung - genau das"
+                            + " war der Fehler vom 26.11.2026: die Vogtei fiel durch"
+                            + " eine Zeile, die nur Kornmark nannte, still durch");
+        }
+
+        // Fenster 2: was VOR der Warnung steht - dort wird der Schalter gefragt.
+        String davor = plugin.substring(Math.max(0, warnung - 800), warnung);
+        assertTrue(davor.contains("resetJeVersion()"),
+                "die Warnung fragt den Schalter nicht - dann haengt sie wieder an"
+                        + " einem festen Weltnamen, und die naechste Farmwelt faellt"
+                        + " still durch");
+    }
 }

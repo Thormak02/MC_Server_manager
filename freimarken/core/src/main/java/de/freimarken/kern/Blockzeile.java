@@ -28,9 +28,19 @@ import java.util.UUID;
  * @param tat       was
  * @param gelungen  ob es durchging; {@code false} heisst, ein Schutz hat abgebrochen
  * @param block     der Name des Blocks, kleingeschrieben
+ * @param vorzustand was an dieser Stelle stand, BEVOR die Tat geschah - als
+ *                  Vanilla-Text, etwa
+ *                  {@code minecraft:oak_stairs[facing=east,half=bottom]}, oder
+ *                  {@code ""}. Genau das stellt ein Rueckweg wieder her, und
+ *                  darum ist es der Zustand VOR der Tat und nicht danach: Bei
+ *                  einer Setzung ist es das, was ueberbaut wurde (Luft, Wasser,
+ *                  Gras), bei einem Abbau und einer Sprengung der Block selbst.
+ *                  Was NACH der Tat dasteht, braucht niemand - bei einer Setzung
+ *                  steht es in {@code block}
  */
 public record Blockzeile(long id, Instant zeitpunkt, UUID spieler, Blockort ort,
-                         Blocktat tat, boolean gelungen, String block) {
+                         Blocktat tat, boolean gelungen, String block,
+                         String vorzustand) {
 
     /**
      * Die Nummer einer Zeile, die noch nicht geschrieben ist.
@@ -41,6 +51,30 @@ public record Blockzeile(long id, Instant zeitpunkt, UUID spieler, Blockort ort,
      * {@code Long} stehen muss.
      */
     public static final long OHNE_NUMMER = 0L;
+
+    /**
+     * Die Kennung fuer "kein Spieler" - eine Weltursache.
+     *
+     * <p><b>Warum es sie braucht</b> [26.11.2026]: Mit {@link Blocktat#SPRENGEN}
+     * kommen Zeilen ohne Taeter ins Buch. Ein Creeper gehoert niemandem, und ein
+     * Bett, das im Nether hochgeht, auch nicht. Die Spalte ist
+     * {@code NOT NULL} - also braucht dieser Fall einen EIGENEN Wert, und nicht
+     * den Spieler, der zufaellig in der Naehe stand.
+     *
+     * <p>Die Nullkennung und keine erfundene: Sie ist die einzige, die mit
+     * Sicherheit niemandem gehoert - Minecraft vergibt Spielerkennungen aus
+     * Zufall oder aus dem Namen, und beide treffen sie nie.
+     *
+     * <p>Wer sie anzeigt, muss sie UEBERSETZEN. Eine Zeile, die
+     * {@code 00000000-0000-0000-0000-000000000000} nennt, beantwortet die Frage
+     * "wer war das" schlechter als ein Satz, der sagt: niemand, das war die Welt.
+     */
+    public static final UUID NIEMAND = new UUID(0L, 0L);
+
+    /** Ob diese Zeile keinem Spieler zuzuordnen ist. */
+    public boolean ohneTaeter() {
+        return NIEMAND.equals(spieler);
+    }
 
     public Blockzeile {
         if (id < OHNE_NUMMER) {
@@ -63,6 +97,17 @@ public record Blockzeile(long id, Instant zeitpunkt, UUID spieler, Blockort ort,
             throw new IllegalArgumentException("Eine Blockzeile ohne Block - auch Luft"
                     + " hat einen Namen");
         }
+        // Leer und nicht null, wie bei jedem Text dieses Projekts, der fehlen
+        // DARF: Ein Leser, der gegen null fragt, uebersieht den leeren Fall - und
+        // umgekehrt. Hier ist das besonders teuer, denn eine Zeile aus der Zeit vor
+        // dem 26.11.2026 hat keinen Zustand, und der Rueckweg muss sie trotzdem
+        // lesen koennen.
+        vorzustand = vorzustand == null ? "" : vorzustand;
+    }
+
+    /** Ob diese Zeile den Vorzustand traegt, den ein Rueckweg braucht. */
+    public boolean hatVorzustand() {
+        return !vorzustand.isBlank();
     }
 
     /**
@@ -74,7 +119,23 @@ public record Blockzeile(long id, Instant zeitpunkt, UUID spieler, Blockort ort,
      */
     public static Blockzeile neu(Instant zeitpunkt, UUID spieler, Blockort ort,
                                  Blocktat tat, boolean gelungen, String block) {
-        return new Blockzeile(OHNE_NUMMER, zeitpunkt, spieler, ort, tat, gelungen, block);
+        return neu(zeitpunkt, spieler, ort, tat, gelungen, block, "");
+    }
+
+    /**
+     * Dieselbe Zeile MIT Vorzustand - der Weg, den der Rueckweg braucht.
+     *
+     * <p><b>Zwei Fabrikmethoden und nicht eine mit acht Werten</b> [26.11.2026]:
+     * Vierzehn Stellen rufen die kurze, und die meisten von ihnen gehen den
+     * Zustand nichts an - eine Probe ueber das Aufraeumen braucht keine Treppe mit
+     * Blickrichtung. Die kurze ist damit kein Rueckfall, sondern die Aussage
+     * "dieser Zustand ist hier gleichgueltig".
+     */
+    public static Blockzeile neu(Instant zeitpunkt, UUID spieler, Blockort ort,
+                                 Blocktat tat, boolean gelungen, String block,
+                                 String vorzustand) {
+        return new Blockzeile(OHNE_NUMMER, zeitpunkt, spieler, ort, tat, gelungen,
+                block, vorzustand);
     }
 
     /** Dieselbe Zeile mit der Nummer, die die Ablage vergeben hat. */
@@ -83,6 +144,7 @@ public record Blockzeile(long id, Instant zeitpunkt, UUID spieler, Blockort ort,
             throw new IllegalArgumentException("Eine vergebene Nummer beginnt bei 1: "
                     + vergeben);
         }
-        return new Blockzeile(vergeben, zeitpunkt, spieler, ort, tat, gelungen, block);
+        return new Blockzeile(vergeben, zeitpunkt, spieler, ort, tat, gelungen,
+                block, vorzustand);
     }
 }

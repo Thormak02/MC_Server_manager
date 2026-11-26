@@ -94,6 +94,10 @@ class SchemaTest {
         737655663, // Schritt 39 - Tabelle team
         1212480773, // Schritt 40 - Tabelle meldungen
         492034302, // Schritt 41 - Tabelle strafen
+        // Der Rueckweg [26.11.2026]: zwei Spalten an blockbuch, zwei Schritte.
+        // Getrennt, weil ein Schemaschritt entweder ganz oder gar nicht laeuft.
+        1271553219, // Schritt 42 - blockbuch.vorzustand
+        1531590179, // Schritt 43 - blockbuch.zurueckgenommen
     };
 
     private static String datenbanktext() {

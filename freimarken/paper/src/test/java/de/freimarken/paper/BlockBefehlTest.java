@@ -470,6 +470,25 @@ class BlockBefehlTest {
             public int raeumeAuf(Instant aelterAls, int hoechstens) {
                 return 0;
             }
+            // DIESE ATTRAPPE KENNT DEN RUECKWEG NICHT. Ein stilles List.of()
+            // liesse eine kuenftige Probe gruen durchlaufen, die ihn meint -
+            // dieselbe Bauart wie Serverprobe und Spielerprobe.
+            @Override
+            public List<Blockzeile> imBereich(String welt,
+                                              de.freimarken.kern.Quader kasten,
+                                              Instant von, Instant bis,
+                                              int hoechstens) {
+                throw new UnsupportedOperationException("Diese Attrappe beantwortet"
+                        + " imBereich nicht - der Zweig, den du durchlaeufst,"
+                        + " braucht sie, also gehoert eine Antwort hierher.");
+            }
+
+            @Override
+            public int merkeZurueckgenommen(java.util.List<Long> nummern) {
+                throw new UnsupportedOperationException("Diese Attrappe beantwortet"
+                        + " merkeZurueckgenommen nicht.");
+            }
+
         };
         Spielerprobe mod = moderator();
 

@@ -44,6 +44,16 @@ public final class SpeicherBlockbuch implements Blockbuchablage {
 
     private final List<Blockzeile> zeilen = new ArrayList<>();
 
+    /**
+     * Die Nummern, die schon zurueckgenommen wurden.
+     *
+     * <p>Eine eigene Menge und kein Feld an der Zeile: {@link Blockzeile} ist ein
+     * Record und damit unveraenderlich - ein Merker darin muesste die Zeile
+     * ersetzen, und dann waeren zwei Fassungen derselben Zeile im Umlauf. In der
+     * Datenbank ist es eine Spalte; hier ist die Menge das Gegenstueck dazu.
+     */
+    private final java.util.Set<Long> zurueckgenommen = new java.util.HashSet<>();
+
     private long naechsteNummer = 1L;
 
     @Override
@@ -111,6 +121,68 @@ public final class SpeicherBlockbuch implements Blockbuchablage {
             }
         }
         return weg;
+    }
+
+    @Override
+    public List<Blockzeile> imBereich(String welt, Quader kasten, Instant von,
+                                      Instant bis, int hoechstens) {
+        if (welt == null || welt.isBlank()) {
+            throw new IllegalArgumentException("Ohne Welt gibt es keinen Bereich");
+        }
+        if (kasten == null) {
+            throw new IllegalArgumentException("Ohne Kasten gibt es keinen Bereich");
+        }
+        if (von == null || bis == null) {
+            throw new IllegalArgumentException("Ein Rueckweg ohne Zeitfenster waere"
+                    + " die ganze Geschichte der Welt");
+        }
+        if (bis.isBefore(von)) {
+            throw new IllegalArgumentException("Das Fenster liegt verkehrt: " + von
+                    + " bis " + bis);
+        }
+        pruefeGrenze(hoechstens);
+        List<Blockzeile> gefunden = new ArrayList<>();
+        for (Blockzeile zeile : zeilen) {
+            if (zurueckgenommen.contains(zeile.id())) {
+                continue;
+            }
+            if (!zeile.ort().welt().equals(welt)) {
+                continue;
+            }
+            if (!kasten.enthaelt(zeile.ort().x(), zeile.ort().y(), zeile.ort().z())) {
+                continue;
+            }
+            if (zeile.zeitpunkt().isBefore(von) || zeile.zeitpunkt().isAfter(bis)) {
+                continue;
+            }
+            gefunden.add(zeile);
+        }
+        // AELTESTE zuerst - die Umkehrung der Hausregel, und zwar begruendet im
+        // Vertrag. Erst sortieren, dann abschneiden, wie bei gefiltert().
+        gefunden.sort(NEUESTE_ZUERST.reversed());
+        return gefunden.size() <= hoechstens
+                ? gefunden
+                : new ArrayList<>(gefunden.subList(0, hoechstens));
+    }
+
+    @Override
+    public int merkeZurueckgenommen(List<Long> nummern) {
+        if (nummern == null) {
+            throw new IllegalArgumentException("Ohne Liste gibt es nichts zu merken");
+        }
+        int gemerkt = 0;
+        for (Long nummer : nummern) {
+            if (nummer == null) {
+                continue;
+            }
+            // Nur was es GIBT und noch nicht gemerkt ist - sonst zaehlte ein
+            // zweiter Aufruf dieselbe Zeile erneut, und die Rueckgabe log.
+            boolean dabei = zeilen.stream().anyMatch(z -> z.id() == nummer);
+            if (dabei && zurueckgenommen.add(nummer)) {
+                gemerkt++;
+            }
+        }
+        return gemerkt;
     }
 
     /** Wie viele Zeilen im Buch stehen - fuer Proben. */

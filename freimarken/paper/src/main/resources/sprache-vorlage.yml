@@ -2639,6 +2639,9 @@ blockbuch:
     setzen: "setzte"
     abbauen: "baute ab"
     benutzen: "benutzte"
+    # Eine Sprengung hat oft keinen Taeter - darum ein Wort, das ohne einen
+    # auskommt. "sprengte weg" liest sich mit "niemand" davor richtig.
+    sprengen: "sprengte weg"
 
 # DIE MEERINSELN VON HAFENWERDER (Plan 6.2, Schritt 10).
 #

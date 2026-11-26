@@ -965,6 +965,251 @@ Nachgesehen am 25.11.2026, und das korrigiert meine eigene Einschaetzung von vor
 
    *Das ist zu entscheiden, bevor die Welt angelegt wird, nicht danach.*
 
+### IM BAU 26.11.2026: der Rueckweg im Blockbuch
+
+Entschieden: Blockbuch ausbauen, nicht Prism. **Grundlage und Regel stehen und
+sind gruen; der BEFEHL fehlt noch.**
+
+STEHT:
+
+- `blockbuch.vorzustand` und `blockbuch.zurueckgenommen` - zwei angehaengte
+  Schemaschritte (42, 43), Pruefsummen in `SchemaTest` nachgetragen.
+- Die Spalte haelt den Zustand **VOR** der Tat, nicht danach. Das ist die
+  Entscheidung, an der alles haengt: Bei einer Setzung ist es das Ueberbaute
+  (Luft, Wasser, Gras) - mit dem Zustand DANACH waere eine Setzung ueberhaupt
+  nicht zurueckzunehmen gewesen.
+- `Blocktat.SPRENGEN` samt Wort in der Sprachdatei (vier Stellen).
+- Zwei neue Zuhoerer: `EntityExplodeEvent` und `BlockExplodeEvent`. Der Taeter
+  kommt bei TNT aus `TNTPrimed.getSource()`, sonst `Blockzeile.NIEMAND`.
+  **Vorher schrieb das Buch von einem TNT-Grief keine einzige Zeile.**
+- `imBereich(welt, Quader, von, bis, grenze)` - die EINZIGE Lesemethode des
+  Buches, die AELTESTE zuerst gibt, und der Vertrag begruendet es.
+- `merkeZurueckgenommen(nummern)` - gemerkt, nicht geloescht: Ein geloeschter
+  Grief laesst sich beim Wiederholungstaeter nicht mehr nachweisen.
+- `Rueckrollplan` im Kern - rein, ohne Bukkit, **17 Proben**. Je Koordinate die
+  aelteste Zeile; erst wegnehmen von oben, dann herstellen von unten.
+- **12 Zusagen im `BlockbuchVertrag`** - und der hat sofort einen echten
+  Unterschied gefunden: `executeBatch` zaehlt beim UPDATE anders als beim
+  INSERT, also meldete das Merken einer Nummer, die es nicht gibt, eine
+  zurueckgenommene Zeile. Auf der Speicherfassung gruen, auf MariaDB rot.
+
+FEHLT NOCH:
+
+- Der Befehl `/blockbuch zurueck <radius> <minuten>` mit Bestaetigung, Grenzen
+  aus der `config.yml` und der Naht fuer `createBlockData`/`setBlockData`.
+- Eine Tafel, die die zwei neuen Zuhoerer als VERDRAHTET haelt.
+- Einspritzung, Startlauf, Spieltest.
+
+AUSDRUECKLICH NICHT dabei: Truheninhalt, Wesen (Rahmen, Gemaelde), Schildtexte,
+Vorschaumodus, Fluessigkeiten, Kolben. **Bloecke in einem Kasten in einem
+Zeitfenster, umkehrbar, ein Befehl.**
+
+### GEPRUEFT 26.11.2026: Prism - Lizenz passt, die Fassungsuhr nicht
+
+Auftrag: *"prism, aber pruefen wegen lizenz und fremder abhaengigkeit, sollte das
+nicht passen, dann Blockbuch ausbauen."* Gemessener Pruefstein: Dieser Server
+laeuft **Minecraft 26.3**, Paper 26.3-259 vom 23.11.2026, und das eigene Plugin
+hat in seiner `plugin.yml` **kein depend, kein softdepend, kein loadbefore**.
+
+**Welches Prism.** Nur eines lebt: `github.com/prism/prism` ("v4", Mike Botsko),
+**MIT**. Freigabe **4.5 vom 24.10.2026** nennt 26.3 auf Modrinth UND Hangar;
+letzter Commit 13.11.2026, Fremdberichte in 0-14 Tagen geschlossen. Die alten
+Traeger des Namens (`PrismRefracted` v3, `AddstarMC/Prism-Bukkit`) stehen unter
+**CC BY-NC-SA 3.0** - fuer einen Server, der Mitgliedschaften verkauft, unzulaessig.
+Sie laufen auf 26.3 aber ohnehin nicht, der Fehlgriff faellt also laut auf.
+
+**LIZENZ: passt.** MIT, in der Datei gelesen. Nebenbefund der Gegenprobe: v4 war
+drei Jahre GPL-3.0 und wurde am 02.04.2025 vom ALLEINIGEN Autor auf MIT gestellt
+(alle 100 Commits davor von ihm, kein CLA). Der schlimmste denkbare Fall bei einem
+Streit ist damit GPL-3.0 - und die erlaubt gewerblichen BETRIEB unbegrenzt,
+Pflichten entstehen nur bei Weitergabe.
+
+**FREMDE ABHAENGIGKEIT: schwerer als sie aussieht, auf drei Weisen.**
+
+1. Aus null werden **zwei** Plugins: Prism traegt `depend: NBTAPI` (hart, kein
+   softdepend). Dazu eine Falle: Der Pflicht-Link auf Hangar zeigt auf NBTAPI
+   **2.12.4 vom 30.04.2024** - das kennt 26.3 nicht. Die taugliche 2.16.1
+   (17.09.2026) gibt es nur auf Modrinth und GitHub.
+2. **31 Bibliotheken** laedt Prism beim ersten Start aus vier Quellen nach (eine
+   davon der Spiegel des Betreuers). Jede wird gegen eine fest eingebaute
+   Pruefsumme gehalten - kein Vertrauensloch -, aber: **ohne ausgehendes HTTPS
+   startet Prism beim ersten Mal nicht**, und was danach im Plugin-Ordner liegt,
+   steht in keinem Repo.
+3. Die EINZIGE 26.3-faehige Freigabe hat einen bekannten **MariaDB-Fehler**:
+   PR #423 vom 09.11.2026 vergroessert `prism_items.data` auf LONGTEXT - behoben
+   nur in `main`, nicht in 4.5. Danach liegen 16 Commits in `main`. Ab Werk nimmt
+   Prism ausserdem **SQLite**, nicht MariaDB; MariaDB ist einzustellen - und genau
+   dort sitzt der Fehler.
+
+**DIE FASSUNGSUHR - das ist der Grund, warum es nicht passt.** `26.4-pre-1` ist am
+**24.11.2026** erschienen, also vor zwei Tagen; ein Pre-Release ist der letzte
+Schritt vor der Freigabe. Prism brauchte fuer 26.3 **sechs Wochen** (15.09. ->
+24.10.2026), NBTAPI zwei Tage. In `main` steht keine einzige 26.4-Zeile. Wer Prism
+jetzt einbaut, hat seinen ersten Ausfall voraussichtlich **im Dezember** - und ein
+Rueckweg, der nach jedem Drop sechs Wochen fehlt, fehlt genau dann, wenn ein Grief
+passiert. Das ist die eine Eigenschaft, die ein Rollback-Werkzeug nicht haben darf.
+
+**AUSWEICHEN GIBT ES NICHT.** CoreProtect CE 24.1 (24.09.2026) traegt im Quelltext
+`LATEST_VERSION = "26.2"` und laeuft auf 26.3 in `VERSION_INCOMPATIBLE` - die
+Planaussage stimmt, jetzt am Quelltext belegt; 26.3 liegt nur im unveroeffentlichten
+`master`, und die Jars haengen an Patreon (Lizenz Artistic-2.0). Alle anderen fallen
+an Lizenz oder Nachweis: LogBlock All-Rights-Reserved ohne Quelle, StellarProtect
+Non-Commercial, BlockLedger ohne Lizenzdatei, HawkEye api-version 1.21. Das einzige
+weitere 26.3-Werkzeug ist **18 Tage alt mit 67 Downloads**.
+
+**AUSSERHALB DES PLUGINS, und das ist brauchbar:** MCA Selector 2.9 (MIT,
+15.09.2026, "Updates for Minecraft 26.3") rollt mit `--mode import --source-world`
+chunkweise aus einer Sicherung zurueck - fassungsunabhaengiger, aber nur ganze
+Chunks (16x16), ohne Taeter und ohne Rueckgaengig.
+
+**DER EIGENE RUECKWEG IST KLEIN** (am Quelltext gemessen, von der Gegenprobe
+bestaetigt):
+
+- **zwei Spalten**: `zustand` fuer `getBlockData().getAsString()` (ohne sie kommen
+  Treppen, Tueren und Truhen falsch gedreht zurueck) und `zurueckgenommen`
+  (sonst laesst sich derselbe Grief zweimal zurueckrollen)
+- **zwei Zuhoerer**: `EntityExplodeEvent` (TNT, Creeper) und `BlockExplodeEvent`
+  (Bett, Ankerstein) - **die Haken gibt es im Haus schon**, `Shopwache.java:370`
+  und `:376`, der Anzuender in `Schutzwache.java:671`
+- **eine Abfrage** `imBereich(welt, Kasten, Zeitfenster)` in Ablage, Speicher-,
+  Maria-Fassung und Vertrag - **ohne neuen Index**, `ix_blockbuch_ort` traegt
+  `welt, x` vorne
+- **ein neuer Wert** `SPRENGEN` in `Blocktat` (vier Stellen, wie immer)
+- `BlockData` ist im Haus schon in Gebrauch (`Altfurtaufbau` an gut zehn Stellen),
+  und die von paper-api 26.3 zum Entfernen vorgemerkten `MaterialData`-Wege kommen
+  im Repo **nicht** vor
+- **ohne Server pruefbar ist fast alles** - nur die Naht
+  `createBlockData`/`setBlockData` wirft, und die gehoert hinter eine schmale
+  Schnittstelle, in die die fertige Liste hereingegeben wird
+- NICHT dabei: Truheninhalt, Wesen, Rahmen, Schildtexte, Vorschau. **Bloecke in
+  einem Kasten in einem Zeitfenster, umkehrbar, ein Befehl.**
+
+**OFFEN, und es hat mit Prism nichts zu tun - aber es ist groesser:** Dieses Repo
+hat **keine Lizenz** (keine LICENSE-Datei, keine Angabe in README oder
+`build.gradle.kts`, GitHub meldet `license=null`). Oeffentlich und damit "alle
+Rechte vorbehalten" - nicht gemeinfrei. Und darin liegen zwei Binaerpakete:
+`app/assets/lobby_plugin/MCSMLobby.jar`, dessen `PresenceBridge` sechzehn Klassen
+des **GPL-3.0**-lizenzierten PacketEvents importiert (`softdepend: [packetevents]`),
+und `freimarken/gradle/wrapper/gradle-wrapper.jar` (Apache-2.0, verlangt bei
+Weitergabe die NOTICE). Das ist die einzige Stelle, an der dieses Projekt ueberhaupt
+ein Binaerpaket weitergibt - GPL-gebunden und ohne jede Lizenzangabe.
+Nebenbei berichtigt: Entscheidung E8 des Plans ("kein GPL-Code im eigenen Plugin
+-> freie Lizenzwahl") ist so nicht richtig - Paper selbst ist GPL-3.0, und 137
+Dateien des `paper`-Moduls importieren `org.bukkit`/`io.papermc`. Richtig ist nur,
+dass `core/` und `daten/` keine einzige Bukkit-Zeile enthalten.
+
+### ENTSCHIEDEN UND GEMESSEN 26.11.2026: fuenf Punkte
+
+**Spielerseite -> eigene Subdomain** (Betreiber: *"erstmal subdomain
+die-altmarken.friedrich-Dietrich.de fuer spielerseite"*).
+
+- Plan 12b.1 verbietet die Spielerseite im Manager-Prozess - sie braucht einen
+  eigenen FastAPI-Prozess und einen zweiten Caddy-Block auf einem neuen Port.
+  Dieser Riegel laesst sich nachtraeglich nicht mehr einziehen.
+- Im Manager gibt es heute **fuenf** Pfade ohne Anmeldung (`/`, `/login`,
+  `/logout`, `/static`, `/resourcepacks`) und keine Spielerseite.
+- Die bestehende Wildcard deckt `*.mc.friedrich-dietrich.de`
+  (CNAME -> thormakmc.ddns.net, `docs/reverse_proxy_setup.md:39`). Der gewaehlte
+  Name liegt NICHT darunter und braucht einen eigenen Eintrag bei IONOS; Plan 3.1
+  hat `mc.friedrich-dietrich.de` als Schema `[entschieden]` - das ist
+  mitzuberichtigen.
+- Reihenfolge: Huelle zuerst (DNS, Caddy, leerer Prozess), dann die drei Seiten
+  ohne Anmeldung (Bannliste, Teamliste, Regeln), dann `/verknuepfen` (Profil und
+  Meldungsstand haengen daran). Die **Bannliste ist Abschreiben**: die SQL steht
+  samt Begruendung in `MariaStrafen.java:112-118`.
+- OFFEN, vor der ersten Zeile HTML: **Impressum und Datenschutzerklaerung.** Eine
+  oeffentliche Bannliste veroeffentlicht Spielernamen samt Grund.
+- Der **Entbannungsantrag** braucht zuerst eine Entscheidung, nicht eine Tabelle:
+  Ein Gebannter kommt nicht auf den Server und kann sich keinen Einmalcode holen -
+  der Weg aus Plan 12b.2 traegt fuer ihn nicht.
+- **BlueMap** ist entschieden und im Repo null Mal vorhanden: kein Plugin, kein
+  Render, kein Webserver.
+
+**~~Zahlungsanbieter~~ entschieden (manuell, PayPal) - OFFEN ist die
+Ablaufpruefung**, und die ist seit dem 25.11. dringender geworden:
+
+- Eine Mitgliedschaft laeuft heute **nicht** ab: `bis` steht fest auf `None`
+  (`app/api/routers/freimarken.py:528`), das Formular hat kein Feld dafuer. Die
+  Messfunktion `laeuft` ist gebaut und geprueft - und hat keinen Aufrufer.
+- **Die Tafel "Rechte, die gesetzt sein muessen" verschweigt aktiv**: Sie liest
+  `nur_laufende=True`. In dem Augenblick, in dem `bis` verstreicht, VERSCHWINDET
+  die Zeile - die Tafel meldet "nichts zu tun", waehrend das Recht auf dem
+  Server steht.
+- `freimarken.welt.vogtei` ist in der Mitgliedschaftstabelle **nicht abbildbar**:
+  Die Zuschlagsform ist `freimarken.extra.<name>.<zahl>`, eine Welt passt nicht
+  hinein. Die Meldung beim Beenden nennt sie darum nie.
+- KLEINSTER EHRLICHER SCHRITT: ein Feld `bis` (der Dienst nimmt den Wert schon an)
+  UND die Rechtezeile als `settemp ... <tage>d` statt `set`. Dann traegt das Recht
+  seinen Ablauf selbst, und `Ankunftswache.holeHeim` holt den Ex-Foerderer beim
+  naechsten Beitritt aus der Vogtei - ohne jeden neuen Takt.
+- Foerderer und Stifter sind **kein Produkt**: Ein Foerderer braucht heute ZWEI
+  Eintraege (parzellen 2 UND gruppe 1), die nichts verbindet. TODO:978 verlangt
+  "Stufe und Laufzeit" - gebaut ist keins von beiden.
+- FALSCHE ZUSAGE gefunden: Plan:2371 verspricht dem Foerderer einen
+  **Kornmark-Vorabzugang**. Kornmark steht in der ausgelieferten Datei jedem
+  offen (kein `premium`, kein `ab-rang`).
+
+**Rollback eines Griefs -> NEIN, das Blockbuch kann es nicht**, und der Plan sagt
+es selbst woertlich: *"Das Blockbuch ersetzt Prism nicht. Es zeigt, es rollt nicht
+zurueck."* (`docs/citybuild_plan.md:2988`).
+
+- Die Tabelle hat zehn Spalten; der Block steht nur als **Materialname**
+  (`Blockwache.java:259`). Kein BlockData, kein Behaelterinhalt, keine
+  Schildzeile, und beim Setzen kein Vorzustand - `getBlockReplacedState` kommt im
+  ganzen Repo nicht vor.
+- Aufgeschrieben werden **drei Spielerereignisse**. Ein TNT-Grief in einer fremden
+  Parzelle wird heute weder verhindert noch aufgeschrieben.
+- Die Ablage sagt Vollstaendigkeit ausdruecklich NICHT zu und verwirft bei
+  Datenbankausfall 20.000 Zeilen auf einmal. **Ein Rollback ueber ein
+  lueckenhaftes Buch heilt halb, und das ist schlimmer als gar nicht.**
+- Prism ist im Plan `[ungeprueft im Detail]`; CoreProtect startet laut Plan auf
+  26.3 nicht. Beschlossen ist die TRENNUNG, nicht das Werkzeug - die Wahl steht
+  noch aus.
+- Bleibt in jedem Fall: Das Blockbuch haelt die **abgewiesenen** Versuche, die
+  kein Rollback-Werkzeug je sieht.
+
+**~~Parkour~~ wartet auf die Map** (schon so entschieden).
+
+**Senken-Bilanz, neu gerechnet gegen die heutige `config.yml`:**
+
+- Die Zahl aus TODO:693 ist eine Subtraktion je **Spieler und Tag**, nicht fuer
+  den Server: Einnahme minus dauerhafte Ausgabe.
+- HEUTE: 20.000 Arbeit + 2.000 Tagesbonus (erst ab Serientag 16; am ersten Tag
+  sind es 500) + 361 Erwartungswert aus dem taeglichen Freilos = **22.361**.
+  Mit einem gesetzten Bund-Ankaufschild 27.361. Wer Goldmark von aussen hat,
+  holt ueber den Rueckweg bis 9.600 dazu.
+- LAUFENDE Senke: **genau eine** - Ladenmiete 500/Tag, und nur fuer Mieter. Es gibt
+  drei Ladeneinheiten, also hoechstens 1.500/Tag fuer den GANZEN Server.
+  Alle drei Marktgebuehren stehen auf 0.
+- Wiederholbar, aber freiwillig: Berufswechsel 5.000 (fruehestens alle 24 h),
+  Biomwechsel 2.000 (jedes Mal), Lose ab dem zweiten (500, verdoppelnd),
+  Wechselstube-Hinweg (vernichtet 200 je Rundlauf).
+- Die Einbahn ist damit **unveraendert rund 21.900 je Spieler und Tag**.
+  BESSER geworden ist nur die Anlaufstrecke: Von den vier Senken, die am 7.11.
+  fehlten, stehen heute zwei mit vollem Preis (Freistadt 400.000, Meerinsel
+  75.000). Alles Kaufbare ist jetzt rund 790.000 statt 265.000 - **36 Tage statt
+  zwoelf**, danach wieder ungebremst.
+- Beide Deckel greifen auch im Quelltext: Der Arbeitsrest VERFAELLT
+  (`Verdienstbuch.java:326-338`). Ungedeckelt sind Tagesbonus, Freilos,
+  Wolken-Aufgaben und die **Betreiber-Gutschrift** - also genau der Weg, den eine
+  von Hand gebuchte PayPal-Zahlung nimmt.
+- Die Wolken-Aufgaben (5.450) haengen an der INSEL, nicht am Spieler, und eine
+  Insel kostet 0: durch Freigeben und Neunehmen **wiederholbar**.
+- FEHLEN ganz (kein Schluessel, kein Buchungsgrund, keine Zeile Quelltext):
+  Hochwald-Sicherung 5.000, Flags 25.000/50.000. "Reparatur, Teleport,
+  Heimatpunkte" ist dagegen eine ENTSCHEIDUNG - Plan:537 haelt sie kostenlos,
+  bis es Zahlen aus dem Betrieb gibt; Plan 8.2 fuehrt sie trotzdem als Senke.
+
+**Dabei repariert (eigene Schulden vom 25.11.):**
+
+- ~~Die Ruecksetz-Erinnerung nannte "Kornmark" als festes Wort~~ - die Vogtei
+  fiel still durch, und an ihrem Reset haengt die Begruendung, dass ein Ablauf
+  harmlos ist. Jetzt gibt es `welten.<welt>.reset-je-version`, und die Warnung
+  nennt genau die Welten mit dieser Zeile. Tafel 31ec haelt es.
+- ~~`config.yml` versprach "der Manager zeigt die Zeile zum Kopieren"~~ fuer
+  `freimarken.welt.<welt>` - im Manager null Treffer. Der Kommentar sagt jetzt,
+  was wahr ist, und nennt den `settemp`-Befehl zum Kopieren.
+
 ### ENTSCHIEDEN 25.11.2026: Zahlungsanbieter
 
 *"am einfachsten erstmal nur ueber paypal und dann manuell freischalten, spaeter dann wenn

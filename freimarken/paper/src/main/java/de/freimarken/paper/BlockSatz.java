@@ -120,7 +120,16 @@ enum BlockSatz implements Satz {
     TAT_ABBAUEN("blockbuch.tat.abbauen", Art.WORT),
 
     /** Das Wort fuer eine benutzte Tat. */
-    TAT_BENUTZEN("blockbuch.tat.benutzen", Art.WORT);
+    TAT_BENUTZEN("blockbuch.tat.benutzen", Art.WORT),
+
+    /**
+     * Das Wort fuer eine Sprengung - an den Leser des Blockbuchs.
+     *
+     * <p>Ein eigenes Wort und nicht das von {@link #TAT_ABBAUEN}: In der Zeile
+     * steht oft niemand als Taeter, und "niemand baute ab" ist ein anderer Satz
+     * als "hier ist etwas explodiert".
+     */
+    TAT_SPRENGEN("blockbuch.tat.sprengen", Art.WORT);
 
     private final String pfad;
     private final Art art;
@@ -175,6 +184,7 @@ enum BlockSatz implements Satz {
             case SETZEN -> TAT_SETZEN;
             case ABBAUEN -> TAT_ABBAUEN;
             case BENUTZEN -> TAT_BENUTZEN;
+            case SPRENGEN -> TAT_SPRENGEN;
         };
     }
 }

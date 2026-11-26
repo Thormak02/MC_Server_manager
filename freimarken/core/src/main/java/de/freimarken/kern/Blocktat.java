@@ -54,7 +54,25 @@ public enum Blocktat {
      * eine ungleich groessere Tabelle - in der Marktstadt ist das richtig, denn dort ist
      * die Frage "wer war in meiner Truhe" der ganze Zweck.
      */
-    BENUTZEN("benutzen");
+    BENUTZEN("benutzen"),
+
+    /**
+     * Eine Sprengung hat den Block weggenommen - TNT, Creeper, Bett, Ankerstein.
+     *
+     * <p><b>Warum eine eigene Tat und nicht {@link #ABBAUEN}</b> [26.11.2026]:
+     * Der Unterschied ist der TAETER. Ein Abbau hat immer einen Spieler; eine
+     * Sprengung oft keinen, der sich zuordnen laesst - ein Creeper gehoert
+     * niemandem. Beides unter {@code abbauen} zu fuehren, hiesse die Frage
+     * "wer hat das abgebaut" mit einer Zeile zu beantworten, die niemanden nennt.
+     *
+     * <p>Dazu kommt die Menge: Eine Ladung TNT schreibt hunderte Zeilen in einem
+     * Augenblick. Wer sie nicht will, laesst diese Tat aus der Auswahl seiner Welt
+     * heraus - und genau das kann man nur, wenn sie eine eigene ist.
+     *
+     * <p>Fuer den RUECKWEG ist sie der wichtigste Fall: Ein gegriefter Bau ist
+     * meist gesprengt und nicht abgebaut.
+     */
+    SPRENGEN("sprengen");
 
     /**
      * Der Name, der in der Auswahl die MISSLUNGENEN Versuche zuschaltet.

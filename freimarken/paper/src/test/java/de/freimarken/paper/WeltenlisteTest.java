@@ -501,6 +501,24 @@ class WeltenlisteTest {
             assertEquals(2, ergebnis.welten().stream()
                             .filter(Weltangabe::hatRangschranke).count(),
                     "genau ZWEI Rangschranken: Nether und Ende");
+
+            // DIE FARMWELTEN MIT RESET, ausdruecklich benannt [26.11.2026]. An
+            // dieser Zeile haengt mehr als eine Erinnerung: Bei der Vogtei ist der
+            // Reset die BEGRUENDUNG dafuer, dass eine ablaufende Mitgliedschaft
+            // harmlos ist (Plan 8.5) - dort bleibt kein Gebautes, WEIL
+            // zurueckgesetzt wird. Wer die Zeile bei vogtei herausnimmt, macht 8.5
+            // rot und muss sie neu beantworten.
+            assertTrue(nachName.get("kornmark").resetJeVersion(),
+                    "Kornmark ist die Farmwelt aus Plan 4.2");
+            assertTrue(nachName.get("vogtei").resetJeVersion(),
+                    "ohne Reset braeuchte Plan 8.5 eine Zeile ueber verlorenes Gebautes");
+            assertTrue(!nachName.get("marktstadt").resetJeVersion(),
+                    "die Marktstadt wird NIE zurueckgesetzt - dort liegt der Besitz");
+            assertTrue(!nachName.get("stollenberg").resetJeVersion(),
+                    "der Stollenberg ist nicht als Farmwelt eingetragen");
+            assertEquals(2, ergebnis.welten().stream()
+                            .filter(Weltangabe::resetJeVersion).count(),
+                    "genau ZWEI Welten mit Reset - eine dritte ist eine Entscheidung");
             // DIE TORE STEHEN SEIT DEM 25.11.2026 NICHT MEHR HIER [Torbuch].
             // Welche Welt ein Tor hat, welche keines, und dass jedes in der Nische
             // seines Torhauses liegt, prueft TorbuchTest gegen tore.yml - samt der
@@ -812,6 +830,41 @@ class WeltenlisteTest {
                 ergebnis.klagen().get(0));
         assertTrue(ergebnis.welten().get(1).premium(),
                 "der sichere Rueckfall ist ZU - sonst waere der Vertipper schlimmer als die Klage");
+    }
+
+    @Test
+    @DisplayName("Ein falsches Wort faellt je Schalter in eine ANDERE Richtung")
+    void rueckfallIstJeSchalterEinAnderer() {
+        // DIE ZUSICHERUNG DIESER PROBE: Beide Schalter gehen durch denselben
+        // Leser, und beide klagen - aber der sichere Rueckfall ist nicht derselbe.
+        // Bei premium ist ZU die sichere Seite (eine versehentlich offene
+        // Mitgliederwelt ist schlimmer als eine gesperrte), bei
+        // reset-je-version ist es NEIN (eine falsch als Farmwelt gefuehrte Welt
+        // bekaeme eine Ruecksetz-Erinnerung, die den Besitz darin kostet).
+        // Ein gemeinsamer Leser ohne diesen Parameter waere die bequeme Falle.
+        var ergebnis = lies("""
+                welten:
+                  altfurt:
+                    art: gewoehnlich
+                  vogtei:
+                    art: gewoehnlich
+                    premium: ja
+                    reset-je-version: vielleicht
+                """);
+
+        assertEquals(2, ergebnis.klagen().size(), ergebnis.klagen().toString());
+        assertTrue(ergebnis.welten().get(1).premium(),
+                "premium faellt auf ZU: " + ergebnis.klagen());
+        assertTrue(!ergebnis.welten().get(1).resetJeVersion(),
+                "reset-je-version faellt auf NEIN: " + ergebnis.klagen());
+        // Und jede Klage nennt ihren Schluessel UND den Rueckfall, der gilt.
+        assertTrue(ergebnis.klagen().stream().anyMatch(k ->
+                        k.contains("welten.vogtei.premium") && k.contains("true")),
+                ergebnis.klagen().toString());
+        assertTrue(ergebnis.klagen().stream().anyMatch(k ->
+                        k.contains("welten.vogtei.reset-je-version")
+                                && k.contains("false")),
+                ergebnis.klagen().toString());
     }
 
     @Test

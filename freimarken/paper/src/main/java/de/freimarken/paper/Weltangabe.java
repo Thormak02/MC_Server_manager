@@ -25,10 +25,15 @@ import org.bukkit.World;
  * @param abRang           ab welcher Rangstufe diese Welt offensteht, oder
  *                         {@code ""} fuer keine Schranke; dann wird das Recht
  *                         {@code freimarken.stufe.<abRang>} verlangt
+ * @param resetJeVersion   ob diese Welt bei einem Minecraft-Versionswechsel neu
+ *                         angelegt wird. Das Plugin setzt sie NICHT selbst
+ *                         zurueck - es erinnert daran, wenn es veraltete Chunks
+ *                         sieht
  */
 record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
                   Long startwert, int kante, String sprungBestaetigt,
-                  GameMode spielmodus, boolean premium, String abRang) {
+                  GameMode spielmodus, boolean premium, String abRang,
+                  boolean resetJeVersion) {
 
     /**
      * Woher die Bloecke kommen.

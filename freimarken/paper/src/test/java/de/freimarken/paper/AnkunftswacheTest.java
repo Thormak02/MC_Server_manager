@@ -73,7 +73,7 @@ class AnkunftswacheTest {
     /** Eine Weltangabe, von der nur der Spielmodus zaehlt - der Rest ist Beiwerk. */
     private static Weltangabe angabe(String name, GameMode modus) {
         return new Weltangabe(name, World.Environment.NORMAL, Weltangabe.Art.GEWOEHNLICH,
-                null, 0, null, modus, false, "");
+                null, 0, null, modus, false, "", false);
     }
 
     /** Ein Ereignis, wie Paper es der Wache gibt - nur Spieler und Anlass zaehlen. */
@@ -246,7 +246,8 @@ class AnkunftswacheTest {
     /** Eine Weltangabe, von der nur das premium zaehlt. */
     private static Weltangabe premiumAngabe(String name) {
         return new Weltangabe(name, World.Environment.NORMAL,
-                Weltangabe.Art.GEWOEHNLICH, null, 0, null, GameMode.SURVIVAL, true, "");
+                Weltangabe.Art.GEWOEHNLICH, null, 0, null, GameMode.SURVIVAL, true, "",
+                false);
     }
 
     /**

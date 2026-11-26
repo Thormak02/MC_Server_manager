@@ -310,10 +310,20 @@ final class Serverprobe {
      * Fuer die Reifefrage ist genau das die richtige Antwort - kein Alter heisst "die
      * Marke ist die Bremse".
      */
-    private static BlockData ohneAlter() {
+    private static BlockData ohneAlter(Weltgriff griff, int x, int y, int z) {
         return (BlockData) Proxy.newProxyInstance(Serverprobe.class.getClassLoader(),
                 new Class<?>[] {BlockData.class},
                 (eigen, methode, werte) -> switch (methode.getName()) {
+                    // Der Zustandstext, den das Blockbuch als VORZUSTAND
+                    // ablegt [26.11.2026]. Aus dem Weltgriff und nicht fest:
+                    // Eine Probe, die einen Rueckweg prueft, muss den Namen
+                    // des Blocks wiedererkennen, den sie selbst gesetzt hat.
+                    // Erst HIER gefragt und nicht beim Bauen des
+                    // Stellvertreters: Sonst wuerfe eine Welt ohne Griff schon,
+                    // wenn eine Stelle ihr Alter angemeldet hat.
+                    case "getAsString" -> "minecraft:"
+                            + griffOderKlage(griff).bei(x, y, z).name()
+                                    .toLowerCase(java.util.Locale.ROOT);
                     case "toString" -> "Blockdatenprobe ohne Alter";
                     case "hashCode" -> 17;
                     case "equals" -> eigen == (werte == null ? null : werte[0]);
@@ -557,6 +567,9 @@ final class Serverprobe {
                     // bleibt. Die Probe fragt danach den Griff, und genau das soll sie:
                     // Was zaehlt, ist die Art, die der Zweig HINEINSCHREIBT.
                     case "getType" -> griffOderKlage(griff).bei(x, y, z);
+                    // Fuer getBlockReplacedState: Das Blockbuch fragt den
+                    // ueberbauten Zustand ueber seinen BlockData-Text.
+                    case "getBlockData" -> ohneAlter(griff, x, y, z);
                     case "setType" -> {
                         griffOderKlage(griff).setze(x, y, z, (Material) werte[0]);
                         yield null;
@@ -614,7 +627,8 @@ final class Serverprobe {
                     // Ohne Anmeldung: Blockdaten OHNE Alter. Das ist die ehrliche
                     // Antwort und kein null - Stein HAT Blockdaten, nur keine Reife.
                     case "getBlockData" -> BLOCKDATEN.getOrDefault(
-                            stelle(welt.key().asString(), x, y, z), ohneAlter());
+                            stelle(welt.key().asString(), x, y, z),
+                            ohneAlter(griff, x, y, z));
                     case "setType" -> {
                         griffOderKlage(griff).setze(x, y, z, (Material) werte[0]);
                         yield null;

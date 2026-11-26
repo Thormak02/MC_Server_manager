@@ -153,7 +153,9 @@ final class Weltenliste {
                     eintrag.getString("sprung-bestaetigt", "").trim(),
                     spielmodus(eintrag, name, klagen),
                     premium(eintrag, name, klagen),
-                    eintrag.getString("ab-rang", "").trim()));
+                    eintrag.getString("ab-rang", "").trim(),
+                    wahrheit(eintrag, name, "reset-je-version", false,
+                            klagen)));
             nenneUmgezogenesTor(eintrag, name, klagen);
         }
         pruefeStartwerte(welten, klagen);
@@ -232,17 +234,43 @@ final class Weltenliste {
      */
     private static boolean premium(ConfigurationSection eintrag, String name,
                                    List<String> klagen) {
-        if (!eintrag.contains("premium")) {
+        // Der sichere Rueckfall ist ZU: Wer premium schreibt, hat etwas gemeint,
+        // und eine versehentlich offene Mitgliederwelt ist schlimmer als eine
+        // versehentlich gesperrte.
+        return wahrheit(eintrag, name, "premium", true, klagen);
+    }
+
+    /**
+     * Ein Ja-Nein-Schalter eines Welteintrags - mit der Klage, die Bukkit nicht hat.
+     *
+     * <p><b>Drei Faelle, und nur der dritte ist ein Fehler:</b> Ein FEHLENDER
+     * Schluessel gibt {@code false} ohne Klage - sonst muesste jede der elf Welten
+     * jede Zeile tragen. Ein gelesenes {@code true} oder {@code false} gilt. Ein
+     * ANDERES Wort wird beklagt, und dann gilt {@code rueckfall}.
+     *
+     * <p><b>Warum es diese Methode gibt</b> [26.11.2026]: {@code premium: ja} ist
+     * der Vertipper, der gemeint ist - Bukkit liest jedes Wort ausser {@code true}
+     * stumm als {@code false}. Mit dem zweiten Schalter ({@code reset-je-version})
+     * waere derselbe Leser ein zweites Mal abgeschrieben worden, und eines Tages
+     * haette einer von beiden die Klage verloren.
+     *
+     * @param rueckfall was bei einem UNBEKANNTEN Wort gilt - die sichere Seite,
+     *                  und die ist je Schalter eine andere
+     */
+    private static boolean wahrheit(ConfigurationSection eintrag, String name,
+                                    String schluessel, boolean rueckfall,
+                                    List<String> klagen) {
+        if (!eintrag.contains(schluessel)) {
             return false;
         }
-        if (!eintrag.isBoolean("premium")) {
-            klagen.add("welten." + name + ".premium ist weder true noch false ("
-                    + eintrag.get("premium") + "). Bukkit liest jedes andere Wort"
-                    + " stumm als false; damit diese Welt nicht versehentlich fuer"
-                    + " alle offensteht, gilt sie als premium: true.");
-            return true;
+        if (!eintrag.isBoolean(schluessel)) {
+            klagen.add("welten." + name + "." + schluessel + " ist weder true"
+                    + " noch false (" + eintrag.get(schluessel) + "). Bukkit liest"
+                    + " jedes andere Wort stumm als false; hier gilt darum "
+                    + rueckfall + ".");
+            return rueckfall;
         }
-        return eintrag.getBoolean("premium");
+        return eintrag.getBoolean(schluessel);
     }
 
     /**
