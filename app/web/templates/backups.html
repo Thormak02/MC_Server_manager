@@ -37,6 +37,18 @@
 
 <section class="card">
     <h2>Verfuegbare Backups</h2>
+    <p class="hint">
+        <strong>Plugin-Datenbank:</strong> Sie laeuft als MariaDB-Dienst und liegt
+        nicht im Serverordner &ndash; bis zum 26.11.2026 lag sie darum in keiner
+        Sicherung. Jetzt nimmt jede <em>vollstaendige</em> und jede
+        <em>Konfigurations</em>-Sicherung einen Abzug mit; eine <em>Welt</em>-Sicherung
+        nicht, denn die meint das Gelaende.
+        <br>Beim Wiederherstellen wird der Abzug <strong>nicht eingespielt</strong>:
+        Das Schema gehoert allen Servern gemeinsam, und ein stilles Ueberschreiben
+        naehme dem zweiten Server seinen Stand. Er landet als Datei im
+        Serverordner, und die Zeile zum Einspielen steht im Hinweis der
+        Wiederherstellung.
+    </p>
     <table>
         <thead>
             <tr>
@@ -45,6 +57,7 @@
                 <th>Typ</th>
                 <th>Status</th>
                 <th>Groesse</th>
+                <th>Plugin-Datenbank</th>
                 <th>Zeitpunkt</th>
                 <th>Aktionen</th>
             </tr>
@@ -61,6 +74,24 @@
                     {{ (item.size_bytes / 1048576)|round(2) }} MB
                     {% else %}
                     -
+                    {% endif %}
+                </td>
+                <td>
+                    {# Der SATZ und kein Ja/Nein: Wer "nein" liest, fragt
+                       "warum". Leer heisst "die Frage stellte sich nicht" -
+                       eine Sicherung von vor dem 26.11.2026, oder eine
+                       Weltsicherung, die nur Gelaende meint. #}
+                    {% if item.datenbank_hinweis %}
+                        {% if "gesichert" in item.datenbank_hinweis %}
+                        <span title="{{ item.datenbank_hinweis }}">dabei</span>
+                        {% else %}
+                        <strong title="{{ item.datenbank_hinweis }}">
+                            NICHT dabei</strong>
+                        <br><span class="hint">
+                            {{ item.datenbank_hinweis }}</span>
+                        {% endif %}
+                    {% else %}
+                    <span class="hint">nicht gefragt</span>
                     {% endif %}
                 </td>
                 <td>{{ item.created_at or "-" }}</td>
@@ -82,7 +113,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="7">Noch keine Backups vorhanden.</td>
+                <td colspan="8">Noch keine Backups vorhanden.</td>
             </tr>
             {% endfor %}
         </tbody>

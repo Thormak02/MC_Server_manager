@@ -1095,6 +1095,91 @@ Zeile verschwand also genau in dem Augenblick, in dem das Recht zu ENTZIEHEN war
 **Nachweis:** 10 neue Proben, 7 Einspritzungen - alle gefangen, und **jede von
 einer anderen Probe**.
 
+
+### FERTIG 26.11.2026: die Plugin-Datenbank ist in der Sicherung
+
+Vorher lag sie in **keiner**. Der Sicherungsdienst zippte Dateien aus dem
+Serverordner; die Datenbank laeuft als MariaDB-Dienst und liegt nicht dort. Damit
+waren Parzellen, Guthaben, Laeden, Freistaedte, Inseln, Strafen, Meldungen,
+Teamrollen, Mitgliedschaften und das Blockbuch ungesichert - und zwar
+unwiederbringlich: Weltdateien lassen sich notfalls neu generieren, ein Guthaben
+nicht.
+
+**DREI ENTSCHEIDUNGEN TRAGEN DAS, und die erste ist die wichtigste:**
+
+1. **Der Abzug enthaelt kein `CREATE DATABASE`** - `mysqldump` laeuft ohne
+   `--databases`. Mit jener Option traegt der Abzug den Namen seines Schemas in
+   sich, und ein Einspielen landet IMMER dort. Die Wiederherstellungsprobe haette
+   damit das **Betriebsschema ueberschrieben** - also genau den Schaden angerichtet,
+   gegen den die Sicherung gebaut ist. Ohne die Option bestimmt der
+   Einspielbefehl das Ziel.
+2. **Das Kennwort steht nie auf der Kommandozeile.** Ein `-p<kennwort>` ist fuer
+   jeden sichtbar, der die Prozessliste liest, und bei einem Dienst, der laufend
+   sichert, steht es dort laufend. Gereicht wird es ueber eine
+   `--defaults-extra-file`, die unmittelbar danach geloescht wird - auch bei einem
+   Wurf.
+3. **Eingespielt wird NICHT automatisch.** Das Schema gehoert allen Servern
+   gemeinsam; ein Wiederherstellen, das es stillschweigend ueberschreibt, nimmt dem
+   zweiten Server seinen Stand, waehrend der Betreiber den ersten zurueckholt. Der
+   Abzug kommt als DATEI zurueck, und die Notiz nennt die fertige Zeile.
+
+DAZU:
+
+- **Umfang:** `full` und `config` nehmen den Abzug mit, `world` nicht - eine
+  Weltsicherung meint das Gelaende.
+- **Neue Spalte `backups.datenbank_hinweis`** (nachgeruestet mit dem vorhandenen
+  ALTER-falls-fehlt-Muster). Sie traegt einen SATZ und kein Ja/Nein: Wer "nein"
+  liest, fragt "warum". **Ein fehlgeschlagener Abzug laesst die Dateisicherung
+  GELINGEN** - eine Dateisicherung ohne Datenbank ist viel besser als keine, sie
+  darf nur nicht so aussehen wie eine vollstaendige. NULL heisst "die Frage
+  stellte sich nicht".
+- **`_manager/` kommt nie in die naechste Sicherung.** Dort liegt der Abzug der
+  vorigen Wiederherstellung; ohne den Ausschluss wuechse jede Sicherung um den
+  Abzug der vorigen, und nach zehn Laeufen lagen zehn alte Abzuege im Archiv -
+  jeder mit allen Spielerdaten.
+- **Der Wegwerfordner wird geloescht**, auch wenn das Schreiben wirft: Ein
+  vergessener Abzug im Temp traegt alle Spielerdaten im Klartext, und zwar dort, wo
+  niemand ihn sucht.
+- **Eine Zerlegung statt einer dritten:** `freimarken_einrichtung_service` hatte
+  zwei eigene `re.match` fuer die JDBC-Adresse, und diese Sicherung haette den
+  dritten gebraucht. Jetzt gibt es `zerlege_url`, und die drei Verbraucher fragen
+  sie. Dieselbe Lehre wie heute bei den .properties-Zerlegern - diesmal **bevor**
+  der Nachbau entstand.
+- **`lies_testadresse`** ist ein eigener, so benannter Weg. `lies_zugangsdaten`
+  gibt `url.test` weiter nicht heraus (der Riegel bleibt), aber der eine
+  Verbraucher, der ans Testschema muss, nennt es beim Namen.
+
+**DER NACHWEIS, auf den es ankommt:** `test_ein_abzug_kommt_wirklich_zurueck` zieht
+mit dem echten `mysqldump` einen Abzug aus einem Schema mit drei Zeilen, **leert das
+Testschema** (ohne diesen Schritt beweist ein Treffer nichts - die Zeilen koennten
+die alten sein), spielt ein und ZAEHLT. Danach ein zweites Mal, in ein nicht leeres
+Schema - genau der Fall, in dem man es braucht. Gelaufen gegen MariaDB 10.4.32.
+
+Die Probe beruehrt die Betriebsdaten nie: eigenes Schema, eigener Benutzer, eigenes
+Kennwort, eigene Properties-Datei. Ohne laufende Anlage wird sie uebersprungen.
+
+**DIE EINSPRITZUNG HAT DREI PROBENLUECKEN GEFUNDEN**, und zwei davon sind die
+Lehre dieser Runde:
+
+- **Der Riegel am Tabellennamen war ungeprueft.** Meine Probe fragte, ob `None`
+  zurueckkommt - und das kommt es auch mit ausgeschaltetem Riegel: MariaDB lehnt
+  den kaputten Namen selbst ab, der Rueckgabewert ist derselbe. Jetzt wird
+  beobachtet, dass der Name das Werkzeug **nicht erreicht**, und die Gegenrichtung
+  (ein guter Name kommt durch) steht daneben.
+- **Die Seite war ungeprueft** - zum dritten Mal an diesem Tag dieselbe Falle: eine
+  gruen gepruefte Regel ohne gepruefen ANSCHLUSS. Die Vorlage konnte den Hinweis
+  verschweigen, und alle fuenfzehn Proben blieben gruen.
+- Und ein Zufallstreffer in meiner eigenen Reparatur: Die neue Probe suchte das
+  Wort "Plugin-Datenbank" und traf damit den Hinweisabsatz ueber der Tabelle
+  statt der Spalte. Jetzt sucht sie `<th>Plugin-Datenbank</th>` - eine fehlende
+  Spalte verschiebt jeden Wert unter einen falschen Kopf.
+
+**22 Einspritzungen, am Ende 22 gefangen** (nach drei Probenverbesserungen).
+
+OFFEN: Der Abzug laeuft gegen die Anlage, die in `datenbank.properties` unter `url`
+steht - auf diesem Entwicklungsrechner gibt es sie nicht (die Plugin-Datenbank
+laeuft auf FRIEDRICHS). **Der erste echte Abzug muss dort gezogen werden**, und die
+Spalte in der Sicherungsliste sagt dann, ob er kam.
 ### ENTSCHIEDEN 26.11.2026: Marktgebuehr 3 Prozent im Spielerhandel
 
 Gemessen waren 22.361 Mark Ueberschuss je Spieler und Tag und genau EINE

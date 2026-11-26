@@ -264,6 +264,44 @@ def lege_config_ab(server) -> tuple[bool, str]:
     return True, "config.yml abgelegt - mit allen Erklaerungen der Vorgabe."
 
 
+def _alle_zugangswerte() -> dict[str, str]:
+    """Alle Zeilen der Zugangsdatei als Karte - mit Javas Regeln gelesen.
+
+    EINE LESUNG FUER BEIDE ADRESSEN, und das ist nicht Bequemlichkeit: Hier
+    standen zwei Abschriften derselben zehn Zeilen, und die Waechterprobe
+    ``test_kein_neuer_eigener_properties_zerleger`` hat die zweite am
+    26.11.2026 gefangen. Zu Recht - sie war ein Nachbau.
+
+    GELESEN WIRD MIT ``properties_service.zerlege_zeile``, also mit Javas
+    Regeln. Das ist hier mehr als Ordnung: Diese Datei liest auch das
+    PLUGIN, und zwar mit Java (``Datenbank.java``). Wer sie anders liest,
+    liest sie falsch - bei einem Kennwort mit Backslash oder einem
+    Doppelpunkt als Trenner faellt das auf, und dann zeigt der Manager eine
+    Anlage an, mit der das Plugin nicht spricht.
+
+    Der Wert bleibt ROH (nicht entflucht), wie ueberall in diesem Haus: Der
+    Schreiber dieser Datei ist das Einrichtungsskript, und es fluchtet
+    nicht.
+    """
+    from app.services import properties_service
+
+    if not PFAD_ZUGANG.is_file():
+        return {}
+    werte: dict[str, str] = {}
+    try:
+        text = PFAD_ZUGANG.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    for zeile in text.split(chr(10)):
+        zerlegt = properties_service.zerlege_zeile(zeile.strip())
+        if zerlegt is None:
+            continue
+        name, wert = zerlegt
+        if name:
+            werte[name] = wert.strip()
+    return werte
+
+
 def lies_zugangsdaten() -> dict[str, str]:
     """``url``, ``benutzer`` und ``passwort`` aus ``datenbank.properties``.
 
@@ -272,20 +310,43 @@ def lies_zugangsdaten() -> dict[str, str]:
     jedem Lauf. Wer dort hineinzeigt, laesst den Betrieb auf einer Anlage laufen, die
     beim naechsten Probelauf leer ist.
     """
-    if not PFAD_ZUGANG.is_file():
-        return {}
-    werte: dict[str, str] = {}
-    try:
-        for zeile in PFAD_ZUGANG.read_text(encoding="utf-8",
-                                           errors="replace").splitlines():
-            roh = zeile.strip()
-            if not roh or roh.startswith("#") or "=" not in roh:
-                continue
-            name, _, wert = roh.partition("=")
-            werte[name.strip()] = wert.strip()
-    except OSError:
+    werte = _alle_zugangswerte()
+    # LEERE KARTE HEISST "KEINE DATEI", drei leere Werte heissen "Datei da, aber
+    # ohne diese Zeilen" - zwei verschiedene Lagen, und eine Probe haelt den
+    # Unterschied fest. Beim Zusammenlegen der zwei Lesungen ist er mir
+    # verlorengegangen; test_ohne_datei_bleibt_der_zugang_leer hat es gefangen.
+    if not werte:
         return {}
     return {"url": werte.get("url", ""), "benutzer": werte.get("benutzer", ""),
+            "passwort": werte.get("passwort", "")}
+
+
+def lies_testadresse() -> dict[str, str]:
+    """Die Adresse des TESTSCHEMAS samt Anmeldung - ``url.test`` und sonst nichts.
+
+    EIN EIGENER, SO BENANNTER WEG, und der Grund steht in {@code lies_zugangsdaten}:
+    Jene Funktion gibt ``url.test`` mit Absicht nicht heraus, damit niemand den
+    Betrieb auf eine Anlage zeigt, die die Java-Proben vor jedem Lauf leeren. Dieser
+    Riegel bleibt.
+
+    Wer trotzdem an das Testschema muss - und das ist genau ein Verbraucher, der
+    Nachweis, dass sich ein Abzug EINSPIELEN laesst -, nennt diese Funktion beim
+    Namen. Dann steht im Quelltext, was geschieht, und eine Suche nach
+    "testadresse" findet jede Stelle.
+
+    Benutzer und Kennwort kommen aus denselben zwei Zeilen wie beim Betrieb: Die
+    Properties-Datei fuehrt sie nur einmal, und das Einrichtungsskript legt beide
+    Schemata fuer denselben Benutzer an.
+    """
+    werte = _alle_zugangswerte()
+    # LEERE KARTE HEISST "KEINE DATEI", drei leere Werte heissen "Datei da, aber
+    # ohne diese Zeilen" - zwei verschiedene Lagen, und eine Probe haelt den
+    # Unterschied fest. Beim Zusammenlegen der zwei Lesungen ist er mir
+    # verlorengegangen; test_ohne_datei_bleibt_der_zugang_leer hat es gefangen.
+    if not werte:
+        return {}
+    return {"url": werte.get("url.test", ""),
+            "benutzer": werte.get("benutzer", ""),
             "passwort": werte.get("passwort", "")}
 
 
@@ -353,24 +414,50 @@ def richte_datenbank_ein() -> tuple[bool, str]:
     return True, "MariaDB eingerichtet: Dienst, Schemata, Benutzer, Firewallregel."
 
 
+def zerlege_url(url: str) -> dict[str, str] | None:
+    """``rechner``, ``port`` und ``schema`` einer JDBC-Adresse - oder ``None``.
+
+    DIE EINE STELLE, an der diese Adresse gelesen wird. Dieser Dienst hatte zwei
+    eigene ``re.match`` dafuer, und die Datenbanksicherung haette den dritten
+    gebraucht - genau das Muster, das heute bei den .properties-Zerlegern aufgefallen
+    ist (vierzehn Nachbauten derselben Regel, jeder ein wenig anders).
+
+    Erkannt wird ``jdbc:mariadb://`` und ``jdbc:mysql://``, mit oder ohne Port, mit
+    oder ohne Parameter dahinter. Alles andere gibt ``None`` - auch eine
+    PostgreSQL-Adresse, denn fuer die taugt weder der Vorgabeport noch mysqldump.
+
+    GEWORFEN WIRD NIE: Jeder Aufrufer beantwortet damit die Frage "gibt es hier
+    ueberhaupt eine Datenbank", und die darf an einer kaputten Zeile in einer
+    Einstellungsdatei nicht scheitern.
+    """
+    import re
+
+    treffer = re.match(
+        r"^jdbc:(?:mariadb|mysql)://([^:/?]+)(?::(\d+))?/([^?/]+)",
+        (url or "").strip())
+    if treffer is None:
+        return None
+    return {
+        "rechner": treffer.group(1),
+        "port": treffer.group(2) or "3306",
+        "schema": treffer.group(3),
+    }
+
+
 def _datenbank_antwortet() -> bool:
     """Steht auf dem Rechner der Zugangsdaten ein Horcher auf dem Port?
 
     Eine Netzprobe und kein Anmeldeversuch: Fuer die Frage "muss ich einrichten" genuegt
     sie, und sie braucht kein Kennwort. Dasselbe Verfahren wie ``mc_ping``.
     """
-    import re
     import socket
 
-    zugang = lies_zugangsdaten()
-    treffer = re.match(r"^jdbc:(?:mariadb|mysql)://([^:/?]+)(?::(\d+))?/",
-                       zugang.get("url", ""))
-    if treffer is None:
+    teile = zerlege_url(lies_zugangsdaten().get("url", ""))
+    if teile is None:
         return False
-    rechner = treffer.group(1)
-    port = int(treffer.group(2) or 3306)
     try:
-        with socket.create_connection((rechner, port), timeout=3.0):
+        with socket.create_connection((teile["rechner"], int(teile["port"])),
+                                      timeout=3.0):
             return True
     except OSError:
         return False
@@ -477,11 +564,11 @@ def trage_zugangsdaten_ein(server) -> tuple[bool, str]:
             "er wird hier nicht genannt, weil eine solche Meldung das Kennwort "
             "enthalten kann.")
 
-    # Die Zeile nennt den RECHNER und das Schema, nie den Benutzer und nie das Kennwort.
-    import re
-
-    treffer = re.match(r"^jdbc:(?:mariadb|mysql)://([^?]+)", zugang["url"])
-    ziel = treffer.group(1) if treffer else "(unleserlich)"
+    # Die Zeile nennt den RECHNER und das Schema, nie den Benutzer und nie das
+    # Kennwort. Zerlegt wird mit zerlege_url - dieselbe Regel wie ueberall.
+    teile = zerlege_url(zugang["url"])
+    ziel = ("(unleserlich)" if teile is None
+            else teile["rechner"] + ":" + teile["port"] + "/" + teile["schema"])
     satz = "Zugangsdaten eingetragen: " + ziel
     if schon_gesetzt:
         satz += (" (unangetastet, weil schon gesetzt: " + ", ".join(schon_gesetzt)

@@ -41,6 +41,7 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_server_schema()
     _ensure_installed_content_schema()
+    _ensure_backup_schema()
     _ensure_scheduled_job_schema()
     _migrate_gateway_settings_to_network()
     _normalize_runtime_states()
@@ -178,6 +179,27 @@ def _ensure_installed_content_schema() -> None:
     with engine.begin() as conn:
         for _name, sql in pending:
             conn.execute(text(sql))
+
+
+def _ensure_backup_schema() -> None:
+    """``datenbank_hinweis`` nachziehen - dasselbe ALTER-falls-fehlt-Muster.
+
+    Bestehende Sicherungen behalten NULL, und das ist richtig: Fuer sie ist
+    nicht nachvollziehbar, ob eine Plugin-Datenbank dabei war - sie war es
+    naemlich nie. Ein nachtraeglich gesetztes "ja" waere eine Zusage ueber
+    eine Datei, die niemand mehr pruefen kann.
+    """
+    inspector = inspect(engine)
+    try:
+        columns = {column["name"]
+                   for column in inspector.get_columns("backups")}
+    except Exception:  # noqa: BLE001 - Tabelle noch nicht da
+        return
+    if "datenbank_hinweis" in columns:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE backups ADD COLUMN datenbank_hinweis TEXT"))
 
 
 def _ensure_scheduled_job_schema() -> None:

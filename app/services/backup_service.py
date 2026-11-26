@@ -11,13 +11,22 @@ from sqlalchemy.orm import Session
 from app.models.backup import Backup
 from app.models.restore_history import RestoreHistory
 from app.models.server import Server
-from app.services import audit_service
+from app.services import audit_service, datenbanksicherung_service
 from app.services.app_setting_service import get_backup_storage_root
 from app.services.process_service import is_running, send_console_command, start_server, stop_server
 
 
 _BACKUP_SCOPES = {"full", "world", "config"}
 _PRE_ACTIONS = {"none", "save_all", "stop_start"}
+
+# Welche Umfaenge einen Abzug der PLUGIN-DATENBANK mitnehmen [26.11.2026].
+#
+# "world" nicht, und das ist kein Vergessen: Eine Weltsicherung meint das
+# GELAENDE - Chunks, Gebautes, uid.dat. Die Spielerdaten liegen ganz woanders,
+# und wer "nur die Welt" waehlt, hat sich fuer eine schnelle, kleine Sicherung
+# entschieden. Die Spalte datenbank_hinweis bleibt dann NULL - "die Frage
+# stellte sich nicht".
+UMFAENGE_MIT_DATENBANK = {"full", "config"}
 
 
 def _safe_name(value: str) -> str:
@@ -41,6 +50,30 @@ def _backup_folder_for_server(db: Session, server: Server) -> Path:
     return target
 
 
+def _ohne_manager_ordner(server_base: Path, paths: list[Path]) -> list[Path]:
+    """Alles ausser dem Ordner, in dem die Wiederherstellung den Abzug ablegt.
+
+    OHNE DIESEN AUSSCHLUSS WUECHSE JEDE SICHERUNG um den Abzug der vorigen:
+    Die Wiederherstellung entpackt ``_manager/freimarken-datenbank.sql`` in
+    den Serverordner, und die naechste Vollsicherung nimmt ihn als Datei des
+    Servers mit - neben dem frischen Abzug. Nach zehn Laeufen lagen zehn alte
+    Abzuege im Archiv, jeder mit allen Spielerdaten.
+
+    AM ENDE DER SAMMLUNG und nicht in einem Zweig: Der Ausschluss gilt fuer
+    jeden Umfang, auch fuer den naechsten, den jemand dazubaut.
+    """
+    ordner = (server_base / datenbanksicherung_service.ORDNER_IM_ARCHIV).resolve()
+    behalten = []
+    for file in paths:
+        try:
+            if file.resolve().is_relative_to(ordner):
+                continue
+        except (OSError, ValueError):
+            pass
+        behalten.append(file)
+    return behalten
+
+
 def _iter_backup_files(server_base: Path, scope: str) -> list[Path]:
     normalized = scope if scope in _BACKUP_SCOPES else "full"
     paths: list[Path] = []
@@ -49,7 +82,7 @@ def _iter_backup_files(server_base: Path, scope: str) -> list[Path]:
         for file in server_base.rglob("*"):
             if file.is_file():
                 paths.append(file)
-        return paths
+        return _ohne_manager_ordner(server_base, paths)
 
     if normalized == "world":
         # Den Weltnamen NICHT fest verdrahten: er steht in server.properties (level-name).
@@ -72,7 +105,7 @@ def _iter_backup_files(server_base: Path, scope: str) -> list[Path]:
             file = server_base / config_file
             if file.exists() and file.is_file():
                 paths.append(file)
-        return paths
+        return _ohne_manager_ordner(server_base, paths)
 
     # config
     for name in ("config", "plugins", "mods"):
@@ -92,10 +125,17 @@ def _iter_backup_files(server_base: Path, scope: str) -> list[Path]:
         file = server_base / config_file
         if file.exists() and file.is_file():
             paths.append(file)
-    return paths
+    return _ohne_manager_ordner(server_base, paths)
 
 
-def _write_zip(server_base: Path, files: list[Path], destination_zip: Path) -> tuple[int, int, int]:
+def _write_zip(server_base: Path, files: list[Path], destination_zip: Path,
+               zusatz: dict[str, Path] | None = None) -> tuple[int, int, int]:
+    """Schreibt das Archiv. ``zusatz`` sind Dateien AUSSERHALB des Serverordners.
+
+    Der Abzug der Plugin-Datenbank liegt in einem Wegwerfordner, nicht im
+    Serverordner - ``relative_to(server_base)`` wuerfe dort. Sein Archivname
+    kommt darum als Schluessel herein.
+    """
     destination_zip.parent.mkdir(parents=True, exist_ok=True)
     size_bytes = 0
     written_files = 0
@@ -118,6 +158,17 @@ def _write_zip(server_base: Path, files: list[Path], destination_zip: Path) -> t
                     pass
                 written_files += 1
             except (OSError, ValueError):
+                skipped_files += 1
+                continue
+        for archivname, quelle in (zusatz or {}).items():
+            try:
+                archive.write(quelle.resolve(), arcname=archivname)
+                size_bytes += quelle.stat().st_size
+                written_files += 1
+            except (OSError, ValueError):
+                # GEZAEHLT und nicht verschwiegen: Ein Abzug, der nicht ins
+                # Archiv kam, ist genau der Fall, in dem die Sicherung
+                # vollstaendig AUSSIEHT und keine ist.
                 skipped_files += 1
                 continue
     return size_bytes, written_files, skipped_files
@@ -201,11 +252,42 @@ def create_backup(
             files = [f for f in files if not f.is_relative_to(target_dir)]
         if not files:
             raise ValueError("Keine Dateien fuer dieses Backup gefunden.")
-        size_bytes, written_files, skipped_files = _write_zip(base, files, zip_path)
+
+        # DER ABZUG DER PLUGIN-DATENBANK [26.11.2026]. Sie liegt nicht im
+        # Serverordner, und darum lag sie bis heute in keiner Sicherung.
+        #
+        # EIN FEHLSCHLAG HIER LAESST DIE SICHERUNG GELINGEN, und das ist eine
+        # Entscheidung: Eine Dateisicherung ohne Datenbank ist viel besser als
+        # keine. Sie darf nur nicht AUSSEHEN wie eine vollstaendige - dafuer
+        # steht der Satz in backup.datenbank_hinweis, und der Betreiber liest
+        # ihn in der Liste.
+        zusatz: dict[str, Path] = {}
+        hinweis: str | None = None
+        wegwerf: Path | None = None
+        if scope in UMFAENGE_MIT_DATENBANK:
+            import tempfile
+
+            wegwerf = Path(tempfile.mkdtemp(prefix="mcm-dbabzug-"))
+            abzug = wegwerf / "freimarken-datenbank.sql"
+            gelungen, hinweis = datenbanksicherung_service.schreibe_abzug(
+                abzug)
+            if gelungen:
+                zusatz[datenbanksicherung_service.NAME_IM_ARCHIV] = abzug
+
+        try:
+            size_bytes, written_files, skipped_files = _write_zip(
+                base, files, zip_path, zusatz)
+        finally:
+            # DER ABZUG LIEGT DANACH NUR NOCH IM ARCHIV: Ein vergessener
+            # Wegwerfordner traegt alle Spielerdaten im Klartext, und zwar
+            # dort, wo niemand ihn sucht.
+            if wegwerf is not None:
+                shutil.rmtree(wegwerf, ignore_errors=True)
         if written_files <= 0:
             raise ValueError("Keine lesbaren Dateien fuer dieses Backup gefunden.")
 
         backup.size_bytes = size_bytes
+        backup.datenbank_hinweis = hinweis
         backup.status = "success"
         db.add(backup)
         db.commit()
@@ -219,6 +301,11 @@ def create_backup(
             details=(
                 f"backup_id={backup.id} scope={scope} pre_action={action} "
                 f"size={size_bytes} written={written_files} skipped={skipped_files}"
+                # Der Satz gehoert MIT ins Protokoll: Wer in drei Monaten
+                # fragt, ob eine Sicherung die Datenbank hatte, liest hier
+                # nach - und nicht in einer Spalte, die inzwischen ueberschrieben
+                # sein kann.
+                + (f" datenbank={hinweis}" if hinweis else "")
             ),
         )
         return backup
@@ -326,6 +413,26 @@ def restore_backup(
         finally:
             if temp_dir.exists():
                 shutil.rmtree(temp_dir, ignore_errors=True)
+
+        # DER ABZUG WIRD NICHT EINGESPIELT, und der Grund steht im Kopf von
+        # datenbanksicherung_service: Das Schema gehoert ALLEN Servern
+        # gemeinsam. Ein Wiederherstellen, das es stillschweigend
+        # ueberschreibt, nimmt dem zweiten Server seinen Stand, waehrend der
+        # Betreiber den ersten zurueckholt.
+        #
+        # GENANNT WIRD ER ABER: Eine Datei, die niemand erwaehnt, findet
+        # niemand - und dann glaubt der Betreiber, die Datenbank sei mit
+        # zurueckgekommen.
+        liegt = base / datenbanksicherung_service.NAME_IM_ARCHIV
+        if liegt.is_file():
+            befehl = datenbanksicherung_service.einspielbefehl(str(liegt))
+            restore_row.notes = ((notes or "")
+                                 + " | Die Plugin-Datenbank wurde NICHT eingespielt"
+                                   " - sie gehoert allen Servern gemeinsam. Der"
+                                   " Abzug liegt in "
+                                 + datenbanksicherung_service.NAME_IM_ARCHIV
+                                 + (". Einspielen mit: " + befehl
+                                    if befehl else "."))
 
         restore_row.status = "success"
         db.add(restore_row)
