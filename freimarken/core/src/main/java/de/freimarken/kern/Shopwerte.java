@@ -57,24 +57,39 @@ public record Shopwerte(int spielershopKauf, int spielershopVerkauf,
             "handel.marktgebuehr-bundshop-verkauf-prozent";
 
     /**
-     * 0 Prozent, wenn ein Kunde bei einem Spielershop kauft.
+     * 3 Prozent, wenn ein Kunde bei einem Spielershop kauft.
      *
-     * <p>Der Spielermarkt soll zuerst laufen. Eine Gebuehr auf den ersten Handel des
-     * ersten Tages bremst genau das, was sie besteuern soll - und die Ladenmiete ist
-     * ohnehin die staerkere Senke (Plan 7.1: "laufend, sichtbar, freiwillig").
+     * <p><b>Bis zum 26.11.2026 waren es 0</b>, mit der Begruendung "der Spielermarkt
+     * soll zuerst laufen; die Ladenmiete ist ohnehin die staerkere Senke". Jene
+     * Annahme ist gemessen widerlegt: Die Ladenmiete bringt 500 Mark am Tag und
+     * server-weit hoechstens 1.500 - das sind 2 Prozent eines Ueberschusses von
+     * 22.361 Mark je Spieler und Tag. Sie ist die EINZIGE automatische
+     * wiederkehrende Senke des Servers.
+     *
+     * <p>Drei Prozent und nicht fuenf (Plan 7.4 sieht fuenf vor): Die Gebuehr ist
+     * noch nie gelaufen. Drei sind spuerbar - von 1.000 Mark Umsatz bleiben 970 -
+     * und lassen Raum nach oben. Der Weg nach unten waere teurer: Eine gesenkte
+     * Gebuehr merkt niemand, eine erhoehte schon.
      */
-    public static final int VORGABE_SPIELER_KAUF = 0;
+    public static final int VORGABE_SPIELER_KAUF = 3;
 
-    /** 0 Prozent, wenn ein Kunde an einen Spielershop verkauft - derselbe Grund. */
-    public static final int VORGABE_SPIELER_VERKAUF = 0;
+    /** 3 Prozent, wenn ein Kunde an einen Spielershop verkauft - derselbe Grund. */
+    public static final int VORGABE_SPIELER_VERKAUF = 3;
 
     /**
-     * 0 Prozent am Bundesmarkt.
+     * 0 Prozent am Bundesmarkt - <b>die Ausnahme, und sie bleibt es [26.11.2026]</b>.
      *
      * <p>Der Ankaufpreis IST hier schon der Abzug: Plan 8.2 setzt ihn bewusst niedrig,
      * damit Verkaufen die Verwertung bleibt und keine zweite Arbeit wird. Eine Gebuehr
      * darauf waere ein zweiter Abzug an derselben Stelle, und ein Betreiber, der den
      * Ankauf senken will, hat dafuer die Tafel.
+     *
+     * <p><b>Als die zwei Lagen darueber auf 3 gingen, blieb diese bei 0</b>, und zum
+     * Grund darueber kommt ein zweiter: Eine Senke soll Geld aus dem UMLAUF nehmen.
+     * Beim Spielerhandel wechselt vorhandenes Geld den Besitzer, und eine Gebuehr
+     * nimmt davon einen Teil heraus. Hier ENTSTEHT das Geld gerade - der Staat zahlt
+     * es neu -, und eine Gebuehr darauf senkt nur, was neu entsteht. Dasselbe tut die
+     * Ankauftafel, nur sichtbar.
      */
     public static final int VORGABE_BUND_VERKAUF = 0;
 

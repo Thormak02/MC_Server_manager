@@ -620,13 +620,84 @@
         Plugin addiert sie einmal und nicht als Summe. Diese Zeilen gehoeren in die
         Rechteverwaltung des Servers; der Manager setzt sie nicht.
     </p>
+    <p class="hint">
+        Wo ein <strong>Bis</strong> steht, ist die Zeile <code>settemp</code> mit
+        Dauer &ndash; damit laeuft das Recht von selbst ab, und der
+        Ex-Foerderer wird beim naechsten Beitritt von selbst aus einer
+        Mitgliederwelt heimgeholt. Mit <code>set</code> bliebe es stehen, die
+        Mitgliedschaft waere abgelaufen, und die beiden widersprachen sich
+        still. Die Zeilen sind Beispiele fuer LuckPerms; welche
+        Rechteverwaltung laeuft, weiss der Manager nicht.
+    </p>
     <table class="table">
-        <thead><tr><th>Wer</th><th>Recht</th></tr></thead>
+        <thead><tr><th>Wer</th><th>Recht</th><th>Bis</th>
+            <th>Zeile zum Kopieren</th></tr></thead>
         <tbody>
             {% for zeile in mitglieder.rechte %}
             <tr>
                 <td title="{{ zeile.kennung }}">{{ zeile.name }}</td>
                 <td><code>{{ zeile.recht }}</code></td>
+                <td>{% if zeile.bis %}{{ zeile.bis.strftime("%d.%m.%Y") }}
+                    <span class="hint">({{ zeile.dauer }})</span>
+                    {% else %}<span class="hint">laeuft</span>{% endif %}</td>
+                <td><code>{{ zeile.befehl }}</code></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% if mitglieder.entziehen %}
+<section class="card">
+    <h2>Rechte, die zu ENTZIEHEN sind</h2>
+    <p class="hint">
+        Diese Mitgliedschaften sind abgelaufen, und ihr Recht ist durch keine
+        laufende Zeile mehr gedeckt. <strong>Die Tafel darueber zeigt sie nicht</strong>
+        &ndash; sie liest nur die laufenden, eine abgelaufene verschwindet dort also
+        genau in dem Augenblick, in dem ihr Recht wegmuss. Wer das Recht mit
+        <code>settemp</code> gesetzt hat, muss hier nichts tun: Es ist von selbst
+        abgelaufen.
+    </p>
+    <table class="table">
+        <thead><tr><th>Wer</th><th>Recht</th><th>Lief ab</th>
+            <th>Stattdessen</th><th>Zeile zum Kopieren</th></tr></thead>
+        <tbody>
+            {% for zeile in mitglieder.entziehen %}
+            <tr>
+                <td title="{{ zeile.kennung }}">{{ zeile.name }}</td>
+                <td><code>{{ zeile.recht }}</code></td>
+                <td>{{ zeile.bis.strftime("%d.%m.%Y") if zeile.bis else "" }}</td>
+                <td>{% if zeile.statt_recht %}
+                    <code>{{ zeile.statt_recht }}</code>
+                    {% else %}<span class="hint">nichts mehr</span>{% endif %}</td>
+                <td><code>{{ zeile.befehl }}</code></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% if mitglieder.bald %}
+<section class="card">
+    <h2>Laeuft in den naechsten Tagen ab</h2>
+    <p class="hint">
+        Damit eine Verlaengerung angesprochen werden kann, <em>bevor</em> der
+        Zuschlag weg ist. Ohne diese Liste erfaehrt man vom Ablauf erst, wenn sich
+        der Spieler beschwert.
+    </p>
+    <table class="table">
+        <thead><tr><th>Wer</th><th>Zuschlag</th><th>Bis</th>
+            <th>Noch</th></tr></thead>
+        <tbody>
+            {% for zeile in mitglieder.bald %}
+            <tr>
+                <td title="{{ zeile.kennung }}">{{ zeile.name }}</td>
+                <td>{{ zeile.zuschlag }} +{{ zeile.zahl }}</td>
+                <td>{{ zeile.bis.strftime("%d.%m.%Y") }}</td>
+                <td>{{ zeile.tage_rest }} Tage
+                    <span class="hint">({{ zeile.dauer }})</span></td>
             </tr>
             {% endfor %}
         </tbody>
@@ -643,6 +714,12 @@
         &ndash; das Plugin rechnet mit <code>max(zahl, 0)</code>, eine 0 wuerde das Recht
         vergeben und nichts bewirken.
     </p>
+    <p class="hint">
+        <strong>Bis</strong> ist der letzte gueltige Tag, nicht der erste ungueltige:
+        Wer bis zum 31. bezahlt hat, ist am 31. noch Mitglied. Steht ein Datum da,
+        nennt die Rechtetafel die Zeile mit <code>settemp</code> &ndash; dann laeuft
+        das Recht von selbst ab, und niemand muss daran denken.
+    </p>
     <form method="post" action="/freimarken/{{ server.id }}/mitglieder">
         <label>Kennung (UUID)
             <input type="text" name="kennung" maxlength="36" required>
@@ -656,6 +733,9 @@
             </select>
         </label>
         <label>Zahl <input type="number" name="zahl" min="1" value="1" required></label>
+        <label>Bis (leer = laeuft weiter)
+            <input type="date" name="bis">
+        </label>
         <label>Herkunft der Zahlung
             <input type="text" name="herkunft" maxlength="60" value="von Hand">
         </label>

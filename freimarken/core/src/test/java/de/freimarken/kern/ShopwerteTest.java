@@ -22,15 +22,27 @@ class ShopwerteTest {
     }
 
     @Test
-    @DisplayName("Ab Werk sind ALLE DREI Saetze 0")
-    void vorgabeIstNull() {
-        // Entschieden am 08.11.2026: Der Spielermarkt soll zuerst laufen. Die Zahlen
-        // stehen trotzdem in der Datei - eine, die erst eingebaut wird, wenn man sie
-        // braucht, wird unter Druck eingebaut.
-        assertEquals(0, Shopwerte.VORGABE.spielershopKauf());
-        assertEquals(0, Shopwerte.VORGABE.spielershopVerkauf());
-        assertEquals(0, Shopwerte.VORGABE.bundshopVerkauf());
-        assertFalse(Shopwerte.VORGABE.erhebtGebuehr());
+    @DisplayName("Ab Werk: 3 Prozent im Spielerhandel, 0 am Bundesmarkt")
+    void vorgabeTrifftDenSpielerhandel() {
+        // GEAENDERT AM 26.11.2026, und zwar gemessen: Der Server hatte 22.361 Mark
+        // Ueberschuss je Spieler und Tag und genau EINE automatische wiederkehrende
+        // Senke (Ladenmiete 500/Tag, server-weit hoechstens 1.500 - 2 Prozent). Die
+        // Annahme von 08.11.2026, "die Ladenmiete ist ohnehin die staerkere Senke",
+        // ist damit widerlegt.
+        //
+        // DER BUNDESMARKT BLEIBT BEI 0, und das ist der Teil, auf den es ankommt:
+        // Dort ENTSTEHT das Geld gerade (der Staat zahlt es neu), und der
+        // Ankaufpreis ist schon der Abzug. Eine Senke soll Geld aus dem UMLAUF
+        // nehmen - beim Spielerhandel wechselt vorhandenes Geld den Besitzer.
+        //
+        // DIESE Probe darf an der Vorgabe haengen: Sie sagt etwas UEBER sie aus.
+        // Die zwei Proben weiter unten setzen ihre Zahlen dagegen selbst.
+        assertEquals(3, Shopwerte.VORGABE.spielershopKauf());
+        assertEquals(3, Shopwerte.VORGABE.spielershopVerkauf());
+        assertEquals(0, Shopwerte.VORGABE.bundshopVerkauf(),
+                "der Bundesmarkt ist die Ausnahme - dort ist der Ankaufpreis schon"
+                        + " der Abzug");
+        assertTrue(Shopwerte.VORGABE.erhebtGebuehr());
     }
 
     @Test
@@ -86,19 +98,27 @@ class ShopwerteTest {
     void witherAendernNurEinen() {
         // Drei Zusicherungen je Wither und nicht eine: Bei einem Wither, der die falsche
         // Stelle belegt, waere eine Probe, die nur den geaenderten Wert liest, gruen.
-        Shopwerte kauf = Shopwerte.VORGABE.mitSpielerKauf(7);
+        //
+        // DIE ZAHLEN SETZT DIESE PROBE SELBST und nimmt sie nicht aus der Vorgabe.
+        // Bis zum 26.11.2026 standen hier Shopwerte.VORGABE.mitX(...) und drei
+        // Nullen - und als die Vorgabe sich aenderte, war die Probe rot, ohne dass
+        // an den Withern etwas falsch war. Geprueft wird eine REGEL ("jeder Wither
+        // belegt GENAU seine Stelle"), und die haengt an keiner Einstellung.
+        Shopwerte ausgang = new Shopwerte(1, 2, 4, "Bund", 10);
+
+        Shopwerte kauf = ausgang.mitSpielerKauf(7);
         assertEquals(7, kauf.spielershopKauf());
-        assertEquals(0, kauf.spielershopVerkauf());
-        assertEquals(0, kauf.bundshopVerkauf());
+        assertEquals(2, kauf.spielershopVerkauf());
+        assertEquals(4, kauf.bundshopVerkauf());
 
-        Shopwerte verkauf = Shopwerte.VORGABE.mitSpielerVerkauf(13);
-        assertEquals(0, verkauf.spielershopKauf());
+        Shopwerte verkauf = ausgang.mitSpielerVerkauf(13);
+        assertEquals(1, verkauf.spielershopKauf());
         assertEquals(13, verkauf.spielershopVerkauf());
-        assertEquals(0, verkauf.bundshopVerkauf());
+        assertEquals(4, verkauf.bundshopVerkauf());
 
-        Shopwerte bund = Shopwerte.VORGABE.mitBundVerkauf(23);
-        assertEquals(0, bund.spielershopKauf());
-        assertEquals(0, bund.spielershopVerkauf());
+        Shopwerte bund = ausgang.mitBundVerkauf(23);
+        assertEquals(1, bund.spielershopKauf());
+        assertEquals(2, bund.spielershopVerkauf());
         assertEquals(23, bund.bundshopVerkauf());
     }
 
@@ -107,10 +127,19 @@ class ShopwerteTest {
     void erhebtGebuehrSiehtAlle() {
         // Eine Fassung, die nur einen Satz prueft, liesse die Startzeile schweigen,
         // waehrend an einer der anderen Lagen eine Gebuehr erhoben wird.
-        assertTrue(Shopwerte.VORGABE.mitSpielerKauf(1).erhebtGebuehr());
-        assertTrue(Shopwerte.VORGABE.mitSpielerVerkauf(1).erhebtGebuehr());
-        assertTrue(Shopwerte.VORGABE.mitBundVerkauf(1).erhebtGebuehr());
-        assertFalse(Shopwerte.VORGABE.erhebtGebuehr());
+        //
+        // VON DER VORGABE GELOEST [26.11.2026]: Hier stand Shopwerte.VORGABE, und
+        // seit jene eine Gebuehr erhebt, waere der letzte Satz immer rot gewesen -
+        // obwohl an erhebtGebuehr nichts falsch ist. Der NULLSTAND, den diese Probe
+        // braucht, wird jetzt selbst gebaut.
+        Shopwerte ohne = new Shopwerte(0, 0, 0, "Bund", 10);
+
+        assertTrue(ohne.mitSpielerKauf(1).erhebtGebuehr());
+        assertTrue(ohne.mitSpielerVerkauf(1).erhebtGebuehr());
+        assertTrue(ohne.mitBundVerkauf(1).erhebtGebuehr());
+        assertFalse(ohne.erhebtGebuehr(),
+                "drei Nullen sind keine Gebuehr - und genau das muss die Startzeile"
+                        + " verschweigen koennen");
     }
 
     @Test

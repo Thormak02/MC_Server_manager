@@ -757,7 +757,9 @@ class BildGleichTest {
                         "&#a5b4bf/parzelle · /mark · /freimarken preis <anzahl>"
                                 + " · /freimarken spielzeit"),
                 new Zeile(BundSatz.STAND_BEFEHLE_VERWALTUNG, 1L, Einsatz.keine(),
-                        "&#6e7a82/freimarken welt · parzelle <x> <z> · neuladen"),
+                        "&#6e7a82/freimarken welt · parzelle <x> <z> · neuladen"
+                                + " · blockbuch · blockbuch zurueck <radius>"
+                                + " <minuten>"),
                 new Zeile(BundSatz.PREIS_GRATIS, 1L, Einsatz.keine(),
                         "&#73bf96Die erste Parzelle ist gratis."),
                 // Der zweite Farbwechsel MITTEN im Satz nach der Schutzwache - und
@@ -1493,6 +1495,74 @@ class BildGleichTest {
                                 + " Serverprotokoll. Das ist KEIN Freispruch."),
                 new Zeile(BlockSatz.UNBEKANNT, 1L, Einsatz.von("name", "annna"),
                         "&#d9564dDen Spieler annna kennt dieser Server nicht."),
+                // DER RUECKWEG [26.11.2026]. Zweistufig, und die Zeilen sind die
+                // Stufen: Die Vorschau nennt Kasten und Zahlen UND den fertigen
+                // Befehl - ohne ihn muesste der Moderator den Ort abtippen, an dem
+                // er gerade steht, und ein Schritt dazwischen traefe den falschen
+                // Kasten.
+                new Zeile(BlockSatz.RUECKWEG_KOPF, 1L,
+                        Einsatz.von("ort", "altfurt 100/70/200").mit("radius", 10L).mit("minuten", 30L),
+                        "&#c6a15bRueckweg&#a5b4bf um altfurt 100/70/200,"
+                                + " Radius 10, letzte 30 Minuten:"),
+                new Zeile(BlockSatz.RUECKWEG_ZAHLEN, 1L,
+                        Einsatz.von("zeilen", 2L).mit("wegnehmen", 1L).mit("herstellen", 1L),
+                        "&#a5b4bf  Zeilen: 2 - wegnehmen: 1, herstellen: 1"),
+                new Zeile(BlockSatz.RUECKWEG_ROH, 1L,
+                        Einsatz.von("anzahl", 3L),
+                        "&#e3c57e  Ohne Vorzustand: 3&#6e7a82 - dort kommt der"
+                                + " Block zurueck, aber nicht seine Blickrichtung; wo in"
+                                + " Wasser gebaut wurde, kommt Luft."),
+                new Zeile(BlockSatz.RUECKWEG_BEFEHL, 1L,
+                        Einsatz.von("befehl", "/freimarken blockbuch zurueck 10 30 bei altfurt 100 70 200 bestaetigen"),
+                        "&#a5b4bf  Ausfuehren mit: &#e3c57e/freimarken"
+                                + " blockbuch zurueck 10 30 bei altfurt 100 70 200"
+                                + " bestaetigen"),
+                new Zeile(BlockSatz.RUECKWEG_LEER, 1L,
+                        Einsatz.von("ort", "altfurt 100/70/200").mit("minuten", 30L),
+                        "&#a5b4bfUm altfurt 100/70/200 steht in den letzten 30"
+                                + " Minuten nichts, was zurueckzunehmen waere."),
+                new Zeile(BlockSatz.RUECKWEG_ZU_VIELE, 1L,
+                        Einsatz.von("zeilen", 2L).mit("grenze", 5000L),
+                        "&#d9564dMindestens 2 Zeilen&#a5b4bf - die Grenze"
+                                + " liegt bei 5.000, und NICHTS wurde getan. Ein Rueckweg"
+                                + " in Haeppchen waere nicht nur unvollstaendig, er"
+                                + " waere falsch: Er nimmt die aelteste Zeile je Block,"
+                                + " und ein Schnitt mitten hindurch stellte den"
+                                + " Zwischenstand her. Nimm einen kleineren Radius oder"
+                                + " ein kuerzeres Fenster."),
+                new Zeile(BlockSatz.RUECKWEG_ZU_WEIT, 1L,
+                        Einsatz.von("radius", 10L).mit("hoechstens", 50L),
+                        "&#d9564dRadius 10 ist zu gross&#a5b4bf - hoechstens"
+                                + " 50. Einstellbar unter"
+                                + " blockbuch.rueckweg.hoechster-radius."),
+                new Zeile(BlockSatz.RUECKWEG_ZU_LANG, 1L,
+                        Einsatz.von("minuten", 30L).mit("hoechstens", 50L),
+                        "&#d9564d30 Minuten sind zu viel&#a5b4bf - hoechstens"
+                                + " 50. Einstellbar unter"
+                                + " blockbuch.rueckweg.hoechste-minuten."),
+                new Zeile(BlockSatz.RUECKWEG_UNBEKANNTE_WELT, 1L,
+                        Einsatz.von("welt", "hochwald").mit("welten", "altfurt, nether"),
+                        "&#d9564dDie Welt hochwald gibt es nicht.&#6e7a82 Es"
+                                + " gibt: altfurt, nether"),
+                new Zeile(BlockSatz.RUECKWEG_FERTIG, 1L,
+                        Einsatz.von("gesetzt", 7L).mit("zeilen", 2L),
+                        "&#73bf96Rueckweg gelaufen&#a5b4bf - 7 Bloecke"
+                                + " gesetzt, 2 Zeilen gemerkt."),
+                new Zeile(BlockSatz.RUECKWEG_MISSLUNGEN, 1L,
+                        Einsatz.von("anzahl", 3L),
+                        "&#d9564d  Nicht gesetzt: 3&#6e7a82 - diesen Block"
+                                + " kennt der Server nicht (mehr). Die Zeilen sind"
+                                + " trotzdem gemerkt, sonst versuchte jeder weitere Lauf"
+                                + " dasselbe wieder."),
+                new Zeile(BlockSatz.RUECKWEG_KEIN_ORT, 1L,
+                        Einsatz.keine(),
+                        "&#a5b4bfDu hast keinen Ort&#6e7a82 - von der Konsole"
+                                + " geht /freimarken blockbuch zurueck <radius>"
+                                + " <minuten> bei <welt> <x> <y> <z>."),
+                new Zeile(BlockSatz.RUECKWEG_KEINE_HOEHE, 1L,
+                        Einsatz.von("hoehe", -70L).mit("unten", -64L).mit("oben", 319L),
+                        "&#d9564dDie Hoehe -70 gibt es in dieser Welt"
+                                + " nicht&#a5b4bf - sie reicht von -64 bis 319."),
 
                 // /shop freigeben - der SCHLUESSEL zu einer fremden Shopkiste.
                 // Die Zusage-Zeile nennt AUSDRUECKLICH, was die Freigabe erlaubt und

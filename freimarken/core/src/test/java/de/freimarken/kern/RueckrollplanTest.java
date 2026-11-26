@@ -314,4 +314,86 @@ class RueckrollplanTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new Rueckrollplan.Setzung(null, Rueckrollplan.LUFT, false));
     }
+
+    // === Die Kastenrechnung ==============================================
+
+    @Test
+    @DisplayName("Der Kasten ist in allen drei Richtungen gleich weit")
+    void kastenIstInAllenRichtungenGleichWeit() {
+        Quader kasten = Rueckrollplan.kastenUm(new Blockort(WELT, 100, 70, 200), 10,
+                -64, 320);
+
+        assertEquals(90, kasten.vonX());
+        assertEquals(110, kasten.bisX());
+        assertEquals(60, kasten.vonY());
+        assertEquals(80, kasten.bisY());
+        assertEquals(190, kasten.vonZ());
+        assertEquals(210, kasten.bisZ());
+    }
+
+    @Test
+    @DisplayName("Radius 0 ist genau der eine Block")
+    void radiusNullIstDerEineBlock() {
+        Quader kasten = Rueckrollplan.kastenUm(new Blockort(WELT, 5, 6, 7), 0,
+                -64, 320);
+
+        assertEquals(1L, kasten.bloecke());
+        assertTrue(kasten.enthaelt(5, 6, 7));
+    }
+
+    @Test
+    @DisplayName("Die Hoehe wird geklemmt - in einer FLACHEN Welt mit negativem y")
+    void hoeheWirdGeklemmt() {
+        // ALTFURT IST DER NORMALFALL, nicht der Randfall: Es ist eine flache Welt,
+        // ihr Boden liegt bei y -61, die Unterkante bei -64. Ein Rueckweg mit
+        // Radius 50 um den Boden reicht nach unten weit unter die Welt - und genau
+        // dort schneidet diese Rechnung. Ohne sie stuende in der Vorschau ein
+        // Kasten, dessen unteres Stueck es nicht gibt.
+        Quader kasten = Rueckrollplan.kastenUm(new Blockort(WELT, 0, -61, 0), 50,
+                -64, 320);
+
+        assertEquals(-64, kasten.vonY(), "nicht -111");
+        assertEquals(-11, kasten.bisY());
+        assertEquals(-50, kasten.vonX(), "in der FLAECHE wird nicht geklemmt");
+    }
+
+    @Test
+    @DisplayName("Nach oben wird auf oben MINUS EINS geklemmt")
+    void nachObenWirdAufObenMinusEinsGeklemmt() {
+        // getMaxHeight nennt die erste Hoehe, die es NICHT mehr gibt. Mit jener Zahl
+        // als Oberkante fragte der Kasten nach einer Ebene ueber der Welt - das
+        // kostet nichts und stuende falsch in der Vorschau.
+        Quader kasten = Rueckrollplan.kastenUm(new Blockort(WELT, 0, 315, 0), 10,
+                -64, 320);
+
+        assertEquals(319, kasten.bisY());
+    }
+
+    @Test
+    @DisplayName("Ein Mittelpunkt ausserhalb der Welt wirft - und wird nicht gedreht")
+    void mittelpunktAusserhalbDerWeltWirft() {
+        // DER QUADER WUERDE DIE ZAHLEN STUMM UMSORTIEREN, und der Kasten stuende
+        // dann auf dem Kopf: Ein Mittelpunkt unter der Welt ist kein vertauschtes
+        // Paar, sondern ein Ort, den es nicht gibt. Der Befehl faengt das vorher ab
+        // und antwortet mit einem Satz; dieser Wurf ist der Wall dahinter.
+        assertThrows(IllegalArgumentException.class,
+                () -> Rueckrollplan.kastenUm(new Blockort(WELT, 0, -200, 0), 10,
+                        -64, 320));
+        assertThrows(IllegalArgumentException.class,
+                () -> Rueckrollplan.kastenUm(new Blockort(WELT, 0, 400, 0), 10,
+                        -64, 320));
+    }
+
+    @Test
+    @DisplayName("Ohne Mittelpunkt, mit negativem Radius oder ohne Hoehe wirft es")
+    void ohneMittelpunktOderHoeheWirftEs() {
+        assertThrows(IllegalArgumentException.class,
+                () -> Rueckrollplan.kastenUm(null, 10, -64, 320));
+        assertThrows(IllegalArgumentException.class,
+                () -> Rueckrollplan.kastenUm(new Blockort(WELT, 0, 0, 0), -1,
+                        -64, 320));
+        assertThrows(IllegalArgumentException.class,
+                () -> Rueckrollplan.kastenUm(new Blockort(WELT, 0, 0, 0), 10,
+                        320, 320));
+    }
 }

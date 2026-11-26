@@ -265,6 +265,22 @@ permissions:
     # und das ist die Vorarbeit fuer einen Einbruch, nicht seine Aufklaerung.
     description: Darf das Blockbuch lesen - wer wann wo was getan hat
     default: op
+  freimarken.blockbuch.zurueck:
+    # Das LESEN ist eine Auskunft, dies hier ein Eingriff in fremdes Gebautes -
+    # dieselbe Trennung wie bei freimarken.team und freimarken.team.vergeben. Ein
+    # Moderator, der Griefs aufklaeren soll, braucht das Lesen; eine ganze Strasse
+    # auf den Stand von vorgestern zu setzen ist eine zweite Entscheidung.
+    #
+    # GEBRAUCHT WERDEN BEIDE, und das ist Absicht: Brigadier prueft auch das
+    # Elternliteral, und das traegt freimarken.blockbuch. Wer zurueckrollen darf,
+    # muss sehen koennen, was er zurueckrollt - eine Rueckrollung ohne vorherige
+    # Einsicht ist genau der Fall, in dem der Falsche getroffen wird.
+    #
+    # KEIN children-Eintrag, der das Leserecht mitzieht: Dieses Projekt hat keinen,
+    # und ein einzelner waere eine zweite Art, Rechte zu verknuepfen - sichtbar nur
+    # hier, unsichtbar in jeder Rollenliste und in jedem Manager-Formular.
+    description: Darf mit dem Blockbuch zurueckrollen - setzt Bloecke auf einen frueheren Stand
+    default: op
   # DIE TEAMROLLEN [Schritt 16a Teil A]: /team, /team rollen, /team zeigen.
   #
   # ZWEI Rechte und nicht eines: Das Ansehen ist eine Auskunft, das Vergeben ein

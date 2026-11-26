@@ -295,7 +295,12 @@ class ShoplisteTest {
         // Der ausgelieferte Zustand, also die Zeile, die ein Betreiber am haeufigsten
         // liest. Sie muss die Pfade nennen: Sonst weiss er nicht, wo er die Gebuehr
         // einschaltet - und bei drei Zeilen erst recht.
-        String zeile = Shopliste.startzeile(Shopwerte.VORGABE);
+        // DER NULLSTAND WIRD HIER GEBAUT und nicht aus der Vorgabe genommen
+        // [26.11.2026]: Diese Probe heisst "OHNE Gebuehr", und ab Werk sind es
+        // seit heute 3 Prozent im Spielerhandel. Mit der Vorgabe pruefte sie den
+        // falschen Fall - die Zeile MIT Gebuehr steht eine Probe weiter.
+        String zeile = Shopliste.startzeile(new Shopwerte(0, 0, 0,
+                Shopwerte.VORGABE_WORT, Shopwerte.VORGABE_ZEILEN));
 
         assertTrue(zeile.contains("ohne Marktgebuehr"), zeile);
         assertTrue(zeile.contains(Shopwerte.PFAD_SPIELER_KAUF), zeile);

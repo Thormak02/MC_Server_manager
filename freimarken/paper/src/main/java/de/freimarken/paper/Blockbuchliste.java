@@ -2,6 +2,7 @@ package de.freimarken.paper;
 
 import de.freimarken.kern.Blockbuchwerte;
 import de.freimarken.kern.Blocktat;
+import de.freimarken.kern.Rueckweggrenzen;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -52,7 +53,10 @@ final class Blockbuchliste {
             Blockbuchwerte.PFAD_BENUTZBAR,
             Blockbuchwerte.PFAD_REICHWEITE,
             Blockbuchwerte.PFAD_ZEILEN,
-            Blockbuchwerte.PFAD_WELTEN);
+            Blockbuchwerte.PFAD_WELTEN,
+            Rueckweggrenzen.PFAD_RADIUS,
+            Rueckweggrenzen.PFAD_MINUTEN,
+            Rueckweggrenzen.PFAD_BLOECKE);
 
     /**
      * Woher der Weltschluessel kommt.
@@ -75,8 +79,15 @@ final class Blockbuchliste {
         String fuer(String weltname);
     }
 
-    /** Was in der Datei stand - und woran es gehapert hat. */
-    record Ergebnis(Blockbuchwerte werte, List<String> klagen, List<String> bericht) {
+    /**
+     * Was in der Datei stand - und woran es gehapert hat.
+     *
+     * <p>Die Grenzen des Rueckwegs stehen NEBEN den Werten und nicht darin - die
+     * Begruendung steht im Kopf von {@link Rueckweggrenzen}: Jene Werte fragt die
+     * Wache bei jedem Blockereignis, diese liest ein Befehl.
+     */
+    record Ergebnis(Blockbuchwerte werte, Rueckweggrenzen grenzen,
+                    List<String> klagen, List<String> bericht) {
     }
 
     private Blockbuchliste() {
@@ -97,7 +108,8 @@ final class Blockbuchliste {
         List<String> klagen = new ArrayList<>();
         List<String> bericht = new ArrayList<>();
         if (wurzel == null) {
-            return new Ergebnis(Blockbuchwerte.VORGABE, klagen, bericht);
+            return new Ergebnis(Blockbuchwerte.VORGABE,
+                    Rueckweggrenzen.VORGABE, klagen, bericht);
         }
         if (macher == null) {
             throw new IllegalArgumentException("Ohne Schluesselmacher waere jede Auswahl"
@@ -141,8 +153,9 @@ final class Blockbuchliste {
 
         Blockbuchwerte werte = new Blockbuchwerte(frist, happen, vorgabe, jeWelt,
                 benutzbar, reichweite, zeilen);
-        nenneWasGilt(werte, bericht);
-        return new Ergebnis(werte, klagen, bericht);
+        Rueckweggrenzen grenzen = grenzen(wurzel, klagen, bericht);
+        nenneWasGilt(werte, grenzen, bericht);
+        return new Ergebnis(werte, grenzen, klagen, bericht);
     }
 
     /** Ob eine gelesene Zahl im erlaubten Bereich liegt. */
@@ -375,6 +388,45 @@ final class Blockbuchliste {
     }
 
     /**
+     * Die drei Grenzen des Rueckwegs.
+     *
+     * <p>Durch dasselbe {@link #zahl} wie die vier Zahlen darueber, mit eigenem
+     * Pruefer und eigenem Hinweis. Genau dafuer nimmt jene Methode beides als
+     * Parameter: Eine Verzweigung ueber den Pfad gaebe der NEUEN Zahl stumm den
+     * Pruefer der letzten - also einen Bereich, den niemand eingetragen hat.
+     *
+     * <p>Fehlt der ganze Abschnitt, gelten die Vorgaben, und das ist harmlos: Sie
+     * sind die enge Richtung. Ein Betreiber, dessen config.yml den Abschnitt
+     * nicht hat - eine vorhandene Datei wird beim Update NIE ueberschrieben -,
+     * bekommt einen Rueckweg mit 50 Bloecken Radius und einem Tag Fenster.
+     */
+    private static Rueckweggrenzen grenzen(ConfigurationSection wurzel,
+                                           List<String> klagen,
+                                           List<String> bericht) {
+        int radius = zahl(wurzel, Rueckweggrenzen.PFAD_RADIUS,
+                Rueckweggrenzen.VORGABE_RADIUS, Rueckweggrenzen.HOECHSTER_RADIUS,
+                "Bloecke", Rueckweggrenzen::brauchbarerRadius,
+                "Eine 0 hiesse, dass der Befehl nie etwas findet; ueber zweihundertfuenfzig"
+                        + " hat der Kasten mehr als eine Milliarde Bloecke, und die Abfrage"
+                        + " dahinter liefe ueber die ganze Tabelle.",
+                klagen, bericht);
+        int minuten = zahl(wurzel, Rueckweggrenzen.PFAD_MINUTEN,
+                Rueckweggrenzen.VORGABE_MINUTEN, Rueckweggrenzen.HOECHSTE_MINUTEN,
+                "Minuten", Rueckweggrenzen::brauchbareMinuten,
+                "Die echte Grenze ist ohnehin die Aufbewahrungsfrist - was weg ist,"
+                        + " kommt nicht zurueck.",
+                klagen, bericht);
+        int bloecke = zahl(wurzel, Rueckweggrenzen.PFAD_BLOECKE,
+                Rueckweggrenzen.VORGABE_BLOECKE, Rueckweggrenzen.HOECHSTE_BLOECKE,
+                "Zeilen", Rueckweggrenzen::brauchbareBloecke,
+                "Der Lauf setzt Bloecke im Hauptfaden des Spielservers; fuenfzigtausend"
+                        + " waeren ein Stillstand, und zwar einer, den der Betreiber selbst"
+                        + " ausloest, waehrend er einen Schaden behebt.",
+                klagen, bericht);
+        return new Rueckweggrenzen(radius, minuten, bloecke);
+    }
+
+    /**
      * Nennt im Bericht, was WIRKLICH gilt - je Welt eine Zeile.
      *
      * <p>Damit der Betreiber im Protokoll sieht, was gilt, und nicht nur, was er glaubt
@@ -382,7 +434,9 @@ final class Blockbuchliste {
      * dem jemand Monate spaeter nach Zeilen sucht, die es nie gab - darum sagt es diese
      * Zeile laut.
      */
-    private static void nenneWasGilt(Blockbuchwerte werte, List<String> bericht) {
+    private static void nenneWasGilt(Blockbuchwerte werte,
+                                     Rueckweggrenzen grenzen,
+                                     List<String> bericht) {
         if (!werte.schreibtIrgendwo()) {
             bericht.add("Das Blockbuch schreibt NICHTS - weder die Vorgabe noch eine"
                     + " einzelne Welt nennt eine Tat. Der Befehl /freimarken blockbuch"
@@ -410,6 +464,14 @@ final class Blockbuchliste {
                 + werte.fristTage() + " Tage Aufbewahrung, hoechstens "
                 + werte.jeAufraeumen() + " Zeilen je Aufraeumschlag. Aenderungen daran"
                 + " brauchen einen NEUSTART - ein Neuladen fasst das Blockbuch nicht an.");
+        // Eine eigene Zeile und nicht an die darueber angehaengt: Jene nennt,
+        // WAS aufgeschrieben wird, diese, was ein Rueckweg hoechstens anfassen
+        // darf. Zwei Dinge in einer Zeile liest niemand als zwei Dinge.
+        bericht.add("Rueckweg: " + grenzen.wieEingetragen()
+                + ". Darueber sagt der Befehl AB und rollt nichts - ein Lauf in"
+                + " Haeppchen stellte den Zwischenstand her. Auch diese drei Zahlen"
+                + " brauchen einen NEUSTART: Sie kommen aus demselben Leser wie das"
+                + " Blockbuch, und der laeuft nur beim Start.");
     }
 
     /** Ob irgendeine Auswahl die Tat {@code benutzen} nennt - Vorgabe oder eine Welt. */

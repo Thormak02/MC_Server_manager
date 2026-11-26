@@ -1602,7 +1602,17 @@ stand:
   # DREI DER VIER ZWEIGE unter diesem Recht: vorgenerieren steht mit Absicht in
   #   keiner Spielerzeile. Und nimmst du einen hier heraus, bleibt er trotzdem
   #   tippbar - der Befehlsbaum steht im Programm, nicht in dieser Datei.
-  befehle-verwaltung: "<gedaempft>/freimarken welt · parzelle \\<x> \\<z> · neuladen</gedaempft>"
+  # DER RUECKWEG STEHT HIER [26.11.2026], und das ist kein Schmuck: /hilfe kennt
+  #   ihn nicht (er ist ein Unterzweig und hat darum keine eigene Beschreibung, also
+  #   laesst die Hilfeplan-Tafel ihn durch), und die plugin.yml liest kein Moderator.
+  #   Ein Befehl, den niemand findet, ist einer, den niemand benutzt - dasselbe
+  #   Argument steht im Hilfeplan ausdruecklich am Eintrag /team.
+  # GENANNT WIRD DER GANZE WEG und nicht nur das Wort: Sonst raet der Moderator,
+  #   was danach kommt. Wie bei "parzelle \<x> \<z>".
+  # Diese Zeile ist fuer ein Dutzend weitere Befehle unvollstaendig (team, strafe,
+  #   meldung, portal, einsehen, geld, goldgeld, besitz, altfurt, messstelle) - das
+  #   steht im TODO und ist ein eigener Punkt.
+  befehle-verwaltung: "<gedaempft>/freimarken welt · parzelle \\<x> \\<z> · neuladen · blockbuch · blockbuch zurueck \\<radius> \\<minuten></gedaempft>"
 
 # /FREIMARKEN PREIS - was die naechste Parzelle kostet.
 #
@@ -2642,6 +2652,51 @@ blockbuch:
     # Eine Sprengung hat oft keinen Taeter - darum ein Wort, das ohne einen
     # auskommt. "sprengte weg" liest sich mit "niemand" davor richtig.
     sprengen: "sprengte weg"
+  # DER RUECKWEG - /freimarken blockbuch zurueck. Der groesste Eingriff, den dieses
+  #   Plugin in eine fertige Welt macht, und darum zweistufig: erst eine Vorschau mit
+  #   Zahlen, dann ein Befehl mit "bestaetigen" dahinter.
+  # DER ORT STEHT IM BESTAETIGUNGSBEFEHL, und das ist die Sicherung: Ohne ihn rollte
+  #   die Bestaetigung den Kasten um die Stelle zurueck, an der der Moderator JETZT
+  #   steht - ein Schritt waehrend des Lesens traefe den falschen Kasten, und zurueck
+  #   gibt es dann nichts. Dieselbe Bauart wie /freimarken parzelle aufgeben.
+  rueckweg:
+    # Die Ueberschrift der Vorschau. NENNT ALLE DREI ANGABEN - was bestaetigt wird,
+    #   ist genau dieser Kasten.
+    kopf: "<kopf>Rueckweg</kopf><fliesstext> um {ort}, Radius {radius}, letzte {minuten} Minuten:</fliesstext>"
+    # WEGNEHMEN UND HERSTELLEN GETRENNT: Eine Rueckrollung, die fast nur wegnimmt,
+    #   war eine Bauerei; eine, die fast nur herstellt, war ein Abriss. An den zwei
+    #   Zahlen sieht der Moderator, ob er den Vorfall erwischt hat, den er meint.
+    zahlen: "<fliesstext>  Zeilen: {zeilen} - wegnehmen: {wegnehmen}, herstellen: {herstellen}</fliesstext>"
+    # Zeilen aus der Zeit vor dem 26.11.2026 haben keinen Vorzustand - die Spalte gab
+    #   es nicht. Sie sind brauchbar, nur groeber, und WER ES VORHER WEISS, wundert
+    #   sich nicht ueber eine Treppe ohne Blickrichtung.
+    roh: "<hinweis>  Ohne Vorzustand: {anzahl}</hinweis><gedaempft> - dort kommt der Block zurueck, aber nicht seine Blickrichtung; wo in Wasser gebaut wurde, kommt Luft.</gedaempft>"
+    # Der fertige Befehl zum Abtippen - mit Welt und Koordinaten.
+    befehl: "<fliesstext>  Ausfuehren mit: </fliesstext><hinweis>{befehl}</hinweis>"
+    leer: "<fliesstext>Um {ort} steht in den letzten {minuten} Minuten nichts, was zurueckzunehmen waere.</fliesstext>"
+    # EINE ABSAGE UND KEINE BREMSE, und der Satz nennt den Grund: Ein Lauf in
+    #   Haeppchen waere nicht bloss unvollstaendig, er waere FALSCH. Die Abfrage gibt
+    #   die aeltesten Zeilen zuerst, und die aelteste je Block traegt den Zustand, der
+    #   wiederkommen soll. Schneidet die Grenze zwischen zwei Zeilen desselben Blocks,
+    #   nimmt dieser Lauf die aeltere und merkt sie - der naechste findet nur noch die
+    #   juengere und stellt den ZWISCHENSTAND her.
+    zu-viele: "<warnung>Mindestens {zeilen} Zeilen</warnung><fliesstext> - die Grenze liegt bei {grenze}, und NICHTS wurde getan. Ein Rueckweg in Haeppchen waere nicht nur unvollstaendig, er waere falsch: Er nimmt die aelteste Zeile je Block, und ein Schnitt mitten hindurch stellte den Zwischenstand her. Nimm einen kleineren Radius oder ein kuerzeres Fenster.</fliesstext>"
+    zu-weit: "<warnung>Radius {radius} ist zu gross</warnung><fliesstext> - hoechstens {hoechstens}. Einstellbar unter blockbuch.rueckweg.hoechster-radius.</fliesstext>"
+    zu-lang: "<warnung>{minuten} Minuten sind zu viel</warnung><fliesstext> - hoechstens {hoechstens}. Einstellbar unter blockbuch.rueckweg.hoechste-minuten.</fliesstext>"
+    # NENNT DIE WELTEN, DIE ES GIBT: Der Befehl wird auch von der Konsole getippt, und
+    #   dort gibt es keine Vorschlaege.
+    unbekannte-welt: "<warnung>Die Welt {welt} gibt es nicht.</warnung><gedaempft> Es gibt: {welten}</gedaempft>"
+    fertig: "<bestaetigung>Rueckweg gelaufen</bestaetigung><fliesstext> - {gesetzt} Bloecke gesetzt, {zeilen} Zeilen gemerkt.</fliesstext>"
+    # Nur gesendet, wenn es welche gab - und dann die wichtigste Zeile des
+    #   Ergebnisses: DORT STEHT NOCH, WAS STEHEN GEBLIEBEN IST.
+    misslungen: "<warnung>  Nicht gesetzt: {anzahl}</warnung><gedaempft> - diesen Block kennt der Server nicht (mehr). Die Zeilen sind trotzdem gemerkt, sonst versuchte jeder weitere Lauf dasselbe wieder.</gedaempft>"
+    # Die Vorschau am eigenen Standort braucht einen Koerper. EINE GELESENE ABSAGE und
+    #   kein stummes "unbekannter Befehl": Der Betreiber auf der Konsole soll den Weg
+    #   lesen, der ihm offensteht.
+    kein-ort: "<fliesstext>Du hast keinen Ort</fliesstext><gedaempft> - von der Konsole geht /freimarken blockbuch zurueck \\<radius> \\<minuten> bei \\<welt> \\<x> \\<y> \\<z>.</gedaempft>"
+    # Die getippte Hoehe gibt es nicht. ERREICHBAR, sobald jemand sie tippt: In
+    #   Altfurt liegt der Boden bei y -61, die Unterkante bei -64.
+    keine-hoehe: "<warnung>Die Hoehe {hoehe} gibt es in dieser Welt nicht</warnung><fliesstext> - sie reicht von {unten} bis {oben}.</fliesstext>"
 
 # DIE MEERINSELN VON HAFENWERDER (Plan 6.2, Schritt 10).
 #

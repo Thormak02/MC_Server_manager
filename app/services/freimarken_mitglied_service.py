@@ -13,7 +13,7 @@ anderen Rechteverwaltung stumm nichts tut.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -236,5 +236,143 @@ def rechtezeilen(db: Session, server_id: int) -> list[dict[str, Any]]:
         "recht": eintrag["recht"],
         "zuschlag": eintrag["zuschlag"],
         "zahl": eintrag["zahl"],
+        "bis": eintrag["bis"],
+        # DIE FERTIGE ZEILE, und sie ist befristet, wo die Mitgliedschaft es ist:
+        # Ein dauerhaft gesetztes Recht neben einer befristeten Mitgliedschaft ist
+        # genau die halbe Einstellung, gegen die dieses Projekt sonst warnt - die
+        # beiden widersprechen sich still, und keiner merkt es.
+        "befehl": rechtebefehl(eintrag["name"] or eintrag["kennung"],
+                                eintrag["recht"], eintrag["bis"]),
+        "dauer": luckperms_dauer(eintrag["bis"]),
     } for eintrag in sorted(hoechste.values(),
                             key=lambda e: (e["name"].lower(), e["zuschlag"]))]
+
+
+# Wie eine Rechteverwaltung eine Dauer schreibt. LuckPerms ist das Beispiel, weil es
+# das verbreitetste ist und weil die config.yml dieses Projekts es schon nennt
+# (bei freimarken.welt.vogtei). Die Zeile ist ein VORSCHLAG zum Kopieren und kein
+# Knopf - der Manager spricht nicht mit fremden Plugins, und welche
+# Rechteverwaltung laeuft, weiss er nicht.
+LUCKPERMS_SETZEN = "lp user {spieler} permission set {recht} true"
+LUCKPERMS_BEFRISTET = "lp user {spieler} permission settemp {recht} true {dauer}"
+LUCKPERMS_ENTZIEHEN = "lp user {spieler} permission unset {recht}"
+
+
+def luckperms_dauer(bis: datetime | None, *,
+                    stichtag: datetime | None = None) -> str | None:
+    """Die Dauer von jetzt bis ``bis``, wie LuckPerms sie liest - oder ``None``.
+
+    ``None`` heisst \"unbefristet\" und ist kein Fehler: Eine Mitgliedschaft ohne
+    ``bis`` laeuft weiter, und ihr Recht gehoert dauerhaft gesetzt.
+
+    AUFGERUNDET wird nach OBEN, und das ist die Richtung, die zaehlt: Wer bis zum
+    31. bezahlt hat, ist am 31. noch Mitglied (``laeuft`` vergleicht mit ``>``).
+    Eine abgerundete Dauer naehme ihm den letzten bezahlten Tag - und das ist der
+    Fehler, den er bemerkt.
+
+    Eine Mitgliedschaft, deren ``bis`` schon vorbei ist, gibt ``\"0s\"``: Sie
+    gehoert nicht gesetzt, sondern entzogen, und das sagt diese Zeichenkette
+    deutlich. Ein ``None`` hier waere die stille Form von \"unbefristet\" - also
+    das Gegenteil.
+    """
+    if bis is None:
+        return None
+    rest = _utc(bis) - (stichtag or _jetzt())
+    sekunden = rest.total_seconds()
+    if sekunden <= 0:
+        return "0s"
+    # Minuten als kleinste Einheit: Eine Mitgliedschaft auf Sekunden gibt es nicht,
+    # und "2592000s" liest kein Mensch.
+    minuten = int(-(-sekunden // 60))
+    if minuten % (60 * 24) == 0:
+        return str(minuten // (60 * 24)) + "d"
+    if minuten % 60 == 0:
+        return str(minuten // 60) + "h"
+    return str(minuten) + "m"
+
+
+def rechtebefehl(spieler: str, recht: str, bis: datetime | None, *,
+                 stichtag: datetime | None = None) -> str:
+    """Die fertige Zeile, die dieses Recht setzt - befristet, wenn es befristet ist.
+
+    ``settemp`` und nicht ``set``, wo ein ``bis`` steht, und das ist der ganze
+    Gewinn dieser Zeile: Damit laeuft das RECHT von selbst ab. Die Ankunftswache
+    holt den Ex-Foerderer dann beim naechsten Beitritt aus der Mitgliederwelt,
+    ohne dass jemand etwas tun muss. Mit ``set`` bliebe das Recht stehen, die
+    Mitgliedschaft waere abgelaufen, und die beiden widersprachen sich still.
+    """
+    dauer = luckperms_dauer(bis, stichtag=stichtag)
+    if dauer is None:
+        return LUCKPERMS_SETZEN.format(spieler=spieler, recht=recht)
+    return LUCKPERMS_BEFRISTET.format(spieler=spieler, recht=recht, dauer=dauer)
+
+
+def zu_entziehen(db: Session, server_id: int) -> list[dict[str, Any]]:
+    """Welches Recht gesetzt sein koennte und durch keine laufende Zeile gedeckt ist.
+
+    DIE FRAGE, DIE BISHER NIEMAND STELLEN KONNTE. ``rechtezeilen`` liest
+    ``nur_laufende=True``; eine abgelaufene Mitgliedschaft verschwindet dort also
+    genau in dem Augenblick, in dem ihr Recht zu entziehen waere.
+
+    GERECHNET ALS DIFFERENZ und nicht als \"was ist abgelaufen\": Wer zwei
+    Mitgliedschaften auf denselben Zuschlag hatte und nur eine verlaengert, behaelt
+    ein Recht - nur mit kleinerer Zahl. Eine Liste der abgelaufenen Zeilen naennte
+    dann ein Recht zum Entzug, das noch gelten MUSS; diese Differenz nennt
+    stattdessen das alte, hoehere.
+
+    Was das Recht ERSETZT, steht daneben: Ohne diese Angabe entzieht der Betreiber
+    das alte und setzt das neue nicht - und der Spieler verliert einen Zuschlag,
+    fuer den er bezahlt hat.
+    """
+    gilt: set[str] = set()
+    ersatz: dict[tuple[str, str], dict[str, Any]] = {}
+    for zeile in rechtezeilen(db, server_id):
+        gilt.add(zeile["kennung"] + "|" + zeile["recht"])
+        ersatz[(zeile["kennung"], zeile["zuschlag"])] = zeile
+
+    raus: dict[str, dict[str, Any]] = {}
+    for eintrag in liste(db, server_id, grenze=5000):
+        if eintrag["laeuft"]:
+            continue
+        schluessel = eintrag["kennung"] + "|" + eintrag["recht"]
+        if schluessel in gilt or schluessel in raus:
+            continue
+        statt = ersatz.get((eintrag["kennung"], eintrag["zuschlag"]))
+        raus[schluessel] = {
+            "kennung": eintrag["kennung"],
+            "name": eintrag["name"],
+            "recht": eintrag["recht"],
+            "zuschlag": eintrag["zuschlag"],
+            "zahl": eintrag["zahl"],
+            "bis": eintrag["bis"],
+            "befehl": LUCKPERMS_ENTZIEHEN.format(
+                spieler=(eintrag["name"] or eintrag["kennung"]),
+                recht=eintrag["recht"]),
+            # Was stattdessen gelten muss - oder None, wenn gar nichts mehr.
+            "statt_recht": None if statt is None else statt["recht"],
+            "statt_zahl": None if statt is None else statt["zahl"],
+        }
+    return sorted(raus.values(),
+                  key=lambda e: ((e["name"] or "").lower(), e["zuschlag"]))
+
+
+def laeuft_bald_ab(db: Session, server_id: int, *, in_tagen: int = 7,
+                   stichtag: datetime | None = None) -> list[dict[str, Any]]:
+    """Welche laufende Mitgliedschaft in den naechsten Tagen endet.
+
+    Damit eine Verlaengerung ANGESPROCHEN werden kann, bevor der Zuschlag weg ist.
+    Ohne diese Liste erfaehrt der Betreiber vom Ablauf erst, wenn der Spieler sich
+    beschwert - und das ist die Enttaeuschung, gegen die Plan 8.5 geschrieben ist.
+
+    Unbefristete Mitgliedschaften stehen NICHT darin: Sie laufen nicht ab.
+    """
+    wann = stichtag or _jetzt()
+    grenze = wann + timedelta(days=max(int(in_tagen), 0))
+    raus = []
+    for eintrag in liste(db, server_id, nur_laufende=True, grenze=5000):
+        if eintrag["bis"] is None or _utc(eintrag["bis"]) > grenze:
+            continue
+        rest = _utc(eintrag["bis"]) - wann
+        raus.append(dict(eintrag, tage_rest=max(rest.days, 0),
+                         dauer=luckperms_dauer(eintrag["bis"], stichtag=wann)))
+    return sorted(raus, key=lambda e: e["bis"])

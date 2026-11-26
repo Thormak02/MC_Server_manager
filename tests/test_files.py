@@ -686,3 +686,102 @@ def test_oeffnen_wird_gezaehlt(tmp_path, client):
         eintraege = {d["pfad"]: d["anzahl"]
                      for d in fs.liste_mit_metadaten(srv, db)["dateien"]}
     assert eintraege["spigot.yml"] == 2
+
+
+# ---------------------------------------------------------------- server.properties
+#
+# DAS LOCH, DAS DIESE PROBEN FESTNAGELN [geschlossen 26.11.2026]: Der Leser kannte
+# nur "=" als Trenner. Java liest eine .properties-Datei mit DREI - "=", ":"
+# und Leerraum -, und Minecraft liest sie mit Java. Ein von Hand eingetragenes
+# "white-list:true" landete damit bei den uebrigen Zeilen, der Schluessel fehlte
+# in der Karte, und der Manager meldete "Whitelist aus", waehrend der Server sie
+# durchsetzte. Vier Aufrufer lesen hierueber.
+
+import pytest
+
+
+@pytest.mark.parametrize("zeile,wert", [
+    ("white-list=true", "true"),
+    ("white-list:true", "true"),
+    ("white-list true", "true"),
+    # Leerraum UND ein folgender Trenner gehoeren zusammen - diesen Fall hat die
+    # Probe gefangen, nicht die Ueberlegung: Mein erster Versuch gab "=  20".
+    ("white-list  =  true", "true"),
+    ("white-list\ttrue", "true"),
+])
+def test_properties_kennt_alle_drei_trenner(zeile, wert):
+    from app.services.file_service import _parse_properties
+
+    werte, extras = _parse_properties(zeile)
+    assert werte.get("white-list") == wert, (
+        "Minecraft liest diese Zeile als Einstellung - der Manager muss sie"
+        " genauso lesen, sonst meldet er einen Zustand, den der Server nicht hat."
+        f" Gelesen: {werte}, uebrig: {extras}")
+
+
+def test_properties_nimmt_nur_den_ERSTEN_trenner():
+    """Bei ``level-name:mein=ordner`` ist der Wert ``mein=ordner``.
+
+    Wer nur nach \"=\" sucht, bekommt den Schluessel ``level-name:mein`` - also
+    einen, nach dem niemand fragt, und die echte Einstellung fehlt.
+    """
+    from app.services.file_service import _parse_properties
+
+    werte, _ = _parse_properties("level-name:mein=ordner\nmotd=Hallo: Welt")
+    assert werte["level-name"] == "mein=ordner"
+    assert werte["motd"] == "Hallo: Welt", (
+        "ein Doppelpunkt IM WERT bleibt dort - sonst waere jede MOTD mit"
+        " Doppelpunkt abgeschnitten")
+
+
+def test_properties_kennt_beide_kommentarzeichen():
+    """``!`` ist neben ``#`` das zweite Kommentarzeichen von java.util.Properties.
+
+    Die Luege in der anderen Richtung: Ohne diese Zeile waere
+    ``!white-list=true`` fuer den Manager eine Einstellung und fuer den Server ein
+    Kommentar - er zeigte eine Whitelist, die nicht wirkt.
+    """
+    from app.services.file_service import _parse_properties
+
+    werte, _ = _parse_properties("#white-list=true\n!online-mode=false")
+    assert werte == {}, f"beide Zeilen sind Kommentare: {werte}"
+
+
+def test_properties_liest_eine_zeile_so_wie_java_sie_liest():
+    """Ein Wort allein ist fuer Java ein Schluessel mit LEEREM Wert.
+
+    Das war bis zum 26.11.2026 anders: ``nurEinWort`` landete bei den uebrigen
+    Zeilen, also anders als Minecraft sie liest. Seit _parse_properties
+    ``properties_service.zerlege_zeile`` ruft, gilt Javas Regel - und die ist hier
+    maszgeblich, denn der Server liest dieselbe Datei mit Java.
+
+    Die Gegenrichtung steht daneben: Eine Zeile OHNE Schluessel (``=wert``) ist
+    kein Paar und bleibt bei den uebrigen. Ohne diesen Satz waere ein \"nimm
+    alles als Einstellung\" ebenfalls gruen.
+    """
+    from app.services.file_service import _parse_properties
+
+    werte, extras = _parse_properties("nurEinWort\n=ohneSchluessel")
+
+    assert werte == {"nurEinWort": ""}, (
+        "Java liest einen Schluessel ohne Trenner als Schluessel mit leerem Wert -"
+        f" und Minecraft liest mit Java: {werte}")
+    assert extras == ["=ohneSchluessel"]
+
+
+def test_der_zwischenraum_beendet_den_schluessel_schon():
+    """``a b = c`` hat den Schluessel ``a`` und den Wert ``b = c``.
+
+    Das verwundert auf den ersten Blick und ist genau Javas Regel: Der
+    Zwischenraum hat den Schluessel bereits beendet, das zweite Trennzeichen ist
+    darum schon Teil des Wertes.
+
+    DIESE PROBE IST DER BELEG, dass der Leser die Regel nicht NACHBAUT, sondern
+    den Dienst ruft, der sie kennt: Mein erster Nachbau haette hier den Wert ``c``
+    gegeben.
+    """
+    from app.services.file_service import _parse_properties
+
+    werte, _ = _parse_properties("a b = c")
+
+    assert werte == {"a": "b = c"}, werte

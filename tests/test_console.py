@@ -56,3 +56,71 @@ def test_super_admin_can_open_audit_logs(client):
     response = client.get("/audit-logs")
     assert response.status_code == 200
     assert "Audit Logs" in response.text
+
+
+# ------------------------------------------------- Die ANTWORT auf einen Befehl
+#
+# DAS LOCH, DAS DIESE PROBEN FESTNAGELN [geschlossen 26.11.2026]:
+# ``send_console_command`` meldete "Befehl gesendet.", sobald die Zeile in stdin
+# stand. Was der Server darauf sagte, sah niemand - ein
+# "/freimarken geld Ana 5000" mit einem Tippfehler im Namen meldete also ERFOLG,
+# und der Betreiber glaubte, die Korrektur sei gebucht. Genau bei Geld und Besitz
+# ist eine falsche Erfolgsmeldung am teuersten.
+
+
+def test_die_antwort_des_servers_steht_in_der_meldung():
+    from app.services import console_service as modul
+    from app.services.process_service import _antwort_abwarten
+
+    dienst = modul.console_service
+    marke = dienst.gezaehlt(4242)
+    dienst.append_output(4242, "> freimarken geld Ana 5000")
+    dienst.append_output(4242, "Den Spieler Ana kennt dieser Server nicht.")
+
+    meldung = _antwort_abwarten(4242, marke)
+
+    assert "kennt dieser Server nicht" in meldung, (
+        "die Antwort des Servers gehoert in die Meldung - sonst liest der"
+        f" Betreiber Erfolg, wo keiner war: {meldung}")
+    assert "freimarken geld Ana" not in meldung, (
+        "die eigene Zeile ist die FRAGE und nicht die Antwort")
+
+
+def test_ein_schweigen_wird_nicht_als_erfolg_verkauft():
+    """Viele Befehle antworten nichts - und das darf nicht wie Erfolg klingen."""
+    from app.services import console_service as modul
+    from app.services.process_service import _antwort_abwarten
+
+    dienst = modul.console_service
+    marke = dienst.gezaehlt(4243)
+    dienst.append_output(4243, "> say hallo")
+
+    meldung = _antwort_abwarten(4243, marke)
+
+    assert "KEIN Beweis" in meldung, (
+        "ein Schweigen ist kein Erfolg, und die Meldung muss das sagen:"
+        f" {meldung}")
+
+
+def test_die_marke_zaehlt_auch_ueber_den_rand_des_puffers():
+    """Der Zaehler ist eine MARKE und keine Laenge.
+
+    Der Ringpuffer haelt tausend Zeilen. Eine Probe, die mit seiner LAENGE
+    rechnete, waere auf einem stillen Server gruen und auf einem belebten falsch -
+    genau dort, wo ein Betreiber eine Geldkorrektur sendet.
+    """
+    from app.services import console_service as modul
+
+    dienst = modul.console_service
+    marke = dienst.gezaehlt(4244)
+    for i in range(1100):
+        dienst.append_output(4244, f"Zeile {i}")
+
+    assert dienst.gezaehlt(4244) - marke == 1100, (
+        "der Zaehler muss ALLE zaehlen, auch die, die der Puffer vorne verloren"
+        " hat")
+    letzte = [z.split("] ", 1)[-1]
+              for z in dienst.seit(4244, marke, hoechstens=3)]
+    assert letzte == ["Zeile 1097", "Zeile 1098", "Zeile 1099"], (
+        "und seit() darf nie mehr Zeilen zurueckgeben, als noch da sind: "
+        + str(letzte))

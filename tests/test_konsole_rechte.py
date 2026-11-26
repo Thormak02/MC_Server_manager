@@ -10,6 +10,7 @@ JEDER Weg laeuft: die Konsolenseite, der Zeitplan und der KI-Agent. Haette ich d
 nur im Agenten eingebaut, waere die Konsolenseite der Weg daran vorbei gewesen.
 """
 import pytest
+from datetime import datetime, timezone
 
 
 @pytest.mark.parametrize("befehl", [
@@ -248,6 +249,20 @@ def test_agent_erlaubt_moderatoren_normale_befehle(client, tmp_path):
     "freimarken besitz freigeben 3 4 bestaetigen",
     "fm besitz uebertragen 3 4 Thormak02",
     "execute as @a run freimarken geld Thormak02 1",   # ueber execute versteckt
+    # TEAM [26.11.2026]: das groesste der drei Loecher, die an diesem Tag
+    # geschlossen wurden. "/freimarken team gib <sich> verwalter" gab einem
+    # Admin ohne Super-Admin-Rolle die Rechte der Verwalterrolle - darunter
+    # freimarken.besitz, also genau die Vollmacht, die der Zweig "besitz"
+    # hier schuetzt. IM SPIEL traegt derselbe Weg zwei Riegel; an der Konsole
+    # trug er keinen.
+    "freimarken team gib Thormak02 verwalter",
+    "fm team gib Thormak02 verwalter",
+    "execute as @a run freimarken team gib Thormak02 verwalter",
+    "freimarken team nimm Thormak02 verwalter",
+    # Auch das blosse Ansehen: Diese Pruefung liest ZWEI Woerter, mehr kann
+    # sie nicht, und "gib" ist das dritte. Der Verlust ist klein - die
+    # Teamliste steht im Manager -, die Alternative waere ein offener Weg.
+    "freimarken team",
 ])
 def test_geld_und_besitz_brauchen_super_admin(befehl):
     """Plan 12a.4 stellt Geld- und Besitzkorrekturen auf Super-Admin.
@@ -273,6 +288,8 @@ def test_geld_und_besitz_brauchen_super_admin(befehl):
     "geld Thormak02 1",            # ohne den Befehlsbaum davor ist es kein Zweig
     "goldgeld Thormak02 1",        # dasselbe fuer die Goldmark
     "freimarken goldpreis 3",      # faengt ein "sperre alles mit gold darin"
+    "freimarken teamliste",        # faengt ein "sperre alles mit team darin"
+    "say freimarken team gib mir alles",   # und in einer Chatnachricht
     "besitz uebertragen 3 4 Anna",
     "say freimarken geld ist toll",
 ])
@@ -287,6 +304,41 @@ def test_die_anderen_freimarken_zweige_bleiben_frei(befehl):
 
     stufe, _ = stufe_fuer_befehl(befehl)
     assert stufe == "", f"{befehl!r} wurde faelschlich gesperrt"
+
+
+def test_jeder_super_admin_zweig_nennt_seinen_eigenen_grund():
+    """Die Absage muss die RICHTIGE Sache nennen.
+
+    Der Grund stand bis zum 26.11.2026 fest formuliert als "aendert Geld oder
+    Besitz eines Spielers" - fuer jeden Zweig derselbe. Mit "team" wurde er
+    falsch: Eine Absage, die den falschen Grund nennt, schickt den Betreiber an
+    die falsche Stelle, und das ist schlimmer als eine knappe Absage.
+
+    Gefragt wird ueber die LISTE und nicht mit vier abgeschriebenen Saetzen:
+    Ein fuenfter Zweig ohne eigenen Grund waere sonst gruen.
+    """
+    from app.services.process_service import (SUPER_ADMIN_ZWEIGE,
+                                              STUFE_SUPER_ADMIN,
+                                              stufe_fuer_befehl)
+
+    gesehen = set()
+    for zweig, grund_erwartet in SUPER_ADMIN_ZWEIGE["freimarken"].items():
+        stufe, grund = stufe_fuer_befehl("freimarken " + zweig + " X 1")
+        assert stufe == STUFE_SUPER_ADMIN, zweig
+        assert grund_erwartet in grund, (
+            "der Grund zu " + zweig + " muss seine eigene Sache nennen: "
+            + grund)
+        assert "Super-Admin" in grund, "und die Stufe"
+        gesehen.add(grund_erwartet)
+    assert len(gesehen) == len(SUPER_ADMIN_ZWEIGE["freimarken"]), (
+        "zwei Zweige teilen sich einen Grund - dann nennt einer von beiden die"
+        " falsche Sache")
+    assert "team" in SUPER_ADMIN_ZWEIGE["freimarken"], (
+        "ohne team ist der Weg ueber eine selbst vergebene Verwalterrolle offen")
+    assert (SUPER_ADMIN_ZWEIGE["fm"]
+            is SUPER_ADMIN_ZWEIGE["freimarken"]), (
+        "das Kuerzel muss DIESELBE Liste tragen - zwei Abschriften laufen"
+        " auseinander, und dann ist ein Weg offen, den niemand sucht")
 
 
 def test_op_bleibt_bei_der_schwaecheren_stufe():
@@ -480,3 +532,67 @@ def test_die_neustartwarnung_wird_geglaettet(monkeypatch, client, tmp_path):
     assert "\n" not in gesendet[0], "die Warnung darf keinen Umbruch tragen"
     assert gesendet[0] == "say Neustart fm geld Thormak02 1000000", \
         "geglaettet zu EINER Zeile - der Text bleibt sichtbar, wirkt aber als Chat"
+
+
+# ------------------------------------------- Die Antwort kommt beim AUFRUFER an
+#
+# WARUM DIESE PROBE HIER STEHT UND NICHT BEI DEN ANDEREN [26.11.2026]: Die Proben
+# in test_console.py rufen ``_antwort_abwarten`` unmittelbar auf. Eine Einspritzung
+# hat gezeigt, dass das zu wenig ist - wer die STELLE aendert, an der jene Funktion
+# gerufen wird (zurueck auf ein festes "Befehl gesendet."), laesst beide gruen.
+# Diese Probe haengt an derselben Naht wie der Betreiber im Manager.
+
+
+def test_die_antwort_des_servers_erreicht_den_aufrufer(client, tmp_path):
+    """``send_console_command`` muss die Antwort des Servers zurueckgeben.
+
+    Der Prozess ist gestellt: Sein stdin schreibt, was der Server geantwortet
+    haette. Damit laeuft der Zweig bis zum Ende durch - ohne laufenden Server
+    waere bei \"Server ist nicht aktiv\" Schluss, und die Antwort kaeme nie zur
+    Probe.
+    """
+    from app.db.session import SessionLocal
+    from app.services import console_service as konsole
+    from app.services.process_service import (ManagedProcess, _PROCESS_LOCK,
+                                              _PROCESS_REGISTRY,
+                                              send_console_command)
+
+    class Stdin:
+        def __init__(self, server_id):
+            self.server_id = server_id
+
+        def write(self, zeile):
+            # Der gestellte Server antwortet, wie der echte es taete: eine Zeile
+            # in die Konsole, unmittelbar nach dem Befehl.
+            konsole.console_service.append_output(
+                self.server_id, "Den Spieler Ana kennt dieser Server nicht.")
+
+        def flush(self):
+            pass
+
+    class Prozess:
+        def __init__(self, server_id):
+            self.stdin = Stdin(server_id)
+
+        def poll(self):
+            return None
+
+    with SessionLocal() as db:
+        person = _nutzer(db, "super_admin", "konsole-antwort")
+        server = _server(db, tmp_path, slug="konsole-antwort", port=25809)
+        with _PROCESS_LOCK:
+            _PROCESS_REGISTRY[server.id] = ManagedProcess(
+                process=Prozess(server.id), log_file_path="",
+                started_at=datetime.now(timezone.utc))
+        try:
+            ok, meldung = send_console_command(
+                db, server, "freimarken geld Ana 5000", person.id)
+        finally:
+            with _PROCESS_LOCK:
+                _PROCESS_REGISTRY.pop(server.id, None)
+
+    assert ok is True
+    assert "kennt dieser Server nicht" in meldung, (
+        "Die Antwort des Servers muss beim Aufrufer ankommen. Steht hier nur"
+        " \"Befehl gesendet\", meldet der Manager Erfolg fuer eine Geldkorrektur,"
+        f" die nie gebucht wurde: {meldung}")

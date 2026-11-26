@@ -1847,10 +1847,36 @@ STUFE_SUPER_ADMIN = "super_admin"
 # "goldgeld" steht seit dem 23.11.2026 daneben, und es ist der wichtigere der beiden:
 # 1 Goldmark ist 800 Mark (Plan 8.1). Ein Zweig, der hier fehlt, ist kein kleineres Loch
 # als "geld", sondern ein achthundertmal groesseres.
-SUPER_ADMIN_ZWEIGE: dict[str, frozenset[str]] = {
-    "freimarken": frozenset({"geld", "goldgeld", "besitz"}),
-    "fm": frozenset({"geld", "goldgeld", "besitz"}),
+# "team" steht seit dem 26.11.2026 daneben, und es war das groesste der drei Loecher:
+# Wer Konsolenrecht hat, aber kein Super-Admin ist, tippte "/freimarken team gib
+# <sich> verwalter" und hatte danach freimarken.besitz - also genau die Vollmacht,
+# die der Zweig "besitz" hier schuetzt. IM SPIEL traegt derselbe Weg ZWEI Riegel
+# (das Recht freimarken.team.vergeben, und das Teambuch vergibt eine Rolle nur an
+# jemanden, der JEDES ihrer Rechte selbst hat). An der Konsole trug er keinen.
+#
+# GESPERRT IST DER GANZE ZWEIG und nicht nur "gib": Diese Pruefung liest zwei
+# Woerter - mehr kann sie nicht, ohne dass "execute as @a run freimarken team
+# gib" eine zweite Zerlegung braeuchte. Der Verlust ist klein: Die Teamliste
+# ANSEHEN kann ein Admin im Manager, und der Manager selbst sendet keinen
+# einzigen team-Befehl (gemessen).
+#
+# JE ZWEIG SEIN EIGENER GRUND, und das ist der zweite Fund derselben Runde:
+# Der Grund stand fest formuliert als "aendert Geld oder Besitz eines Spielers".
+# Fuer team ist das falsch, und eine Absage mit dem falschen Grund schickt den
+# Betreiber an die falsche Stelle.
+SUPER_ADMIN_ZWEIGE: dict[str, dict[str, str]] = {
+    "freimarken": {
+        "geld": "aendert das Guthaben eines Spielers",
+        "goldgeld": ("aendert das Goldguthaben eines Spielers - eine Goldmark"
+                     " ist 800 Mark"),
+        "besitz": "verschiebt fremdes Eigentum",
+        "team": ("vergibt Teamrollen und damit Rechte - ueber eine Verwalterrolle"
+                 " auch freimarken.besitz"),
+    },
 }
+# Das Kuerzel traegt dieselben Zweige. EINE Quelle und keine zweite Liste: Zwei
+# Abschriften laufen auseinander, und dann ist ein Weg offen, den niemand sucht.
+SUPER_ADMIN_ZWEIGE["fm"] = SUPER_ADMIN_ZWEIGE["freimarken"]
 
 
 # Dateien im Serverhauptordner, die Minecraft beim Start liest. Wer sie schreibt, tut
@@ -1944,9 +1970,10 @@ def stufe_fuer_befehl(command: str) -> tuple[str, str]:
 
     def _pruefe(wort: str, danach: str | None) -> tuple[str, str]:
         zweige = SUPER_ADMIN_ZWEIGE.get(wort)
-        if zweige is not None and (danach or "") in zweige:
+        grund_zweig = (zweige or {}).get(danach or "")
+        if grund_zweig:
             return STUFE_SUPER_ADMIN, (
-                f"'{wort} {danach}' aendert Geld oder Besitz eines Spielers und ist "
+                f"'{wort} {danach}' {grund_zweig} und ist "
                 f"Sache des Super-Admins.")
         if wort in RECHTE_BEFEHLE:
             return STUFE_ADMIN, (
@@ -2090,6 +2117,13 @@ def send_console_command(
     if not managed.process.stdin:
         return False, "Serverprozess akzeptiert keine Konsolenbefehle."
 
+    # DIE MARKE VOR DEM SENDEN [26.11.2026]. Bis heute meldete diese Funktion
+    # "Befehl gesendet", sobald die Zeile in stdin stand - was der Server
+    # darauf sagte, sah niemand. Ein "/freimarken geld Ana 5000" mit einem
+    # Tippfehler im Namen meldete also ERFOLG, und der Betreiber glaubte, die
+    # Korrektur sei gebucht. Genau bei Geld und Besitz ist eine falsche
+    # Erfolgsmeldung am teuersten.
+    marke = console_service.gezaehlt(server.id)
     try:
         managed.process.stdin.write(normalized + "\n")
         managed.process.stdin.flush()
@@ -2104,7 +2138,55 @@ def send_console_command(
         server_id=server.id,
         details=f"command={normalized}",
     )
-    return True, "Befehl gesendet."
+    return True, _antwort_abwarten(server.id, marke)
+
+
+# Wie lange auf die Antwort des Servers gewartet wird, und in welchen Schritten.
+#
+# Eine Sekunde, weil ein Minecraft-Befehl im Hauptfaden laeuft und dort auf den
+# naechsten Takt wartet - 50 ms im Normalfall, mehr unter Last. Laenger zu
+# warten hiesse, einen Web-Request fuer eine Antwort anzuhalten, die bei
+# stillen Befehlen (say, kick) nie kommt.
+ANTWORT_WARTEN_SEKUNDEN = 1.0
+ANTWORT_SCHRITT_SEKUNDEN = 0.05
+# Nach der ERSTEN neuen Zeile noch so lange nachwarten: Eine Auskunft ist oft
+# mehrzeilig (das Blockbuch antwortet mit Kopf und zehn Zeilen), und eine
+# Meldung, die nur die erste zeigt, waere irrefuehrend.
+ANTWORT_NACHWARTEN_SEKUNDEN = 0.25
+# Wie viele Zeilen in die Meldung kommen. Zehn, weil der Manager sie in einem
+# Hinweisfeld zeigt; alles weitere steht ohnehin in der Konsolenansicht.
+ANTWORT_ZEILEN = 10
+
+
+def _antwort_abwarten(server_id: int, marke: int) -> str:
+    """Was der Server auf den Befehl geantwortet hat - oder dass er schwieg.
+
+    EIN SCHWEIGEN WIRD NICHT ALS ERFOLG VERKAUFT, und das ist der Zweck dieser
+    Funktion: Viele Befehle antworten nichts (``say``, ``kick``), und das ist in
+    Ordnung - aber ein ``/freimarken geld Ana 5000`` antwortet \"Spieler unbekannt\",
+    und bis heute las der Betreiber trotzdem \"Befehl gesendet\". Die Meldung sagt
+    darum beides: was kam, und wenn nichts kam, dass das kein Beweis ist.
+
+    Die eigene Zeile ``> befehl`` wird herausgenommen - sie ist die Frage und
+    nicht die Antwort."""
+    gewartet = 0.0
+    while gewartet < ANTWORT_WARTEN_SEKUNDEN:
+        sleep(ANTWORT_SCHRITT_SEKUNDEN)
+        gewartet += ANTWORT_SCHRITT_SEKUNDEN
+        # Die eigene Zeile zaehlt nicht als Antwort: Sie ist selbst eine der
+        # gezaehlten, und ohne diese Schwelle waere JEDER Befehl sofort
+        # \"beantwortet\".
+        if console_service.gezaehlt(server_id) - marke > 1:
+            sleep(ANTWORT_NACHWARTEN_SEKUNDEN)
+            break
+    zeilen = [z for z in console_service.seit(server_id, marke, ANTWORT_ZEILEN)
+              if "] > " not in z]
+    if not zeilen:
+        return ("Gesendet. Der Server hat in einer Sekunde nichts geantwortet -"
+                " viele Befehle tun das. Das ist KEIN Beweis, dass es geklappt"
+                " hat; was wirklich geschah, steht in der Konsolenansicht.")
+    return "Gesendet. Der Server antwortet: " + " | ".join(
+        z.split("] ", 1)[-1] for z in zeilen)
 
 
 def stop_server(

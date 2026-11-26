@@ -87,13 +87,21 @@ public final class Blockbuchwerte {
      * mein Haus abgerissen"). Die abgewiesenen gehoeren dazu, denn sie sind der Fund, bei
      * dem gar nichts passiert ist - ein Dutzend Fehlversuche an einer fremden Parzelle.
      *
+     * <p><b>{@code sprengen} gehoert dazu, seit es die Tat gibt [26.11.2026]</b>, und
+     * zwar aus dem umgekehrten Grund wie {@code benutzen}: Eine Sprengung ist selten
+     * und IMMER interessant. Sie ist ausserdem die Tat, fuer die es den Rueckweg
+     * ueberhaupt gibt - stand sie nicht in dieser Vorgabe, schriebe das Buch von
+     * einem TNT-Grief keine Zeile, und der Rueckweg waere fuer genau den Fall
+     * wirkungslos, fuer den er gebaut wurde. Tafel 31ed haelt das.
+     *
      * <p>{@code benutzen} fehlt mit Absicht: Es ist die mit Abstand haeufigste Tat, und
      * ein Spieler, der eine Minute durch sein Haus laeuft, fuellt die Tabelle mit
      * Tueroeffnungen, nach denen niemand je fragt. Wer die Truhenfrage beantworten will,
      * gibt sie der Welt, in der sie gestellt wird.
      */
     public static final Auswahl VORGABE_AUSWAHL =
-            new Auswahl(EnumSet.of(Blocktat.SETZEN, Blocktat.ABBAUEN), true);
+            new Auswahl(EnumSet.of(Blocktat.SETZEN, Blocktat.ABBAUEN,
+                    Blocktat.SPRENGEN), true);
 
     /**
      * Wie viele Zeilen ein Aufraeumschlag hoechstens loescht.

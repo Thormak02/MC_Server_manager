@@ -13,6 +13,7 @@ from typing import Any
 from app.models.server import Server
 from app.schemas.file_editor import FileReadResponse
 from app.services import yaml_assistant_service
+from app.services import properties_service
 
 
 # Reihenfolge, in der die bekannten Dateien im Serverordner angezeigt werden - die am
@@ -334,21 +335,63 @@ def get_download_file(server: Server, relative_path: str) -> Path:
     )
 
 
+# DAS WAR EIN LOCH [geschlossen 26.11.2026]: Dieser Leser kannte nur "=" als
+# Trenner. Java liest eine .properties-Datei mit DREI - "=", ":" und Leerraum -,
+# und Minecraft liest sie mit Java. Ein von Hand eingetragenes "white-list:true"
+# landete damit bei den uebrigen Zeilen, der Schluessel fehlte in der Karte, und der
+# Manager meldete "Whitelist aus", waehrend der Server sie durchsetzte. Dasselbe
+# fuer level-name, difficulty, max-players, online-mode; vier Aufrufer lesen
+# hierueber.
+#
+# GEFLICKT WURDE ES NICHT, SONDERN ABGEGEBEN. Mein erster Versuch war ein eigener
+# Zerleger mit Javas Regel - nachgebaut und schlechter -, und die Waechterprobe
+# test_kein_neuer_eigener_properties_zerleger hat ihn als fuenfzehnten gefangen.
+# Sie hatte recht: properties_service kennt diese Regeln vollstaendig, samt
+# Fluchtzeichen und beiden Kommentarzeichen. Seit dieser Aenderung ist
+# _parse_properties KEIN eigener Zerleger mehr und steht nicht mehr in jener Liste.
+
+
 def _parse_properties(content: str) -> tuple[dict[str, str], list[str]]:
+    """Schluessel und Werte einer .properties-Datei - mit Javas Regeln.
+
+    DIE REGELN STEHEN IN ``properties_service`` und werden hier nicht nachgebaut.
+    Mein erster Versuch tat genau das, und die Waechterprobe
+    ``test_kein_neuer_eigener_properties_zerleger`` hat ihn gefangen - zu Recht: Jener
+    Dienst kennt die Fluchtzeichen, beide Kommentarzeichen und die Regel
+    \"hoechstens EIN ``=`` oder ``:`` nach dem Zwischenraum\". Ein Nachbau ist
+    immer der schlechtere von beiden.
+
+    DER WERT BLEIBT ROH - ``entflucht()`` wird NICHT gerufen. Das ist eine
+    Entscheidung mit Grund: {@code _dump_properties} schreibt ohne Fluchtung
+    zurueck. Wer hier entflucht und dort nicht fluchtet, verliert bei jedem
+    Speichern einen Backslash - die Gegenrichtung des Fehlers, den
+    ``server_service.read_server_property`` beschreibt. Beides gehoert zugleich
+    umgestellt oder keines.
+
+    WAS DIESER LESER NICHT KANN: Fortsetzungszeilen (eine Zeile, die auf einer
+    ungeraden Zahl Backslashes endet, geht in Java weiter). ``properties_service``
+    beherrscht sie, aber nur mit einem PFAD; diese Funktion bekommt den Text. Eine
+    server.properties von Minecraft hat keine - wer eine von Hand schreibt, bekommt
+    zwei halbe Zeilen, und die zweite landet bei den uebrigen.
+
+    ``extras`` sind die Zeilen, die KEIN Paar sind: eine ohne Schluessel
+    (``=wert``). Eine Zeile wie ``nurEinWort`` ist dagegen fuer Java ein Schluessel
+    mit leerem Wert, und sie wird jetzt so gelesen - bis zum 26.11.2026 landete sie
+    hier bei den uebrigen, also anders als Minecraft sie liest.
+    """
     parsed: dict[str, str] = {}
     extras: list[str] = []
     for raw in content.splitlines():
         line = raw.strip()
-        if not line or line.startswith("#"):
+        zerlegt = properties_service.zerlege_zeile(line)
+        if zerlegt is None:
+            # Leer oder Kommentar - beide Kommentarzeichen kennt der Dienst.
             continue
-        if "=" not in line:
-            extras.append(line)
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip()
+        key, value = zerlegt
         if key:
-            parsed[key] = value
+            parsed[key] = value.strip()
+        elif line:
+            extras.append(line)
     return parsed, extras
 
 

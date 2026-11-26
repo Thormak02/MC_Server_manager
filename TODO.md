@@ -993,17 +993,165 @@ STEHT:
   INSERT, also meldete das Merken einer Nummer, die es nicht gibt, eine
   zurueckgenommene Zeile. Auf der Speicherfassung gruen, auf MariaDB rot.
 
-FEHLT NOCH:
+FERTIG 26.11.2026 - der Befehl steht:
 
-- Der Befehl `/blockbuch zurueck <radius> <minuten>` mit Bestaetigung, Grenzen
-  aus der `config.yml` und der Naht fuer `createBlockData`/`setBlockData`.
-- Eine Tafel, die die zwei neuen Zuhoerer als VERDRAHTET haelt.
-- Einspritzung, Startlauf, Spieltest.
+- `/freimarken blockbuch zurueck <radius> <minuten>` zeigt die Vorschau am
+  eigenen Standort; `... bei <welt> <x> <y> <z>` an einem genannten Ort, auch
+  **von der Konsole**; `... bestaetigen` fuehrt aus. Der ORT steht im
+  Bestaetigungsbefehl - ein Schritt zwischen Warnung und Bestaetigung traefe
+  sonst den falschen Kasten.
+- Eigenes Recht `freimarken.blockbuch.zurueck`; gebraucht werden BEIDE (Brigadier
+  prueft das Elternliteral, und wer zurueckrollt, muss sehen koennen, was).
+- Drei Grenzen in `config.yml` unter `blockbuch.rueckweg`: Radius 50, Fenster
+  1440 Minuten, 5000 Zeilen je Lauf. **Ueber der Blockgrenze wird ABGESAGT, nicht
+  gestueckelt** - ein Lauf in Haeppchen waere nicht unvollstaendig, sondern falsch
+  (er nimmt je Block die aelteste Zeile; ein Schnitt mitten hindurch stellte den
+  Zwischenstand her). Gelesen wird mit Grenze+1, um "voll" von "zu viel" zu
+  unterscheiden.
+
+DER FUND DIESER RUNDE: **`sprengen` war nirgends angeschlossen.** Die zwei
+Zuhoerer waren gebaut, ihre Haken gezaehlt, der Rueckrollplan konnte Sprengungen
+zuruecknehmen - und das Blockbuch schrieb sie NICHT, weil die Tat weder in
+`VORGABE_AUSWAHL` noch irgendwo in der ausgelieferten `config.yml` stand. Ein
+TNT-Grief ware weiterhin in keiner Zeile gelandet. **Tafel 31ed** haelt das jetzt
+fuer JEDE kuenftige Tat, und sie liest nur die Listen - ein Kommentar zaehlt nicht.
+
+NACHWEISE:
+
+- **25 Einspritzungen, 25 gefangen.** Einer (Fall V, die Form der
+  Welt-Vorschlaege) lief gegen KEINE Paper-Probe: Er sitzt in
+  `Rueckrollung.ueberBukkit`. Antwort darauf: Die Vergleichsregel ist nach
+  `Blocktext.istDieseWelt` herausgezogen (jetzt mit Probe), und **Tafel 31ee**
+  haelt die Form der Liste.
+- **Startlauf gruen**, zwei Laeufe. Fuenf Konsolenbefehle antworten mit deutschen
+  Saetzen; die Weltliste nennt die kurzen Namen; zwei falsche Grenzen werden
+  beklagt und der Server laeuft weiter; keine Ausnahme.
+- 6117+ Proben in allen Modulen gruen.
+
+FEHLT NOCH: der Spieltest zu zweit (braucht ein Konto ohne Rechte).
 
 AUSDRUECKLICH NICHT dabei: Truheninhalt, Wesen (Rahmen, Gemaelde), Schildtexte,
 Vorschaumodus, Fluessigkeiten, Kolben. **Bloecke in einem Kasten in einem
 Zeitfenster, umkehrbar, ein Befehl.**
 
+
+### FERTIG 26.11.2026: die drei stillen Loecher im Manager
+
+Alle drei meldeten einen Zustand, den der Server nicht hatte - darum "still".
+
+1. **`team` fehlte in `SUPER_ADMIN_ZWEIGE`.** Wer Konsolenrecht hatte, aber kein
+   Super-Admin war, tippte `/freimarken team gib <sich> verwalter` und hatte danach
+   `freimarken.besitz` - also genau die Vollmacht, die der Zweig `besitz` dort
+   schuetzt. Im Spiel traegt derselbe Weg ZWEI Riegel, an der Konsole trug er keinen.
+   Gesperrt ist jetzt der ganze Zweig (die Pruefung liest zwei Woerter, `gib` ist das
+   dritte); der Verlust ist klein, die Teamliste steht im Manager. **Zweiter Fund
+   derselben Reparatur:** Der Grund stand fest formuliert als "aendert Geld oder
+   Besitz" - fuer `team` falsch. Jetzt traegt jeder Zweig seinen eigenen.
+
+2. **Die Konsole gab nie eine Antwort zurueck.** `send_console_command` meldete
+   "Befehl gesendet", sobald die Zeile in stdin stand. Ein `/freimarken geld Ana
+   5000` mit Tippfehler im Namen meldete also ERFOLG. Jetzt wartet die Funktion bis
+   zu einer Sekunde auf die Antwort und gibt sie weiter; ein Schweigen wird
+   ausdruecklich NICHT als Erfolg verkauft. Dafuer hat der Konsolendienst einen
+   Zaehler bekommen - der Ringpuffer waechst nicht monoton, seine Laenge taugt
+   als Marke nicht.
+
+3. **`_parse_properties` kannte nur `=`.** Java liest `.properties` mit DREI
+   Trennern (`=`, `:`, Leerraum), und Minecraft liest mit Java. Ein von Hand
+   eingetragenes `white-list:true` landete bei den uebrigen Zeilen - der Manager
+   meldete "Whitelist aus", waehrend der Server sie durchsetzte. Dasselbe fuer
+   `level-name`, `difficulty`, `max-players`, `online-mode`; vier Aufrufer lesen
+   darueber. **Die Probe hat einen eigenen Fehler gefangen:** Mein erster Versuch
+   gab bei `max-players  =  20` den Wert `=  20`. Java ueberspringt nach dem
+   Schluessel Leerraum UND einen folgenden Trenner.
+
+**Nachweis:** Je Loch der Zustand von gestern eingespritzt, alle drei gefangen -
+aber **einer erst beim zweiten Versuch:** Meine Proben zu (2) riefen die
+Hilfsfunktion unmittelbar auf und hielten damit die Regel, nicht den ANSCHLUSS. Die
+Einspritzung aenderte die STELLE des Aufrufs, und beide blieben gruen. Jetzt ruft
+eine Probe `send_console_command` selbst, mit gestelltem Prozess.
+
+### FERTIG 26.11.2026: die Ablaufpruefung der Mitgliedschaften
+
+Vorher lief **keine** Mitgliedschaft ab: Das Formular hatte kein Feld fuer `bis`,
+die Route schrieb `bis=None`, und die Rechtetafel liest `nur_laufende=True` - die
+Zeile verschwand also genau in dem Augenblick, in dem das Recht zu ENTZIEHEN war.
+
+- **Feld `bis`** im Formular. Der Tag gehoert dem Spieler: `2026-12-31` wird
+  `23:59:59`, nicht `00:00` - `laeuft` vergleicht mit `>`, und mit Tagesbeginn waere
+  der bezahlte letzte Tag verloren.
+- **`settemp` statt `set`**, wo ein `bis` steht. Damit laeuft das RECHT von selbst
+  ab, und `Ankunftswache.holeHeim` holt den Ex-Foerderer beim naechsten Beitritt
+  aus der Mitgliederwelt. Die Dauer wird nach OBEN gerundet.
+- **Zwei neue Tafeln:** was in den naechsten Tagen ablaeuft (damit eine
+  Verlaengerung angesprochen werden kann), und **welches Recht zu ENTZIEHEN ist**.
+  Die zweite rechnet als DIFFERENZ zwischen "galt einmal" und "gilt jetzt", nicht
+  als "ist abgelaufen": Wer zwei Mitgliedschaften auf denselben Zuschlag hatte und
+  nur eine mit kleinerer Zahl verlaengert, behaelt sein Recht - nur schwaecher. Eine
+  Liste der abgelaufenen Zeilen naennte dort ein Recht zum Entzug, das gelten MUSS.
+  Was stattdessen gilt, steht daneben.
+- Jede Zeile kommt kopierfertig (`lp user ... permission settemp/unset ...`).
+
+**Nachweis:** 10 neue Proben, 7 Einspritzungen - alle gefangen, und **jede von
+einer anderen Probe**.
+
+### ENTSCHIEDEN 26.11.2026: Marktgebuehr 3 Prozent im Spielerhandel
+
+Gemessen waren 22.361 Mark Ueberschuss je Spieler und Tag und genau EINE
+automatische wiederkehrende Senke (Ladenmiete 500/Tag, server-weit hoechstens
+1.500 - also 2 Prozent). Die Annahme vom 8.11., "die Ladenmiete ist ohnehin die
+staerkere Senke", ist damit widerlegt.
+
+- **Spielershop Kauf und Verkauf: 3 Prozent.** Nicht 5 (Plan 7.4): Die Gebuehr ist
+  noch nie gelaufen; drei sind spuerbar und lassen Raum nach oben. Der Weg nach
+  unten waere teurer - eine gesenkte Gebuehr merkt niemand, eine erhoehte schon.
+- **Der Bundesmarkt bleibt bei 0**, und das ist der Teil, auf den es ankommt: Dort
+  ENTSTEHT das Geld gerade (der Staat zahlt es neu), und der Ankaufpreis ist schon
+  der Abzug. Eine Senke soll Geld aus dem UMLAUF nehmen. Ich hatte zuerst alle drei
+  Lagen gleich gesetzt - der Quelltext hatte das bessere Argument.
+- **Der Tagesbonus war schon gedeckelt** (`hoechstbetrag: 2000`, erreicht ab Tag 16)
+  - mein Vorschlag "nicht weiter steigen lassen" war bereits erfuellt.
+
+**AUF DEM LAUFENDEN SERVER FEHLEN DIE ZEILEN NOCH.** Eine vorhandene `config.yml`
+wird beim Update NIE ueberschrieben; geaendert ist nur die ausgelieferte Vorgabe.
+
+**Was die Aenderung gekostet hat, und das ist die Lehre:** Acht Proben wurden rot,
+und bei keiner war etwas falsch - sie nahmen `Shopwerte.VORGABE` als "ohne
+Gebuehr". Genau der Fall, vor dem die Hausregel warnt. Sieben davon setzen ihre
+Zahlen jetzt SELBST (eine eigene Konstante `OHNE_GEBUEHR` in `ShophandelTest`, 21
+Stellen), nur die eine, die etwas UEBER die Vorgabe sagt, nennt die Zahl.
+
+### FERTIG 26.11.2026: der Rueckweg ist AUFFINDBAR
+
+`/hilfe` kennt ihn nicht (ein Unterzweig hat keine eigene Beschreibung, also laesst
+die Hilfeplan-Tafel ihn durch), und die `plugin.yml` liest kein Moderator. Die
+Verwaltungszeile von `/freimarken` nannte **drei** Befehle - welt, parzelle,
+neuladen. Ein Befehl, den niemand findet, ist einer, den niemand benutzt.
+
+Jetzt steht `blockbuch` und `blockbuch zurueck \<radius> \<minuten>` mit drin,
+**dreifach festgenagelt** (BildGleichTest, FreimarkenBefehlTest, SendewegTest) und
+im Startlauf durch das echte MiniMessage geprueft.
+
+OFFEN, eigener Punkt: Dieselbe Zeile ist fuer ein Dutzend weitere Befehle
+unvollstaendig - team, strafe, meldung, portal, einsehen, geld, goldgeld, besitz,
+altfurt, messstelle.
+
+### FUND 26.11.2026: ein Properties-Zerleger ist VERSCHWUNDEN
+
+Die Reparatur von Loch 3 war ein fuenfzehnter eigener Zerleger - und die
+Waechterprobe `test_kein_neuer_eigener_properties_zerleger` hat ihn gefangen. Sie
+hatte recht: `properties_service` kennt Javas Regeln seit dem 23.11. **vollstaendig**,
+samt Fluchtzeichen, beiden Kommentarzeichen und der Regel "hoechstens EIN `=` oder
+`:` nach dem Zwischenraum". Ich hatte sie nachgebaut, schlechter.
+
+`file_service._parse_properties` ruft jetzt `properties_service.zerlege_zeile` und
+traegt kein eigenes Trennzeichen mehr. **Von vierzehn auf dreizehn** - so soll diese
+Liste sich bewegen.
+
+**Noch dreizehn haben dasselbe Loch** (ai_agent_service, ai_config_service,
+hub_capture_service, modpack_service, process_service, server_import_service,
+server_service, transfer_service, freimarken_einrichtung_service). Jeder einzelne
+ist ein eigener kleiner Schritt.
 ### GEPRUEFT 26.11.2026: Prism - Lizenz passt, die Fassungsuhr nicht
 
 Auftrag: *"prism, aber pruefen wegen lizenz und fremder abhaengigkeit, sollte das

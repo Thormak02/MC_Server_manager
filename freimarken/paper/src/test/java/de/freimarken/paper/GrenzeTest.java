@@ -1,5 +1,7 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Blockbuchwerte;
+import de.freimarken.kern.Blocktat;
 import de.freimarken.kern.Tat;
 import de.freimarken.kern.Wirtschaftsstand;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -343,7 +345,7 @@ class GrenzeTest {
             "Rundgangswache.java",
             // /rang [20.11.2026]: EINE Sendestelle fuer beide Zweige und jede Absage.
             "RangBefehle.java",
-            "Reise.java", "RueckwegBefehle.java", "Schutzwache.java",
+            "Reise.java", "RueckrollBefehle.java", "RueckwegBefehle.java", "Schutzwache.java",
             // Plan 7.4: die Zeilen des Anlegens und die Handbalken des Schutzes -
             // zwei Wege, weil Chat und Handbalken zwei verschiedene Aufrufe sind.
             "Shopwache.java",
@@ -570,6 +572,11 @@ class GrenzeTest {
             // sich ein Zweig seinen eigenen Weg gebaut hat.
             Map.entry("RangBefehle.java", 1),
             Map.entry("Reise.java", 8),
+            // Der RUECKWEG des Blockbuchs: EINE Sendestelle, und das ist die
+            // Entscheidung dieses Zweiges. Elf Absagen und zwei Ergebniszeilen gehen
+            // alle durch dasselbe private sende() - eine Zwei hier heisst, dass sich
+            // ein Zweig seinen eigenen Weg an den Sender gebaut hat.
+            Map.entry("RueckrollBefehle.java", 1),
             Map.entry("RueckwegBefehle.java", 1),
             Map.entry("Schutzwache.java", 1),
             // Plan 7.4: ZWEI, und beide sind eine Entscheidung. Die erste ist das private
@@ -5314,6 +5321,12 @@ class GrenzeTest {
             "Blockbuchwerte.PFAD_FRIST", "Blockbuchwerte.PFAD_HAPPEN",
             "Blockbuchwerte.PFAD_REICHWEITE", "Blockbuchwerte.PFAD_TATEN",
             "Blockbuchwerte.PFAD_WELTEN", "Blockbuchwerte.PFAD_ZEILEN",
+            // Die GRENZEN DES RUECKWEGS stehen daneben und werden mit demselben
+            // Leser geholt - also auch nur beim Start. Sie gehoeren hierher aus
+            // genau demselben Grund, und die Berichtszeile des Lesers sagt den
+            // Neustart ausdruecklich.
+            "Rueckweggrenzen.PFAD_RADIUS", "Rueckweggrenzen.PFAD_MINUTEN",
+            "Rueckweggrenzen.PFAD_BLOECKE",
             // Die STELLEN der Freien Truhen sind kein Wert, sondern eine Liste von
             // Orten: Sie werden beim Start gelesen und in die Wache gegeben.
             "Truhenverzeichnis.PFAD_TRUHEN",
@@ -5658,5 +5671,124 @@ class GrenzeTest {
                 "die Warnung fragt den Schalter nicht - dann haengt sie wieder an"
                         + " einem festen Weltnamen, und die naechste Farmwelt faellt"
                         + " still durch");
+    }
+
+    @Test
+    @DisplayName("31ed - jede Tat des Blockbuchs ist in der config.yml angeschlossen")
+    void jedeTatIstAngeschlossen() {
+        // DER FEHLER, GEGEN DEN DIESE TAFEL GEBAUT IST [gefunden 26.11.2026, beim
+        // Bauen des Rueckwegs]: Blocktat.SPRENGEN war angelegt, ihr Wort in der
+        // Sprachdatei, zwei Zuhoerer gebaut, ihre Haken in BlockwacheTest gezaehlt,
+        // der Rueckrollplan konnte Sprengungen zuruecknehmen - und das Blockbuch
+        // schrieb sie NICHT. Die Tat stand weder in Blockbuchwerte.VORGABE_AUSWAHL
+        // noch irgendwo in der ausgelieferten config.yml, und die Wache fragt vor
+        // jeder Zeile werte.schreibt(...).
+        //
+        // Nichts bricht, nichts wird rot. Ein TNT-Grief landet in keiner Zeile, und
+        // der Rueckweg ist fuer genau den Fall wirkungslos, fuer den er gebaut
+        // wurde - das faellt erst dem Betreiber auf, der einen Krater vor sich hat.
+        //
+        // GEPRUEFT WIRD DER ANSCHLUSS und nicht die Vorgabe: Eine Tat darf in der
+        // Vorgabe fehlen, wenn eine WELT sie nennt - genau so steht benutzen da, und
+        // zwar mit Begruendung (es ist die haeufigste Tat und fuellt die Tabelle mit
+        // Tueroeffnungen). Was NICHT sein darf, ist eine Tat, die nirgends steht:
+        // Die gibt es dann im Programm, in der Sprachdatei und in der Wache, und
+        // wirkt nie.
+        String datei = ausgelieferte("config.yml");
+        int anfang = datei.indexOf("blockbuch:");
+        assertTrue(anfang >= 0, "der Abschnitt blockbuch: muss in der ausgelieferten"
+                + " config.yml stehen");
+
+        // Gelesen werden die LISTEN und nicht der ganze Abschnitt: Ein Tatname in
+        // einem Kommentar waere sonst ein Anschluss, und genau das war er nicht -
+        // "sprengen" stand am 26.11.2026 in mehreren Kommentaren dieser Datei.
+        var listen = new java.util.ArrayList<String>();
+        for (String zeile : datei.substring(anfang).split("\n", -1)) {
+            String nackt = zeile.strip();
+            if (nackt.startsWith("#")) {
+                continue;
+            }
+            int klammer = nackt.indexOf('[');
+            if (klammer >= 0 && nackt.endsWith("]")) {
+                listen.add(nackt.substring(klammer + 1, nackt.length() - 1));
+            }
+            // Der Abschnitt endet an der ersten Zeile ohne Einrueckung - sonst
+            // zaehlten die Listen JEDES folgenden Abschnitts mit, und die Tafel
+            // waere gruen, weil irgendwo irgendeine Liste ein Wort trifft.
+            if (!zeile.isBlank() && !zeile.startsWith(" ")
+                    && !zeile.startsWith("blockbuch:")) {
+                break;
+            }
+        }
+        assertTrue(listen.size() >= 3,
+                "nur " + listen.size() + " Listen im Abschnitt blockbuch: gelesen -"
+                        + " dann prueft diese Tafel fast nichts: " + listen);
+
+        var fehlen = new java.util.ArrayList<String>();
+        for (Blocktat tat : Blocktat.values()) {
+            boolean inDerVorgabe = Blockbuchwerte.VORGABE_AUSWAHL.taten()
+                    .contains(tat);
+            boolean inEinerListe = listen.stream().anyMatch(liste ->
+                    java.util.Arrays.stream(liste.split(","))
+                            .map(String::strip)
+                            .anyMatch(wort -> wort.equals(tat.schluessel())));
+            if (!inDerVorgabe && !inEinerListe) {
+                fehlen.add(tat.schluessel());
+            }
+        }
+        assertEquals(java.util.List.of(), fehlen,
+                "Diese Taten gibt es im Programm, in der Sprachdatei und in der Wache -"
+                        + " und sie wirken NIE: Sie stehen weder in"
+                        + " Blockbuchwerte.VORGABE_AUSWAHL noch in einer Liste des"
+                        + " Abschnitts blockbuch: der ausgelieferten config.yml. Wer eine"
+                        + " neue Tat baut, traegt sie in die Vorgabe ein (wenn sie"
+                        + " ueberall gelten soll) oder bei der Welt, in der ihre Frage"
+                        + " gestellt wird. Ein Kommentar zaehlt nicht: Diese Tafel liest"
+                        + " nur die Listen.");
+    }
+
+    @Test
+    @DisplayName("31ee - die Weltvorschlaege des Rueckwegs sind KURZ wie die Befehlszeile")
+    void weltvorschlaegeSindKurz() {
+        // DER FALL, DER GEGEN KEINE PROBE LIEF [Einspritzung V, 26.11.2026]: Die
+        // Vorschlagsliste steht in Rueckrollung.ueberBukkit, also hinter einem
+        // Aufruf, den ohne laufenden Server keine Probe erreicht - gemessen gegen
+        // ALLE Paper-Proben, und sie blieben gruen.
+        //
+        // Was dabei kaputtgeht: Brigadiers word() kennt keinen Doppelpunkt. Gaebe
+        // die Liste "freimarken:altfurt" vor, waere jeder Vorschlag unbrauchbar,
+        // und die Absage bei unbekannter Welt naennte Namen, die der Befehl nicht
+        // annimmt. Die Bestaetigungszeile kuerzt dagegen (Blocktext.bestaetigung,
+        // durch Einspritzung S gedeckt) - zwei Stellen, die verschiedene Formen
+        // nennen, und eine gibt vor, was die andere ablehnt.
+        //
+        // Geprueft wird ZEILENWEISE und der Treffer ist die ZEILE: Eine Zaehltafel
+        // liesse sich hochdrehen, und bei einer zweiten Vorschlagsliste waere sie
+        // blind.
+        String quelle = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("Rueckrollung.java"))
+                .findFirst().orElseThrow(() -> new AssertionError(
+                        "Rueckrollung.java nicht gefunden")));
+        int gepruefte = 0;
+        for (String zeile : quelle.split("\n", -1)) {
+            if (!zeile.contains("namen.add(")) {
+                continue;
+            }
+            gepruefte++;
+            assertTrue(zeile.contains("Blocktext.kurzeWelt("),
+                    "Diese Zeile legt einen Weltnamen in die Vorschlagsliste, ohne"
+                            + " ihn zu kuerzen: " + zeile.strip()
+                            + " -- Brigadiers word() kennt keinen Doppelpunkt, also"
+                            + " waere jeder Vorschlag mit Namensraum unbrauchbar, und"
+                            + " die Absage bei unbekannter Welt naennte Namen, die der"
+                            + " Befehl nicht annimmt. Blocktext.bestaetigung kuerzt;"
+                            + " beide Stellen muessen dieselbe Form nennen.");
+        }
+        assertEquals(1, gepruefte,
+                "erwartet wird GENAU EINE Zeile, die einen Weltnamen in die Liste"
+                        + " legt. Keine heisst, dass diese Tafel ihren Gegenstand nicht"
+                        + " mehr findet - dann prueft sie nichts. Mehr heisst, dass eine"
+                        + " zweite Liste dazugekommen ist; die gehoert hier mitgezaehlt.");
     }
 }

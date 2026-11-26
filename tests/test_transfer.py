@@ -1099,13 +1099,20 @@ def test_weltname_folgt_javas_regeln(tmp_path, client):
 # bewusst keine server.properties (_dump_properties SCHREIBT sie, mit demselben Trenner) -
 # er steht mit in der Liste, weil der Riegel die GESTALT faengt und nicht den Dateinamen.
 #
-# Die ZAHL und die NAMEN sind der Riegel: ein fuenfzehnter macht diese Probe rot, und wer
+# Die ZAHL und die NAMEN sind der Riegel: ein vierzehnter macht diese Probe rot, und wer
 # einen aufraeumt, muss ihn hier herausnehmen.
+#
+# AM 26.11.2026 IST EINER VERSCHWUNDEN, und zwar durch genau diese Probe:
+# file_service._parse_properties kannte nur "=" als Trenner (ein von Hand
+# eingetragenes "white-list:true" war fuer den Manager unsichtbar, fuer den
+# Server aber wirksam). Der erste Reparaturversuch baute Javas Regel NACH - und
+# diese Probe hat ihn als fuenfzehnten gefangen. Jetzt ruft jene Funktion
+# properties_service.zerlege_zeile und traegt kein eigenes Trennzeichen mehr.
+# Von vierzehn auf dreizehn: So soll diese Liste sich bewegen.
 EIGENE_PROPERTIES_ZERLEGER = {
     ("ai_agent_service.py", "_tue_einstellung"),
     ("ai_config_service.py", "_properties"),
     ("ai_config_service.py", "_parse_inhalt"),             # bekommt den Text als Parameter
-    ("file_service.py", "_parse_properties"),              # bekommt den Text als Parameter
     ("file_service.py", "_dump_properties"),               # schreibt, mit demselben Trenner
     ("file_service.py", "get_assistant_payload"),
     ("freimarken_einrichtung_service.py", "lies_zugangsdaten"),
@@ -1228,7 +1235,11 @@ def test_kein_neuer_eigener_properties_zerleger(client):
             if hat_trennzeichen(knoten, quelle, namen):
                 gefunden.add((pfad.name, knoten.name))
 
-    assert len(gefunden) == 14, (f"Erwartet waren 14 eigene Zerleger, gefunden "
+    # DREIZEHN seit dem 26.11.2026 - vorher vierzehn. file_service._parse_properties
+    # ruft jetzt properties_service.zerlege_zeile und traegt kein eigenes
+    # Trennzeichen mehr. Die Zahl soll NUR in diese Richtung wandern; waechst sie,
+    # ist ein neuer Nachbau dazugekommen.
+    assert len(gefunden) == 13, (f"Erwartet waren 13 eigene Zerleger, gefunden "
                                  f"{len(gefunden)}: {sorted(gefunden)}. Stimmt das "
                                  f"Muster noch?")
     neu = gefunden - EIGENE_PROPERTIES_ZERLEGER

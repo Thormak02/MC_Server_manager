@@ -545,3 +545,222 @@ def test_die_korrektur_landet_in_ihrer_eigenen_route(seite, erwartet):
             assert route.endpoint.__name__ == erwartet
             return
     raise AssertionError("Die Route POST " + eigen + " fehlt")
+
+
+# ======================================================= DIE ABLAUFPRUEFUNG
+#
+# WAS BIS ZUM 26.11.2026 FEHLTE: Eine Mitgliedschaft lief nie ab. Das Formular hatte
+# kein Feld fuer "bis", die Route schrieb bis=None, und die Rechtetafel liest
+# nur_laufende=True - die Zeile verschwand also genau in dem Augenblick, in dem das
+# Recht zu ENTZIEHEN war. Der Betreiber sah nie, was er wegnehmen muss.
+
+
+def test_die_dauer_wird_nach_oben_gerundet():
+    """Der bezahlte letzte Tag darf nicht verloren gehen.
+
+    ``laeuft`` vergleicht mit ``>``: Wer bis zum 31. bezahlt hat, ist am 31. noch
+    Mitglied. Eine abgerundete Dauer naehme ihm diesen Tag - und das ist der
+    Fehler, den er bemerkt.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.services import freimarken_mitglied_service as ms
+
+    jetzt = datetime(2026, 11, 26, 12, 0, tzinfo=timezone.utc)
+    assert ms.luckperms_dauer(jetzt + timedelta(days=30), stichtag=jetzt) == "30d"
+    assert ms.luckperms_dauer(jetzt + timedelta(hours=12), stichtag=jetzt) == "12h"
+    assert ms.luckperms_dauer(jetzt + timedelta(minutes=45), stichtag=jetzt) \
+        == "45m"
+    # Die Rundung nach oben: 30 Tage und eine Sekunde sind nicht 30 Tage.
+    assert ms.luckperms_dauer(jetzt + timedelta(days=30, seconds=1),
+                              stichtag=jetzt) != "30d"
+    assert ms.luckperms_dauer(None) is None, "ohne bis laeuft es weiter"
+
+
+def test_eine_abgelaufene_dauer_ist_null_und_nicht_unbefristet():
+    """``0s`` und nicht ``None``.
+
+    ``None`` heisst in dieser Funktion \"unbefristet\" - also das Gegenteil. Wer
+    eine abgelaufene Mitgliedschaft nach ihrer Dauer fragt und ``None`` bekaeme,
+    setzte das Recht DAUERHAFT.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.services import freimarken_mitglied_service as ms
+
+    jetzt = datetime(2026, 11, 26, 12, 0, tzinfo=timezone.utc)
+    assert ms.luckperms_dauer(jetzt - timedelta(days=1), stichtag=jetzt) == "0s"
+
+
+def test_das_datum_aus_dem_formular_ist_der_ganze_tag():
+    """Wer \"bis 31.12.\" eintraegt, meint den ganzen 31.12."""
+    from app.api.routers.freimarken import _bis_aus_formular
+
+    wert = _bis_aus_formular("2026-12-31")
+
+    assert wert is not None
+    assert (wert.hour, wert.minute) == (23, 59), (
+        "bis ist der LETZTE gueltige Augenblick - mit 00:00 waere der bezahlte"
+        " letzte Tag verloren")
+    assert _bis_aus_formular("") is None, "leer heisst: laeuft weiter"
+    assert _bis_aus_formular("kaputt") is None, (
+        "ein Tippfehler in einem FREIWILLIGEN Feld darf die Eingabe nicht"
+        " abweisen - eine unbefristete Mitgliedschaft laesst sich beenden")
+
+
+def test_die_rechtezeile_ist_settemp_wo_es_befristet_ist(client, tmp_path):
+    """Ein dauerhaft gesetztes Recht neben einer befristeten Mitgliedschaft ist die
+    halbe Einstellung, gegen die dieses Projekt sonst warnt: Die beiden
+    widersprechen sich still, und keiner merkt es."""
+    server_id = _aufbau(client, tmp_path, name="mitglied-settemp", port=25731)
+
+    client.post("/freimarken/" + str(server_id) + "/mitglieder",
+                data={"kennung": "bbbbbbbb-1111-4111-8111-111111111111",
+                      "name": "Anna", "zuschlag": "wolken", "zahl": "2",
+                      "bis": "2099-12-31"},
+                follow_redirects=False)
+    seite = client.get("/freimarken/" + str(server_id) + "/mitglieder").text
+
+    assert "permission settemp freimarken.extra.wolken.2 true" in seite, (
+        "die Zeile muss BEFRISTET sein - sonst bleibt das Recht stehen, wenn die"
+        " Mitgliedschaft ablaeuft")
+
+
+def test_die_rechtezeile_ist_set_wo_es_unbefristet_ist(client, tmp_path):
+    """Die Gegenrichtung: Ohne sie waere ein \"immer settemp\" ebenfalls gruen -
+    und dann liefe eine unbefristete Mitgliedschaft nach einer Dauer ab, die
+    niemand eingetragen hat."""
+    server_id = _aufbau(client, tmp_path, name="mitglied-set", port=25732)
+
+    client.post("/freimarken/" + str(server_id) + "/mitglieder",
+                data={"kennung": "cccccccc-1111-4111-8111-111111111111",
+                      "name": "Bert", "zuschlag": "wolken", "zahl": "1"},
+                follow_redirects=False)
+    seite = client.get("/freimarken/" + str(server_id) + "/mitglieder").text
+
+    assert "permission set freimarken.extra.wolken.1 true" in seite
+    assert "settemp freimarken.extra.wolken.1" not in seite
+
+
+def test_ein_abgelaufenes_recht_steht_zum_entzug_auf_der_seite(client, tmp_path):
+    """DER ANSCHLUSS. Eine Liste, die nur der Dienst kennt, ist unsichtbar
+    wirkungslos - und genau das war der Zustand: Die Rechtetafel liest nur die
+    laufenden Zeilen."""
+    from app.db.session import SessionLocal
+    from app.services import freimarken_mitglied_service as ms
+
+    server_id = _aufbau(client, tmp_path, name="mitglied-entzug", port=25733)
+    client.post("/freimarken/" + str(server_id) + "/mitglieder",
+                data={"kennung": "dddddddd-1111-4111-8111-111111111111",
+                      "name": "Cara", "zuschlag": "wolken", "zahl": "3"},
+                follow_redirects=False)
+    with SessionLocal() as db:
+        nummer = ms.liste(db, server_id)[0]["id"]
+    client.post("/freimarken/" + str(server_id) + "/mitglieder/beenden",
+                data={"eintrag": str(nummer)}, follow_redirects=False)
+
+    seite = client.get("/freimarken/" + str(server_id) + "/mitglieder").text
+
+    assert "zu ENTZIEHEN" in seite, (
+        "die Tafel muss erscheinen, sobald ein Recht ungedeckt ist")
+    assert "permission unset freimarken.extra.wolken.3" in seite, (
+        "und die fertige Zeile zum Kopieren nennen")
+
+
+def test_eine_verlaengerung_mit_kleinerer_zahl_nennt_den_ERSATZ(client, tmp_path):
+    """DER FALL, DER SONST GELD KOSTET.
+
+    Wer zwei Mitgliedschaften auf denselben Zuschlag hatte und nur eine mit
+    KLEINERER Zahl verlaengert, behaelt ein Recht - nur ein schwaecheres. Eine
+    Liste der abgelaufenen Zeilen naennte hier das alte Recht zum Entzug und
+    verschwiege das neue: Der Betreiber entzieht und setzt nichts, und der Spieler
+    verliert einen Zuschlag, fuer den er bezahlt hat.
+    """
+    from app.db.session import SessionLocal
+    from app.services import freimarken_mitglied_service as ms
+
+    server_id = _aufbau(client, tmp_path, name="mitglied-ersatz", port=25734)
+    kennung = "eeeeeeee-1111-4111-8111-111111111111"
+    for zahl in ("3", "1"):
+        client.post("/freimarken/" + str(server_id) + "/mitglieder",
+                    data={"kennung": kennung, "name": "Dora",
+                          "zuschlag": "wolken", "zahl": zahl},
+                    follow_redirects=False)
+    with SessionLocal() as db:
+        # Die GROESSERE beenden - die kleinere laeuft weiter.
+        gross = [z for z in ms.liste(db, server_id) if z["zahl"] == 3][0]["id"]
+    client.post("/freimarken/" + str(server_id) + "/mitglieder/beenden",
+                data={"eintrag": str(gross)}, follow_redirects=False)
+
+    with SessionLocal() as db:
+        offen = ms.zu_entziehen(db, server_id)
+
+    assert len(offen) == 1, offen
+    assert offen[0]["recht"] == "freimarken.extra.wolken.3"
+    assert offen[0]["statt_recht"] == "freimarken.extra.wolken.1", (
+        "was stattdessen gelten MUSS, gehoert daneben - sonst entzieht der"
+        " Betreiber das alte und setzt das neue nicht")
+
+
+def test_ein_noch_gedecktes_recht_steht_NICHT_zum_entzug(client, tmp_path):
+    """Die Gegenrichtung: Eine abgelaufene Zeile, deren Recht eine laufende Zeile
+    noch deckt, gehoert nicht in die Entzugsliste. Ohne diesen Satz waere ein
+    \"nenne alles Abgelaufene\" gruen - und der Betreiber entzoege ein Recht, das
+    gelten muss."""
+    from app.db.session import SessionLocal
+    from app.services import freimarken_mitglied_service as ms
+
+    server_id = _aufbau(client, tmp_path, name="mitglied-gedeckt", port=25735)
+    kennung = "ffffffff-1111-4111-8111-111111111111"
+    for _ in range(2):
+        client.post("/freimarken/" + str(server_id) + "/mitglieder",
+                    data={"kennung": kennung, "name": "Emil",
+                          "zuschlag": "wolken", "zahl": "2"},
+                    follow_redirects=False)
+    with SessionLocal() as db:
+        eine = ms.liste(db, server_id)[0]["id"]
+    client.post("/freimarken/" + str(server_id) + "/mitglieder/beenden",
+                data={"eintrag": str(eine)}, follow_redirects=False)
+
+    with SessionLocal() as db:
+        offen = ms.zu_entziehen(db, server_id)
+
+    assert offen == [], (
+        "dasselbe Recht laeuft noch ueber die zweite Zeile - es darf nicht zum"
+        f" Entzug stehen: {offen}")
+
+
+def test_was_bald_ablaeuft_steht_auf_der_seite(client, tmp_path):
+    """Damit eine Verlaengerung angesprochen werden kann, BEVOR der Zuschlag weg
+    ist. Ohne diese Liste erfaehrt man vom Ablauf erst, wenn sich der Spieler
+    beschwert - und das ist die Enttaeuschung, gegen die Plan 8.5 geschrieben ist."""
+    from datetime import datetime, timedelta, timezone
+
+    server_id = _aufbau(client, tmp_path, name="mitglied-bald", port=25736)
+    morgen = (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
+
+    client.post("/freimarken/" + str(server_id) + "/mitglieder",
+                data={"kennung": "99999999-1111-4111-8111-111111111111",
+                      "name": "Finn", "zuschlag": "wolken", "zahl": "1",
+                      "bis": morgen},
+                follow_redirects=False)
+    seite = client.get("/freimarken/" + str(server_id) + "/mitglieder").text
+
+    assert "naechsten Tagen ab" in seite
+    assert "Finn" in seite
+
+
+def test_eine_unbefristete_laeuft_nicht_bald_ab(client, tmp_path):
+    """Die Gegenrichtung: Ohne sie stuende jede unbefristete Mitgliedschaft in der
+    Ablaufliste, und die Liste waere nach einer Woche unlesbar."""
+    from app.db.session import SessionLocal
+    from app.services import freimarken_mitglied_service as ms
+
+    server_id = _aufbau(client, tmp_path, name="mitglied-ohne", port=25737)
+    client.post("/freimarken/" + str(server_id) + "/mitglieder",
+                data={"kennung": "88888888-1111-4111-8111-111111111111",
+                      "name": "Gero", "zuschlag": "wolken", "zahl": "1"},
+                follow_redirects=False)
+
+    with SessionLocal() as db:
+        assert ms.laeuft_bald_ab(db, server_id) == []

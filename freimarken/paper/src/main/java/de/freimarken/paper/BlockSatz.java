@@ -129,7 +129,114 @@ enum BlockSatz implements Satz {
      * steht oft niemand als Taeter, und "niemand baute ab" ist ein anderer Satz
      * als "hier ist etwas explodiert".
      */
-    TAT_SPRENGEN("blockbuch.tat.sprengen", Art.WORT);
+    TAT_SPRENGEN("blockbuch.tat.sprengen", Art.WORT),
+
+    /**
+     * Die Ueberschrift der Vorschau auf eine Rueckrollung.
+     *
+     * <p>NENNT ALLE DREI ANGABEN - Ort, Radius und Fenster. Was der Betreiber
+     * bestaetigt, ist genau dieser Kasten; stuende nur "Rueckweg:" da, bestaetigte er
+     * eine Zahl, die er sich gemerkt zu haben glaubt.
+     */
+    RUECKWEG_KOPF("blockbuch.rueckweg.kopf", Art.SATZ, "ort", "radius", "minuten"),
+
+    /**
+     * Was die Rueckrollung taete, in Zahlen.
+     *
+     * <p>Wegnehmen und Herstellen GETRENNT, und das ist die Angabe, auf die es
+     * ankommt: Eine Rueckrollung, die fast nur wegnimmt, war eine Bauerei; eine, die
+     * fast nur herstellt, war ein Abriss. Der Betreiber sieht an den zwei Zahlen,
+     * ob er den Vorfall erwischt hat, den er meint.
+     */
+    RUECKWEG_ZAHLEN("blockbuch.rueckweg.zahlen", Art.SATZ, "zeilen", "wegnehmen",
+            "herstellen"),
+
+    /**
+     * Wie viele Zeilen ohne Vorzustand auskommen muessen.
+     *
+     * <p>Eine eigene Zeile, weil sie das ERGEBNIS beschreibt und nicht den Umfang:
+     * Diese Stellen bekommen den Block zurueck, aber nicht seine Blickrichtung, und
+     * wo in Wasser gebaut wurde, kommt Luft. Wer es vorher weiss, wundert sich
+     * nicht - und kann sich gegen die Rueckrollung entscheiden.
+     */
+    RUECKWEG_ROH("blockbuch.rueckweg.roh", Art.SATZ, "anzahl"),
+
+    /**
+     * Die Zeile zum Bestaetigen - fertig zum Abtippen.
+     *
+     * <p>Der ganze Befehl steht darin, samt Welt und Koordinaten. Das ist die
+     * Sicherung gegen einen Schritt zwischen Warnung und Bestaetigung: Ohne den Ort
+     * im Befehl rollte die Bestaetigung den Kasten um die Stelle zurueck, an der der
+     * Betreiber JETZT steht - und ein Schritt waehrend des Lesens traefe den
+     * falschen. Dieselbe Bauart wie bei {@code /freimarken parzelle aufgeben}.
+     */
+    RUECKWEG_BEFEHL("blockbuch.rueckweg.befehl", Art.SATZ, "befehl"),
+
+    /** In diesem Kasten und Fenster steht nichts, was zurueckzunehmen waere. */
+    RUECKWEG_LEER("blockbuch.rueckweg.leer", Art.SATZ, "ort", "minuten"),
+
+    /**
+     * Zu viele Zeilen - und darum wird NICHT zurueckgerollt.
+     *
+     * <p><b>Eine Absage und keine Bremse</b>, und der Satz muss den Grund nennen:
+     * Ein Lauf in Haeppchen waere nicht bloss unvollstaendig, er waere FALSCH. Die
+     * Abfrage gibt die aeltesten Zeilen zuerst; schneidet die Grenze zwischen zwei
+     * Zeilen desselben Blocks, nimmt dieser Lauf die aeltere und merkt sie, und der
+     * naechste stellt dann den Zwischenstand her. Der Betreiber muss darum
+     * verkleinern - das kann ihm niemand abnehmen.
+     */
+    RUECKWEG_ZU_VIELE("blockbuch.rueckweg.zu-viele", Art.SATZ, "zeilen", "grenze"),
+
+    /** Der Radius liegt ueber der eingestellten Grenze. */
+    RUECKWEG_ZU_WEIT("blockbuch.rueckweg.zu-weit", Art.SATZ, "radius",
+            "hoechstens"),
+
+    /** Das Zeitfenster liegt ueber der eingestellten Grenze. */
+    RUECKWEG_ZU_LANG("blockbuch.rueckweg.zu-lang", Art.SATZ, "minuten",
+            "hoechstens"),
+
+    /**
+     * Die genannte Welt gibt es nicht - und der Satz nennt die, die es gibt.
+     *
+     * <p>Die Liste gehoert dazu: Der Befehl wird auch von der Konsole getippt, und
+     * dort gibt es keine Vorschlaege. Ohne sie raet der Betreiber zwischen
+     * {@code altfurt} und {@code freimarken:altfurt}.
+     */
+    RUECKWEG_UNBEKANNTE_WELT("blockbuch.rueckweg.unbekannte-welt", Art.SATZ, "welt",
+            "welten"),
+
+    /** Die Rueckrollung ist gelaufen. */
+    RUECKWEG_FERTIG("blockbuch.rueckweg.fertig", Art.SATZ, "gesetzt", "zeilen"),
+
+    /**
+     * Wie viele Bloecke dieser Server nicht setzen konnte.
+     *
+     * <p>Nur gesendet, wenn es welche gab - und dann ist es die wichtigste Zeile des
+     * Ergebnisses: Dort steht noch, was stehen geblieben ist. Die Zeilen sind
+     * trotzdem gemerkt, sonst versuchte jeder weitere Lauf dasselbe wieder.
+     */
+    RUECKWEG_MISSLUNGEN("blockbuch.rueckweg.misslungen", Art.SATZ, "anzahl"),
+
+    /**
+     * Die Vorschau am eigenen Standort geht nur mit einem Koerper.
+     *
+     * <p>Eine gelesene Absage und kein {@code requires} - dieselbe Begruendung wie
+     * bei {@link #KEIN_BLOCK}: Der Betreiber auf der Konsole soll den WEG lesen, der
+     * ihm offensteht, und nicht "unbekannter Befehl". Fuer ihn gibt es den Zweig mit
+     * Welt und Koordinaten, und genau den nennt dieser Satz.
+     */
+    RUECKWEG_KEIN_ORT("blockbuch.rueckweg.kein-ort", Art.SATZ),
+
+    /**
+     * Die getippte Hoehe gibt es in dieser Welt nicht.
+     *
+     * <p>Erreichbar, sobald jemand die Hoehe TIPPT - und das ist in Altfurt schnell
+     * passiert: Der Boden liegt dort bei y -61, die Unterkante bei -64. Ohne diesen
+     * Satz wuerfe die Kastenrechnung, und der Betreiber bekaeme eine rote
+     * Konsolenmeldung statt einer Auskunft.
+     */
+    RUECKWEG_KEINE_HOEHE("blockbuch.rueckweg.keine-hoehe", Art.SATZ, "hoehe",
+            "unten", "oben");
 
     private final String pfad;
     private final Art art;

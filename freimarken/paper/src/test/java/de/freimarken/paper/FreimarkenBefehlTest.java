@@ -178,7 +178,11 @@ class FreimarkenBefehlTest {
 
         assertEquals(5, mitRecht.chatBild().size(), "vier Zeilen plus die Verwaltung: "
                 + mitRecht.chatBild());
-        assertEquals("&#6e7a82/freimarken welt · parzelle <x> <z> · neuladen",
+        // BLOCKBUCH UND RUECKWEG STEHEN SEIT DEM 26.11.2026 MIT DRIN: /hilfe kennt
+        // den Rueckweg nicht (er ist ein Unterzweig ohne eigene Beschreibung), und
+        // ein Befehl, den niemand findet, ist einer, den niemand benutzt.
+        assertEquals("&#6e7a82/freimarken welt · parzelle <x> <z> · neuladen"
+                        + " · blockbuch · blockbuch zurueck <radius> <minuten>",
                 mitRecht.chatBild().get(4),
                 "und sie steht ZULETZT - ein Spieler liest sie sonst vor den Befehlen,"
                         + " die ihn angehen");

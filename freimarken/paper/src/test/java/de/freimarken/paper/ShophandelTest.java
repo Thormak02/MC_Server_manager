@@ -50,6 +50,18 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Der Handel am Kistenshop")
 class ShophandelTest {
 
+    /**
+     * Ein Handelsstand OHNE jede Gebuehr - der Ausgangspunkt dieser Datei.
+     *
+     * <p><b>Und nicht {@code Shopwerte.VORGABE}</b> [26.11.2026]: Dort stand jene,
+     * und sie bedeutete "ohne Besonderheiten", solange sie auf 0 war. Als die
+     * Marktgebuehr ab Werk auf 3 Prozent ging, wurden fuenf Proben dieser Datei
+     * rot - obwohl an der Gebuehrenrechnung nichts falsch war. Geprueft wird hier
+     * die RECHNUNG, und die haengt an keiner Einstellung.
+     */
+    private static final Shopwerte OHNE_GEBUEHR = new Shopwerte(0, 0, 0,
+            Shopwerte.VORGABE_WORT, Shopwerte.VORGABE_ZEILEN);
+
     private static final String WELT = "freimarken:altfurt";
     private static final UUID KUNDE = UUID.fromString(
             "11111111-1111-1111-1111-111111111111");
@@ -138,7 +150,7 @@ class ShophandelTest {
         // Haltbar ist nur eine Fassung: voller Preis gutschreiben, Gebuehr davon
         // abbuchen. Ein drittes Konto fuer den Staat gibt es nicht und soll es nicht
         // geben - die Ladenmiete bucht genauso ohne Empfaenger ab.
-        var werte = Shopwerte.VORGABE.mitSpielerKauf(7);
+        var werte = OHNE_GEBUEHR.mitSpielerKauf(7);
         var ausgang = handle(spielershop(), Handelsart.KUNDE_KAUFT, false, werte);
 
         assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid());
@@ -166,7 +178,7 @@ class ShophandelTest {
         // Geprueft mit einem Besitzer, dessen Konto LEER ist: Steht die Gebuehr vor der
         // Gutschrift, ist das zweite Schrittpaar vertauscht und diese Probe rot.
         Kasse leer = new SpeicherKasse(0L);
-        var werte = Shopwerte.VORGABE.mitSpielerKauf(7);
+        var werte = OHNE_GEBUEHR.mitSpielerKauf(7);
         Wirtschaftsstand eigenerStand = stand(werte);
         var handel = new Shophandel(buch(eigenerStand), hand,
                 new Mitschrift(leer, schritte), eigenerStand,
@@ -196,7 +208,7 @@ class ShophandelTest {
         // Mark ist sie abgerundet 0, und eine Zeile ueber 0 Mark waere eine Zeile ohne
         // Geldbewegung - genau das verbietet die Kasse. Mit einem Shop zu 19 Mark und 5
         // Prozent ist die Lage erreichbar, OBWOHL ein Satz eingestellt ist.
-        var werte = Shopwerte.VORGABE.mitSpielerKauf(5);
+        var werte = OHNE_GEBUEHR.mitSpielerKauf(5);
         Kistenshop billig = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, BESITZER, 1,
                 19L, 0L, ware(), Set.of());
         var ausgang = handle(billig, Handelsart.KUNDE_KAUFT, false, werte);
@@ -219,7 +231,7 @@ class ShophandelTest {
         // "ERST DANACH OEFFNET SICH DER BUNDESMARKT" - Plan 10.1. Der Zustand wird HIER
         // hergestellt: eine Anmeldung, die AN ist und in der niemand angenommen hat.
         // Ohne diesen Zustand waere der Riegel gruen mit und ohne.
-        Wirtschaftsstand eigenerStand = stand(Shopwerte.VORGABE);
+        Wirtschaftsstand eigenerStand = stand(OHNE_GEBUEHR);
         var handel = new Shophandel(buch(eigenerStand), hand, kasse, eigenerStand,
                 offen(eigenerStand), UHR, protokollMit(protokollzeilen));
         ablage.schreibe(bundstand());
@@ -239,7 +251,7 @@ class ShophandelTest {
         // der BUND anbietet. Einen Spielershop zu sperren waere eine Entscheidung ueber
         // das Geschaeft eines Dritten - und er bekaeme sein Geld nicht, weil ein vierter
         // seine Regeln nicht gelesen hat.
-        Wirtschaftsstand eigenerStand = stand(Shopwerte.VORGABE);
+        Wirtschaftsstand eigenerStand = stand(OHNE_GEBUEHR);
         var handel = new Shophandel(buch(eigenerStand), hand, kasse, eigenerStand,
                 offen(eigenerStand), UHR, protokollMit(protokollzeilen));
         ablage.schreibe(spielershop());
@@ -256,7 +268,7 @@ class ShophandelTest {
     void nachDerAnnahmeGehtEs() {
         // Ohne diese Haelfte waere auch ein Riegel gruen, der IMMER absagt - und der
         // Bundesmarkt waere fuer jeden zu, auch fuer den, der zugestimmt hat.
-        Wirtschaftsstand eigenerStand = stand(Shopwerte.VORGABE);
+        Wirtschaftsstand eigenerStand = stand(OHNE_GEBUEHR);
         var anmeldung = offen(eigenerStand);
         var handel = new Shophandel(buch(eigenerStand), hand, kasse, eigenerStand,
                 anmeldung, UHR, protokollMit(protokollzeilen));
@@ -351,7 +363,7 @@ class ShophandelTest {
         ablage.schreibe(bundstand());
         hand.setzeBestand(999, 999, 999, 999);
 
-        var ausgang = handel(stand(Shopwerte.VORGABE, 10L))
+        var ausgang = handel(stand(OHNE_GEBUEHR, 10L))
                 .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, true);
 
         assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid());
@@ -375,7 +387,7 @@ class ShophandelTest {
         ablage.schreibe(bundstand());
         echteKasse.eroeffne(KUNDE);
 
-        var ausgang = handel(stand(Shopwerte.VORGABE, 10L))
+        var ausgang = handel(stand(OHNE_GEBUEHR, 10L))
                 .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
 
         assertEquals(Shophandel.Bescheid.KEINE_WARE, ausgang.bescheid(),
@@ -392,7 +404,7 @@ class ShophandelTest {
         hand.setzeBestand(999, 999, 999, 999);
         schritte.clear();
 
-        var ausgang = handel(stand(Shopwerte.VORGABE, 10L))
+        var ausgang = handel(stand(OHNE_GEBUEHR, 10L))
                 .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
 
         assertEquals(Shophandel.Bescheid.BUND_DECKEL, ausgang.bescheid());
@@ -415,7 +427,7 @@ class ShophandelTest {
         ablage.schreibe(bundladen());
         hand.setzeBestand(999, 999, 999, 999);
 
-        var ausgang = handel(stand(Shopwerte.VORGABE, 10L))
+        var ausgang = handel(stand(OHNE_GEBUEHR, 10L))
                 .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_KAUFT, false);
 
         assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid(),
@@ -434,7 +446,7 @@ class ShophandelTest {
         ablage.schreibe(bundstand());
         hand.setzeBestand(999, 999, 999, 999);
 
-        var ausgang = handel(stand(Shopwerte.VORGABE, 10L))
+        var ausgang = handel(stand(OHNE_GEBUEHR, 10L))
                 .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
 
         assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid());
@@ -465,12 +477,12 @@ class ShophandelTest {
         // FELD - also die Zahlen des Serverstarts. Ein /freimarken neuladen baut
         // absichtlich kein Objekt neu, und darum wirkte eine geaenderte Marktgebuehr
         // nie, waehrend der Befehl "uebernommen" meldete.
-        Wirtschaftsstand halter = stand(Shopwerte.VORGABE, 20L);
+        Wirtschaftsstand halter = stand(OHNE_GEBUEHR, 20L);
         ablage.schreibe(spielershop());
         neuerStand();
 
         handel(halter).handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_KAUFT, false);
-        assertEquals(List.of(), schritteMit("SHOP_GEBUEHR"), "ab Werk keine Gebuehr");
+        assertEquals(List.of(), schritteMit("SHOP_GEBUEHR"), "ohne Gebuehr darf keine Zeile stehen");
 
         halter.uebernimm(halter.werte().mitHandel(
                 halter.werte().handel().mitSpielerKauf(10)));
@@ -489,7 +501,7 @@ class ShophandelTest {
         // Einstellung: Beim Kauf am Bundshop bekommt niemand Geld, dem eine Gebuehr
         // abzuziehen waere. Geprueft mit BEIDEN Saetzen hochgedreht - dann ist eine
         // Fassung, die den Spielersatz auch am Bundshop nimmt, sofort rot.
-        var werte = Shopwerte.VORGABE.mitSpielerKauf(7).mitSpielerVerkauf(11)
+        var werte = OHNE_GEBUEHR.mitSpielerKauf(7).mitSpielerVerkauf(11)
                 .mitBundVerkauf(23);
 
         var kauf = handle(bundladen(), Handelsart.KUNDE_KAUFT, false, werte);
@@ -528,7 +540,7 @@ class ShophandelTest {
         ablage.schreibe(shop);
         hand.setzeBestand(999, 999, 999, 999);
 
-        var ausgang = handel(Shopwerte.VORGABE).handle(BESITZER, WELT, 60, 71, 6,
+        var ausgang = handel(OHNE_GEBUEHR).handle(BESITZER, WELT, 60, 71, 6,
                 Handelsart.KUNDE_KAUFT, false);
 
         assertEquals(Shophandel.Bescheid.EIGENER_SHOP, ausgang.bescheid());
@@ -638,7 +650,7 @@ class ShophandelTest {
         // Die Ablage bleibt leer: An diesem Schild haengt kein Shop. Darauf gibt es
         // keine Absage - ein Spieler, der auf ein Wegweiserschild klickt, bekaeme sonst
         // eine Meldung dafuer, dass dort kein Laden ist.
-        var ausgang = handel(Shopwerte.VORGABE).handle(KUNDE, WELT, 60, 71, 6,
+        var ausgang = handel(OHNE_GEBUEHR).handle(KUNDE, WELT, 60, 71, 6,
                 Handelsart.KUNDE_KAUFT, false);
 
         assertEquals(Shophandel.Bescheid.KEIN_SHOP, ausgang.bescheid());
@@ -778,7 +790,7 @@ class ShophandelTest {
         // Erloes zurueck, fehlte ihm die Gebuehr eines Handels, der nie stattgefunden
         // hat - und zwar lautlos, denn beide Zeilen stehen im Buch und die Summe stimmt.
         hand.nimmtHoechstens = 0;
-        var werte = Shopwerte.VORGABE.mitSpielerKauf(7);
+        var werte = OHNE_GEBUEHR.mitSpielerKauf(7);
 
         var ausgang = handle(spielershop(), Handelsart.KUNDE_KAUFT, false, werte);
 
@@ -803,7 +815,7 @@ class ShophandelTest {
         // Empfaenger, der Besitzer zahlt den vollen Preis - und genau den bekommt er
         // zurueck.
         hand.nimmtHoechstens = 0;
-        var werte = Shopwerte.VORGABE.mitSpielerVerkauf(10);
+        var werte = OHNE_GEBUEHR.mitSpielerVerkauf(10);
 
         var ausgang = handle(spielershop(), Handelsart.KUNDE_VERKAUFT, false, werte);
 
@@ -861,7 +873,7 @@ class ShophandelTest {
         // dann oeffnete die Tuer an einer Stelle, an der nicht gehandelt wird.
         Kistenshop shop = spielershop();
         ablage.schreibe(shop);
-        var handel = handel(Shopwerte.VORGABE);
+        var handel = handel(OHNE_GEBUEHR);
 
         assertEquals(shop, handel.amSchild(WELT, 60, 71, 6));
         assertNull(handel.amSchild(WELT, 99, 99, 99));
@@ -921,7 +933,7 @@ class ShophandelTest {
     }
 
     private Shopbuch buch() {
-        return buch(stand(Shopwerte.VORGABE));
+        return buch(stand(OHNE_GEBUEHR));
     }
 
     private Shopbuch buch(Wirtschaftsstand wirtschaft) {
@@ -1005,7 +1017,7 @@ class ShophandelTest {
 
     private Shophandel.Ausgang handle(Kistenshop shop, Handelsart art,
             boolean ganzerStapel) {
-        return handle(shop, art, ganzerStapel, Shopwerte.VORGABE);
+        return handle(shop, art, ganzerStapel, OHNE_GEBUEHR);
     }
 
     private Shophandel.Ausgang handle(Kistenshop shop, Handelsart art,
@@ -1036,7 +1048,7 @@ class ShophandelTest {
         Kasse eigeneKasse = new SpeicherKasse(guthaben);
         eigeneKasse.eroeffne(KUNDE);
         eigeneKasse.eroeffne(BESITZER);
-        Wirtschaftsstand eigenerStand = stand(Shopwerte.VORGABE);
+        Wirtschaftsstand eigenerStand = stand(OHNE_GEBUEHR);
         var handel = new Shophandel(
                 new Shopbuch(eigeneAblage, new Leser(),
                         (wer, welt, x, y, z) -> true, eigenerStand, null,

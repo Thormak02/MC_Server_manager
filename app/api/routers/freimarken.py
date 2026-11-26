@@ -21,6 +21,8 @@ Marker in jeder Route.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -249,6 +251,16 @@ def freimarken_seite(request: Request, server_id: int, seite: str,
             "zeilen": freimarken_mitglied_service.liste(db, server.id),
             "rechte": freimarken_mitglied_service.rechtezeilen(db, server.id),
             "zuschlaege": freimarken_mitglied_service.zuschlaege(),
+            # DIE ABLAUFPRUEFUNG [26.11.2026]. Die Tafel darueber liest nur
+            # die LAUFENDEN - eine abgelaufene Mitgliedschaft verschwand dort
+            # also genau in dem Augenblick, in dem ihr Recht zu entziehen
+            # waere. Diese zwei Listen beantworten die beiden Fragen, die
+            # bisher niemand stellen konnte: Was laeuft bald ab (damit eine
+            # Verlaengerung angesprochen werden kann), und welches Recht ist
+            # gesetzt, ohne noch gedeckt zu sein.
+            "bald": freimarken_mitglied_service.laeuft_bald_ab(db, server.id),
+            "entziehen": freimarken_mitglied_service.zu_entziehen(
+                db, server.id),
         }
     elif beschreibung.get("quelle"):
         pass   # eine Quelle, die es noch nicht gibt - die Vorlage sagt es dem Nutzer
@@ -501,6 +513,36 @@ async def freimarken_mitglied_beenden(request: Request, server_id: int,
     return RedirectResponse(url=ziel, status_code=303)
 
 
+def _bis_aus_formular(roh: str) -> datetime | None:
+    """Das Datum aus dem Formular als letzter gueltiger Augenblick.
+
+    DER TAG GEHOERT DEM SPIELER. ``bis`` ist der LETZTE GUELTIGE Augenblick
+    (``laeuft`` vergleicht mit ``>``), und ein Datumsfeld gibt nur den Tag.
+    Wer "bis 31.12." eintraegt, meint den ganzen 31.12. - daraus wird
+    23:59:59 und nicht 00:00. Ohne diese Umrechnung waere der bezahlte letzte
+    Tag verloren, und das ist der Fehler, den ein Foerderer merkt.
+
+    Gerechnet wird in UTC, wie alles in dieser Datenbank. Fuer einen Betreiber
+    in Mitteleuropa endet der Tag damit eine bis zwei Stunden nach
+    Mitternacht seiner Uhr - also zugunsten des Spielers, und das ist die
+    Richtung, in der eine Rundung hier gehoert.
+
+    Ein leeres Feld gibt ``None`` und heisst "laeuft weiter". Ein unlesbares
+    Datum ebenso: Ein Wurf waere hier eine Absage fuer einen Tippfehler in
+    einem FREIWILLIGEN Feld, und eine unbefristete Mitgliedschaft laesst sich
+    jederzeit beenden.
+    """
+    text = (roh or "").strip()
+    if not text:
+        return None
+    try:
+        tag = datetime.strptime(text, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return tag.replace(hour=23, minute=59, second=59,
+                       tzinfo=timezone.utc)
+
+
 @router.post("/freimarken/{server_id}/mitglieder")
 async def freimarken_mitglied_anlegen(request: Request, server_id: int,
                                       db: Session = Depends(get_db)):
@@ -525,7 +567,7 @@ async def freimarken_mitglied_anlegen(request: Request, server_id: int,
             spieler_name=str(form.get("name") or ""),
             zuschlag_name=str(form.get("zuschlag") or ""),
             zuschlag_zahl=str(form.get("zahl") or ""),
-            bis=None,
+            bis=_bis_aus_formular(str(form.get("bis") or "")),
             zahlung_herkunft=str(form.get("herkunft") or ""),
             zahlung_beleg=str(form.get("beleg") or ""),
             grund=str(form.get("grund") or ""),
@@ -541,11 +583,18 @@ async def freimarken_mitglied_anlegen(request: Request, server_id: int,
                  + "." + str(eintrag.zuschlag_zahl)
                  + freimarken_service.TRENNER_GRUND
                  + (eintrag.grund or freimarken_service.OHNE_GRUND)))
+    # DIE FERTIGE ZEILE und nicht nur der Rechtename: Der Betreiber soll sie
+    # kopieren koennen. Steht da nur das Recht, setzt er es mit "set" - also
+    # dauerhaft, waehrend die Mitgliedschaft befristet ist, und die beiden
+    # widersprechen sich still.
     push_flash(request, "Eingetragen. Damit es wirkt, braucht der Spieler in der "
-                        "Rechteverwaltung des Servers das Recht "
-                        + freimarken_mitglied_service.rechtename(
-                            eintrag.zuschlag_name, eintrag.zuschlag_zahl)
-                        + " - der Manager vergibt es nicht.", "success")
+                        "Rechteverwaltung des Servers dieses Recht - der Manager "
+                        "vergibt es nicht: "
+                        + freimarken_mitglied_service.rechtebefehl(
+                            eintrag.spieler_name or eintrag.spieler_kennung,
+                            freimarken_mitglied_service.rechtename(
+                                eintrag.zuschlag_name, eintrag.zuschlag_zahl),
+                            eintrag.bis), "success")
     return RedirectResponse(url=ziel, status_code=303)
 
 

@@ -3296,8 +3296,18 @@ handel:
   #
   # Fuer alle drei gilt dasselbe:
   #
-  #   * 0 heisst: keine Gebuehr. Das ist die ausgelieferte Einstellung - erst soll der
-  #     Handel laufen, die Senke kommt spaeter.
+  #   * 0 heisst: keine Gebuehr. Bei den zwei SPIELERSHOP-Lagen stand das bis zum
+  #     26.11.2026 ab Werk so da - "erst
+  #     soll der Handel laufen, die Senke kommt spaeter". Jetzt sind es DREI Prozent,
+  #     und der Grund ist gemessen: 22.361 Mark Ueberschuss je Spieler und Tag, bei
+  #     genau EINER automatischen wiederkehrenden Senke (Ladenmiete 500/Tag, server-
+  #     weit hoechstens 1.500 - also 2 Prozent der Einnahme). Die einmaligen Senken
+  #     (Freistadt 400.000, Meerinsel 75.000) verlaengern die Anlaufstrecke und loesen
+  #     das Dauerproblem nicht; das tun nur wiederkehrende.
+  #     DER BUNDESMARKT BLEIBT BEI 0, und das ist kein Vergessen: Dort ENTSTEHT das
+  #     Geld gerade (der Staat zahlt es neu), und der Ankaufpreis ist schon der
+  #     Abzug. Eine Gebuehr darauf waere ein zweiter an derselben Stelle - wer den
+  #     Ankauf senken will, hat dafuer die Tafel in bundesmarkt.ankauf.
   #   * Erlaubt ist 0 bis 50. Ueber der Haelfte waere die Gebuehr hoeher als der Erloes,
   #     und dann verkauft niemand mehr: eine Steuer, die ihre eigene Grundlage abschafft.
   #   * Abgezogen wird sie IMMER dem, der das Geld BEKOMMT - nie als Aufschlag auf den
@@ -3308,11 +3318,11 @@ handel:
 
   # KUNDE KAUFT bei einem Spielershop (Rechtsklick). Das Geld bekommt der BESITZER, also
   # zahlt er die Gebuehr - von 1.000 Mark Umsatz bleiben ihm bei 5 Prozent 950.
-  marktgebuehr-spielershop-kauf-prozent: 0
+  marktgebuehr-spielershop-kauf-prozent: 3
 
   # KUNDE VERKAUFT an einen Spielershop (Linksklick). Das Geld bekommt der KUNDE, also
   # zahlt er die Gebuehr. Das war die Lage, die vorher als die einzige dastand.
-  marktgebuehr-spielershop-verkauf-prozent: 0
+  marktgebuehr-spielershop-verkauf-prozent: 3
 
   # KUNDE VERKAUFT an einen BUNDSHOP, also an einen Shop ohne Besitzer. Getrennt, weil es
   # etwas anderes ist: Beim Spielershop zahlt jemand etwas an den Staat, hier verkauft er
@@ -3559,7 +3569,13 @@ blockbuch:
   # Minute durch sein Haus laeuft, oeffnet ein Dutzend Tueren, und niemand fragt je
   # danach. Gib es der Welt, in der die Frage "wer war in meiner Truhe" wirklich
   # gestellt wird.
-  taten: [setzen, abbauen, abgewiesen]
+  #
+  # "sprengen" steht hier aus dem UMGEKEHRTEN Grund wie "benutzen" fehlt: Eine
+  #   Sprengung ist selten und immer interessant - und sie ist die Tat, fuer die es
+  #   /freimarken blockbuch zurueck ueberhaupt gibt. Ohne sie schriebe das Buch von
+  #   einem TNT-Grief keine Zeile, und der Rueckweg waere fuer genau den Fall
+  #   wirkungslos, fuer den er gebaut wurde.
+  taten: [setzen, abbauen, sprengen, abgewiesen]
 
   # Welche Bloecke die Tat "benutzen" ueberhaupt aufschreibt.
   #
@@ -3610,6 +3626,71 @@ blockbuch:
   # vorhandenen.
   zeilen-je-abfrage: 10
 
+  # DER RUECKWEG: /freimarken blockbuch zurueck <radius> <minuten>
+  #
+  # Der groesste Eingriff, den dieses Plugin in eine fertige Welt macht - er setzt
+  #   tausend Bloecke, ohne zu fragen, wem sie gehoeren. Darum zweistufig: Der erste
+  #   Befehl zeigt Zahlen, der zweite fuehrt aus, und der ORT steht im
+  #   Bestaetigungsbefehl. Ohne ihn rollte die Bestaetigung den Kasten um die Stelle
+  #   zurueck, an der der Moderator JETZT steht - ein Schritt waehrend des Lesens
+  #   traefe den falschen Kasten, und zurueck gibt es dann nichts.
+  #
+  # Mit dem Ort im Befehl geht die Rueckrollung AUCH VON DER KONSOLE, also aus dem
+  #   Manager heraus, ohne sich einzuloggen. Spielerpflichtig ist nur die Vorschau am
+  #   eigenen Standort.
+  #
+  # Eigenes Recht: freimarken.blockbuch.zurueck. Das Lesen (freimarken.blockbuch) ist
+  #   eine Auskunft, dies hier ein Eingriff in fremdes Gebautes - zwei
+  #   Entscheidungen. Gebraucht werden BEIDE: Wer zurueckrollen darf, muss sehen
+  #   koennen, was er zurueckrollt.
+  #
+  # WAS NICHT ZURUECKKOMMT, und zwar ausdruecklich: Truheninhalt, Schildzeilen, Wesen
+  #   (Rahmen, Gemaelde), Fluessigkeiten und Kolben. Das Blockbuch haelt sie nicht,
+  #   und ein Rueckweg, der sie erfindet, ist schlimmer als einer, der sie weglaesst.
+  #   Eine Truhe kommt LEER an ihre Stelle zurueck.
+  rueckweg:
+    # Wie weit ein Rueckweg hoechstens reicht, in Bloecken um den Mittelpunkt.
+    # Erlaubt ist 1 bis 250.
+    #
+    # Fuenfzig, weil ein Grief fast immer oertlich ist: ein gesprengtes Haus, eine
+    #   abgeholzte Allee, eine ausgeraeumte Wand. Die Grenze faengt die Null, die aus
+    #   einer 50 eine 500 macht - ein Kasten mit Radius 500 hat ueber eine Milliarde
+    #   Bloecke, und die Abfrage dahinter liefe ueber die ganze Tabelle.
+    #
+    # Radius 0 ist im BEFEHL erlaubt und heisst der eine Block in der Mitte. Hier
+    #   waere eine 0 dagegen die stille Form von "der Befehl findet nie etwas", und
+    #   darum wird sie beklagt.
+    hoechster-radius: 50
+
+    # Wie weit ein Rueckweg hoechstens zurueckgreift, in Minuten. Erlaubt ist 1 bis
+    # 525600 (ein Jahr).
+    #
+    # Ein Tag, weil eine Beschwerde so lange braucht, um anzukommen: Wer morgens
+    #   liest, dass nachts etwas passiert ist, kommt mit einem Tag hin. Laenger ist
+    #   selten gemeint und trifft schnell auch das, was andere seither rechtmaessig
+    #   gebaut haben.
+    #
+    # Die echte Grenze ist ohnehin blockbuch.aufbewahrung-tage - was weg ist, kommt
+    #   nicht zurueck.
+    hoechste-minuten: 1440
+
+    # Wie viele Zeilen EIN Lauf hoechstens verarbeitet. Erlaubt ist 1 bis 50000.
+    #
+    # DAS IST EIN RIEGEL UND KEINE BREMSE: Darueber sagt der Befehl AB und rollt
+    #   nichts. Ein Lauf in Haeppchen waere nicht bloss unvollstaendig, er waere
+    #   FALSCH - der Rueckweg nimmt je Block die AELTESTE Zeile, weil sie den
+    #   Zustand traegt, der wiederkommen soll. Schneidet die Grenze zwischen zwei
+    #   Zeilen desselben Blocks, nimmt dieser Lauf die aeltere und merkt sie, und der
+    #   naechste stellt dann den ZWISCHENSTAND her. Verkleinern muss darum der
+    #   Betreiber: Radius oder Fenster.
+    #
+    # Fuenftausend, weil der Lauf im HAUPTFADEN des Spielservers setzt - dort wird
+    #   ein Befehl ausgefuehrt. Fuenftausend setBlockData ohne Physik sind ein kurzes
+    #   Stocken; fuenfzigtausend waeren ein Stillstand, und zwar einer, den der
+    #   Betreiber selbst ausloest, waehrend er einen Schaden behebt. Eine TNT-Ladung
+    #   reisst ein paar hundert Zeilen, ein gesprengtes Haus selten mehr als tausend.
+    hoechste-bloecke: 5000
+
   # JE WELT eine eigene Liste - sie gilt STATT der Vorgabe und nicht zusaetzlich.
   #
   # Eine Welt, die hier nicht steht, folgt der Vorgabe oben. Das ist Absicht: Eine neu
@@ -3620,7 +3701,7 @@ blockbuch:
     # Die Marktstadt ist die eine Welt, in der die Truhenfrage wirklich gestellt wird:
     # Hier stehen die Laeden, hier liegt fremde Ware, und hier ist "wer war in meiner
     # Kiste" der ganze Zweck des Buchs.
-    marktstadt: [setzen, abbauen, benutzen, abgewiesen]
+    marktstadt: [setzen, abbauen, benutzen, sprengen, abgewiesen]
     # Der Nether und das End sind ausgenommen: Dort baut niemand dauerhaft, es gibt
     # keine Parzellen, und eine Zeile je abgebautem Netherrack ist die groesste
     # Schreiblast fuer die geringste Frage.

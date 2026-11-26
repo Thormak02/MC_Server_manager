@@ -90,6 +90,7 @@ import de.freimarken.kern.SpeicherStrafen;
 import de.freimarken.kern.Meldeablage;
 import de.freimarken.kern.Meldebuch;
 import de.freimarken.kern.Einsichtsstand;
+import de.freimarken.kern.Rueckweggrenzen;
 import de.freimarken.kern.Strafablage;
 import de.freimarken.kern.Strafbuch;
 import de.freimarken.kern.Teamablage;
@@ -950,6 +951,20 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * dann "ist abgeschaltet" sagen koennen, und dafuer braucht er die Werte.
      */
     private Blockbuchwerte blockbuchwerte = Blockbuchwerte.VORGABE;
+
+    /**
+     * Was eine Rueckrollung hoechstens anfassen darf - Schritt 16c.
+     *
+     * <p>Ein eigenes Feld neben {@code blockbuchwerte} und nicht darin - die
+     * Begruendung steht im Kopf von {@link Rueckweggrenzen}: Jene Werte fragt die
+     * Wache bei jedem Blockereignis, diese liest ein Befehl.
+     *
+     * <p>Mit der Vorgabe vorbelegt und nicht mit {@code null}: Der Blockbuchzweig
+     * entsteht im Befehlsereignis, und das kann vor dem ersten Neuladen liegen.
+     * Ein {@code null} waere dort eine Ausnahme mitten im Befehl; die Vorgabe ist
+     * die enge Richtung und darum harmlos.
+     */
+    private Rueckweggrenzen rueckweggrenzen = Rueckweggrenzen.VORGABE;
     private SpielzeitBefehle spielzeitBefehle;
     private Stadtgrenze grenze;
     /**
@@ -1612,6 +1627,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // sonst unloeschbar, weil niemand mehr aufraeumt. Sie haengt am Spielzeittakt und
         // nicht an der Wache darunter, genau aus diesem Grund.
         blockbuchwerte = gelesen.werte();
+        rueckweggrenzen = gelesen.grenzen();
         blockraeumung = new Blockraeumung(blockbuchablage, gelesen.werte(), wirtschaft,
                 uhr, getLogger());
         if (!gelesen.werte().schreibtIrgendwo()) {
@@ -2967,6 +2983,36 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     /**
+     * Der Baum von {@code /freimarken blockbuch} samt Rueckrollzweig.
+     *
+     * <p>HIER zusammengesetzt und nicht in {@link BlockBefehle}: Jene Klasse nimmt
+     * acht Werte, und der Rueckrollzweig braucht vier weitere - die Rueckrollung,
+     * die Grenzen, eine Uhr und das Protokoll. Eingehaengt wird mit
+     * {@code .then(...)}, genau dem Muster, mit dem der Blockbuchzweig selbst in
+     * den Baum von {@code /freimarken} kommt.
+     *
+     * <p>Beides entsteht im BEFEHLSEREIGNIS und nicht in {@code onEnable}: Die
+     * Werte, die beide Zweige brauchen, stehen in Feldern, die
+     * {@code richteBlockbuchEin} fuellt. Ein Feld fuer den fertigen Zweig waere
+     * ein zweiter Ort, an dem er entstehen koennte.
+     *
+     * <p><b>Ein NEULADEN fasst diese Werte nicht an</b>, und das sagt Tafel 31cw:
+     * Jener Leser laeuft nur beim Start, und die drei Rueckweggrenzen stehen darum
+     * in {@code OHNE_NEULADEZEILE}. Wer sie aendert, startet neu - die Berichtszeile
+     * des Lesers sagt es ausdruecklich.
+     */
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<
+            io.papermc.paper.command.brigadier.CommandSourceStack> blockbuchzweig() {
+        return BlockBefehle.ueberBukkit(blockbuchablage, blockbuchwerte,
+                        wirtschaft, sprache, getLogger()).blockbuch()
+                .then(new RueckrollBefehle(
+                        Rueckrollung.ueberBukkit(blockbuchablage,
+                                rueckweggrenzen, getServer(), getLogger()),
+                        blockbuchwerte, sprache, uhr::instant, getLogger())
+                        .zurueck());
+    }
+
+    /**
      * Baut den Befehlsbaum von {@code /freimarken} - im Ereignis, nicht im onEnable.
      *
      * <p>Seit dem 06.11.2026 steht der Baum in {@link BundBefehle} und nicht mehr
@@ -2999,8 +3045,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // fertigen Zweig waere ein zweiter Ort, an dem er entstehen koennte.
         return new BundBefehle(sprache, stand,
                 wirtschaft, spielzeitBefehle.spielzeit(),
-                BlockBefehle.ueberBukkit(blockbuchablage, blockbuchwerte, wirtschaft,
-                        sprache, getLogger()).blockbuch(),
+                blockbuchzweig(),
                 (empfaenger, wer) -> zeigeWelt(empfaenger),
                 (empfaenger, wer) -> zeigeVorgenerierung(empfaenger),
                 this::neulade,

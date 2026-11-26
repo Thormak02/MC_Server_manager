@@ -139,9 +139,146 @@ final class Blocktext {
      * Ort als die Absage darunter.
      */
     static String ortText(Blockort ort) {
-        String welt = ort.welt();
-        int doppelpunkt = welt.indexOf(':');
-        String kurz = doppelpunkt < 0 ? welt : welt.substring(doppelpunkt + 1);
-        return kurz + " " + ort.x() + "/" + ort.y() + "/" + ort.z();
+        return kurzeWelt(ort.welt()) + " " + ort.x() + "/" + ort.y() + "/" + ort.z();
+    }
+
+    /**
+     * Was die Vorschau zeigt - oder warum es keine gibt.
+     *
+     * <p><b>Die ganze Verzweigung steht hier</b>, und das ist der Zweck dieser
+     * Methode: Welche Zeilen ein Moderator liest, BEVOR er in eine fertige Welt
+     * eingreift, ist die Entscheidung dieses Teils - und sie muss ohne laufenden
+     * Server pruefbar sein. Im Befehl stuende sie hinter einem Brigadier-Zweig, den
+     * keine Probe erreicht.
+     *
+     * <p>Drei Faelle, und sie sind nach Gewissheit geordnet: zuerst die ABSAGE (zu
+     * viele - dann wird nichts getan), dann das leere Ergebnis (haeufig und kein
+     * Fehler), dann die Vorschau. So liest der Moderator nie Zahlen, auf die er sich
+     * verlassen koennte, wenn der Lauf gar nicht laufen wird.
+     *
+     * @param mitte   der Mittelpunkt des Kastens
+     * @param radius  wie weit, in Bloecken
+     * @param minuten wie weit zurueck
+     * @param befehl  die fertige Zeile zum Bestaetigen, aus {@link #bestaetigung}
+     */
+    static List<Component> schauZeilen(Sprache sprache, Blockort mitte, int radius,
+                                       int minuten, Rueckrollung.Schau schau,
+                                       String befehl) {
+        if (schau.zuViele()) {
+            return sprache.bau(BlockSatz.RUECKWEG_ZU_VIELE, 1L,
+                    Einsatz.von("zeilen", schau.gelesen())
+                            .mit("grenze", schau.gelesen() - 1));
+        }
+        if (schau.leer()) {
+            return sprache.bau(BlockSatz.RUECKWEG_LEER, 1L,
+                    Einsatz.von("ort", ortText(mitte)).mit("minuten", minuten));
+        }
+        List<Component> gebaut = new java.util.ArrayList<>(sprache.bau(
+                BlockSatz.RUECKWEG_KOPF, 1L,
+                Einsatz.von("ort", ortText(mitte)).mit("radius", radius)
+                        .mit("minuten", minuten)));
+        gebaut.addAll(sprache.bau(BlockSatz.RUECKWEG_ZAHLEN, 1L,
+                Einsatz.von("zeilen", schau.gelesen())
+                        .mit("wegnehmen", schau.wegnehmen())
+                        .mit("herstellen", schau.herstellen())));
+        // Nur wenn es welche gibt. Eine Zeile "Ohne Vorzustand: 0" waere eine
+        // Warnung ohne Gegenstand, und wer sie oft liest, liest sie bald nicht mehr.
+        if (schau.ohneVorzustand() > 0) {
+            gebaut.addAll(sprache.bau(BlockSatz.RUECKWEG_ROH, 1L,
+                    Einsatz.von("anzahl", schau.ohneVorzustand())));
+        }
+        gebaut.addAll(sprache.bau(BlockSatz.RUECKWEG_BEFEHL, 1L,
+                Einsatz.von("befehl", befehl)));
+        return List.copyOf(gebaut);
+    }
+
+    /**
+     * Was der Lauf getan hat - und was er nicht konnte.
+     *
+     * <p>Die misslungenen Bloecke bekommen eine EIGENE Zeile, und nur wenn es welche
+     * gab. Dann ist sie die wichtigste des Ergebnisses: Dort steht noch, was stehen
+     * geblieben ist. In der Erfolgszeile mitgezaehlt waere sie eine Zahl unter
+     * anderen.
+     */
+    static List<Component> laufZeilen(Sprache sprache, Rueckrollung.Lauf lauf) {
+        List<Component> gebaut = new java.util.ArrayList<>(sprache.bau(
+                BlockSatz.RUECKWEG_FERTIG, 1L,
+                Einsatz.von("gesetzt", lauf.gesetzt())
+                        .mit("zeilen", lauf.gemerkt())));
+        if (lauf.misslungen() > 0) {
+            gebaut.addAll(sprache.bau(BlockSatz.RUECKWEG_MISSLUNGEN, 1L,
+                    Einsatz.von("anzahl", lauf.misslungen())));
+        }
+        return List.copyOf(gebaut);
+    }
+
+    /**
+     * Die fertige Zeile zum Bestaetigen - mit Welt und Koordinaten.
+     *
+     * <p><b>Der Ort steht darin, und das ist die Sicherung</b>, nicht Bequemlichkeit:
+     * Ohne ihn rollte die Bestaetigung den Kasten um die Stelle zurueck, an der der
+     * Moderator JETZT steht - ein Schritt waehrend des Lesens traefe den falschen
+     * Kasten, und zurueck gibt es dann nichts. Dieselbe Bauart und derselbe Grund wie
+     * bei {@code /freimarken parzelle aufgeben bestaetigen \u003Cx\u003E \u003Cz\u003E}.
+     *
+     * <p>Die WELT steht als kurzer Name darin, ohne Namensraum - so, wie sie der
+     * Betreiber in seiner config.yml geschrieben hat. Der Befehl nimmt beide Formen.
+     *
+     * <p><b>Diese Zeile und der Befehlsbaum muessen zusammenpassen</b>, und das haelt
+     * keine Tafel, sondern die Probe {@code bestaetigungszeilePasstZumBaum}: Sie
+     * tippt genau diese Zeile in den gebauten Baum. Ein umbenanntes Literal macht sie
+     * rot - ohne sie waere eine Vorschau denkbar, die eine Zeile vorgibt, die es
+     * nicht mehr gibt.
+     */
+    static String bestaetigung(Blockort mitte, int radius, int minuten) {
+        return "/freimarken blockbuch " + RueckrollBefehle.ZURUECK + " " + radius
+                + " " + minuten + " " + RueckrollBefehle.BEI + " "
+                + kurzeWelt(mitte.welt()) + " " + mitte.x() + " " + mitte.y()
+                + " " + mitte.z() + " " + RueckrollBefehle.BESTAETIGEN;
+    }
+
+    /**
+     * Der Weltname ohne Namensraum.
+     *
+     * <p>Herausgezogen aus {@link #ortText}, weil die Bestaetigungszeile ihn ohne die
+     * Koordinaten braucht - zwei Stellen, die denselben Doppelpunkt suchen, suchen
+     * ihn eines Tages verschieden.
+     */
+    static String kurzeWelt(String weltschluessel) {
+        int doppelpunkt = weltschluessel.indexOf(':');
+        return doppelpunkt < 0 ? weltschluessel
+                : weltschluessel.substring(doppelpunkt + 1);
+    }
+
+    /**
+     * Meint dieser getippte Name diese Welt?
+     *
+     * <p><b>Herausgezogen, weil sie sonst unpruefbar waere</b> [26.11.2026]: Die
+     * Weltsuche steht in {@code Rueckrollung.ueberBukkit}, also hinter einem
+     * Aufruf, den keine Probe ohne laufenden Server erreicht - eine Einspritzung
+     * (Fall V) hat gezeigt, dass dort ein Griff gegen KEINE Probe laeuft. Was
+     * reine Textarbeit ist, gehoert darum hierher.
+     *
+     * <p>BEIDE Formen, und das ist kein Komfort: Der Befehl nimmt den kurzen
+     * Namen (Brigadiers {@code word()} kennt keinen Doppelpunkt), die Vorschau am
+     * eigenen Standort gibt dagegen {@code World.key().asString()} herein - also
+     * die lange. Eine Suche, die nur eine Form kennt, laesst genau einen der
+     * beiden Wege nie eine Welt finden.
+     *
+     * <p>Gross und Klein wird nicht unterschieden: Der Name kommt aus einer
+     * Befehlszeile, und ein Betreiber, der {@code Altfurt} tippt, hat sich nicht
+     * vertippt.
+     *
+     * @param weltschluessel wie {@code World.key().asString()} ihn liefert
+     * @param getippt        was in der Befehlszeile stand; {@code null} und leer
+     *                       meinen keine Welt
+     */
+    static boolean istDieseWelt(String weltschluessel, String getippt) {
+        if (weltschluessel == null || getippt == null || getippt.isBlank()) {
+            return false;
+        }
+        String sauber = getippt.trim();
+        return weltschluessel.equalsIgnoreCase(sauber)
+                || kurzeWelt(weltschluessel).equalsIgnoreCase(sauber);
     }
 }

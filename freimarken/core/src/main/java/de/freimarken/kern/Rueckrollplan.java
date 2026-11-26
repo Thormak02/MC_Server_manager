@@ -206,4 +206,53 @@ public final class Rueckrollplan {
         }
         return ohne;
     }
+
+    /**
+     * Der Kasten um einen Mittelpunkt, geklemmt an der Welthoehe.
+     *
+     * <p>Hier und nicht im Befehl: Es ist reine Rechnerei, und zwar die mit dem
+     * Randfall. Die Hoehe wird GEKLEMMT, der Radius in X und Z nicht - unten und
+     * oben hat eine Welt eine Grenze, in der Flaeche nicht. Ohne die Klemmung
+     * stuende in der Vorschau ein Kasten, dessen oberes Drittel es nicht gibt, und
+     * der Betreiber rechnete mit Zeilen, die nie kommen koennen.
+     *
+     * <p><b>Die Klemmung muss mit negativen Hoehen rechnen</b>, und das ist kein
+     * Randfall dieses Servers, sondern der Normalfall: Altfurt ist eine flache
+     * Welt, ihr Boden liegt bei y -61, die Unterkante bei -64. Ein Rueckweg mit
+     * Radius 50 um den Boden reicht nach unten weit unter die Welt - und genau
+     * dort schneidet diese Rechnung.
+     *
+     * @param mitte  der Mittelpunkt; seine Welt gilt fuer den ganzen Kasten
+     * @param radius wie weit in jede Richtung, in Bloecken; 0 ist der eine Block
+     * @param unten  die Weltunterkante ({@code World.getMinHeight})
+     * @param oben   die Weltoberkante ({@code World.getMaxHeight}) - EINGESCHLOSSEN
+     *               wird {@code oben - 1}, denn jene Zahl ist die erste Hoehe, die
+     *               es NICHT mehr gibt
+     */
+    public static Quader kastenUm(Blockort mitte, int radius, int unten, int oben) {
+        if (mitte == null) {
+            throw new IllegalArgumentException("Ein Kasten ohne Mittelpunkt");
+        }
+        if (radius < 0) {
+            throw new IllegalArgumentException("Ein Radius von " + radius
+                    + " Bloecken ist keiner - 0 ist der eine Block in der Mitte");
+        }
+        if (unten >= oben) {
+            throw new IllegalArgumentException("Eine Welt von " + unten + " bis "
+                    + oben + " hat keine Hoehe");
+        }
+        int vonY = Math.max(mitte.y() - radius, unten);
+        int bisY = Math.min(mitte.y() + radius, oben - 1);
+        // Liegt der Mittelpunkt selbst ausserhalb der Welt, kreuzen sich die beiden
+        // Zahlen. Der Quader sortiert sie dann stumm um und stuende auf dem Kopf -
+        // also hier ein Wurf: Ein Mittelpunkt unter der Welt ist kein Vertipper des
+        // Betreibers, sondern ein Ort, den es nicht gibt.
+        if (vonY > bisY) {
+            throw new IllegalArgumentException("Der Mittelpunkt liegt bei y "
+                    + mitte.y() + " und damit ausserhalb der Welt (" + unten
+                    + " bis " + (oben - 1) + ")");
+        }
+        return new Quader(mitte.x() - radius, vonY, mitte.z() - radius,
+                mitte.x() + radius, bisY, mitte.z() + radius);
+    }
 }
