@@ -538,8 +538,18 @@ public final class Schutzwache implements Listener {
             return;
         }
         letzteKlage = jetzt;
-        Bukkit.getLogger().warning("[Freimarken] Besitz nicht nachsehbar, es wird abgelehnt: "
-                + fehler.getMessage());
+        // DER FEHLERTYP GEHOERT IN DIE ZEILE, und das ist gemessen: Ein
+        // NoSuchElementException aus einem Programmfehler stand hier als "Besitz
+        // nicht nachsehbar: No value present" - also als Netzproblem. Der
+        // Betreiber haette die Datenbank neu gestartet, den Fehler nie gemeldet,
+        // und der Schutz haette solange ALLES abgebrochen.
+        //
+        // Die Ablage wirft IllegalStateException mit "Datenbankfehler beim ..."
+        // (MariaLager.weiterreichen). JEDER ANDERE TYPNAME IST EIN FEHLER IM
+        // PLUGIN, und am Namen ist das zu sehen.
+        Bukkit.getLogger().warning("[Freimarken] Besitz nicht nachsehbar, es wird"
+                + " abgelehnt: " + fehler.getClass().getSimpleName()
+                + ": " + fehler.getMessage());
     }
 
     /**

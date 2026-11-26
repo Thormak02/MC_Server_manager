@@ -110,7 +110,8 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                                Lotteriewerte lotterie,
                                Wettbewerbswerte wettbewerb, Teamwerte team,
                                Meldewerte melden, Strafwerte strafen,
-                               Einsichtswerte einsehen) {
+                               Einsichtswerte einsehen,
+                               Weltregelwerte weltregeln) {
 
     /**
      * Die Schluessel in der Einstellungsdatei - hier und nicht an jeder Stelle, die klagt.
@@ -183,7 +184,8 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
             Angelwerte.VORGABE, Wolkenwerte.VORGABE, Rangwerte.VORGABE,
             Wechselwerte.VORGABE, Muenzwerte.VORGABE, Anmeldewerte.VORGABE,
             Lotteriewerte.VORGABE, Wettbewerbswerte.VORGABE, Teamwerte.VORGABE,
-            Meldewerte.VORGABE, Strafwerte.VORGABE, Einsichtswerte.VORGABE);
+            Meldewerte.VORGABE, Strafwerte.VORGABE, Einsichtswerte.VORGABE,
+            Weltregelwerte.VORGABE);
 
     public Wirtschaftswerte {
         if (preise == null) {
@@ -335,7 +337,22 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
+    }
+
+    /**
+     * Dieselben Werte mit anderen Weltregeln.
+     *
+     * <p>Gebraucht wird er von den Proben und von {@code uebernimm}: Beim Neuladen
+     * wird alles aus der Datei genommen, und der Wither ist der Weg, einen
+     * einzelnen Wert davon auszunehmen.
+     */
+    public Wirtschaftswerte mitWeltregeln(Weltregelwerte andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
+                rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
+                handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
+                wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
+                einsehen, andere);
     }
 
     /** Dieselben Werte mit anderem Startguthaben. */
@@ -344,7 +361,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderer Parzellenhoechstzahl. */
@@ -353,7 +370,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderer Gruppengroesse. */
@@ -362,7 +379,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderer Rangwerbung. */
@@ -371,7 +388,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 andere, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Zeitwerten. */
@@ -380,7 +397,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, andere, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Berufswerten. */
@@ -389,7 +406,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, andere, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Verdienstwerten. */
@@ -398,7 +415,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, andere, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Marktwerten. */
@@ -407,7 +424,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, andere, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Messwerten. */
@@ -416,7 +433,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, andere, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Bonuswerten. */
@@ -425,7 +442,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, andere, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Mietwerten. */
@@ -434,7 +451,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, andere,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Handelsgebuehren. */
@@ -443,7 +460,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 andere, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Zahlen der Freien Truhe. */
@@ -452,7 +469,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, andere, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Zahlen der Freistaedte. */
@@ -461,7 +478,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, andere, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Zahlen der Meerinseln. */
@@ -470,7 +487,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, andere, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit einer anderen Angeltabelle. */
@@ -479,7 +496,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, andere, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Wolkenwerten. */
@@ -488,7 +505,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, andere, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit einer anderen Anmeldung. */
@@ -497,7 +514,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, andere, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderem Muenzhauskatalog. */
@@ -506,7 +523,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, andere, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Kursen und anderem Wechseldeckel. */
@@ -515,7 +532,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 andere, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit einer anderen Rangleiter. */
@@ -524,7 +541,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, andere,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit einer anderen Lotterie. */
@@ -533,7 +550,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, andere, wettbewerb, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit einem anderen Angelwettbewerb. */
@@ -542,7 +559,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, andere, team, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Teamrollen. */
@@ -551,7 +568,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, andere, melden, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderem Meldewesen. */
@@ -560,7 +577,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, andere, strafen,
-                einsehen);
+                einsehen, weltregeln);
     }
 
     /** Dieselben Werte mit anderer Einsichtsfrist. */
@@ -569,7 +586,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden,
-                strafen, andere);
+                strafen, andere, weltregeln);
     }
 
     /** Dieselben Werte mit anderen Strafen. */
@@ -578,7 +595,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
                 wechsel, muenzhaus, anmeldung, lotterie, wettbewerb, team, melden,
-                andere, einsehen);
+                andere, einsehen, weltregeln);
     }
 
     /** Ob aus dieser Zahl ein Startguthaben werden kann; 0 heisst: mit nichts anfangen. */

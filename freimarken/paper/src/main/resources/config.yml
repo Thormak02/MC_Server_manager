@@ -3520,6 +3520,83 @@ reisen:
   # nur lesbar.
   ankunftswelt: altfurt
 
+# WELTREGELN: was eine Welt an Zerstoerung OHNE SPIELER zulaesst.
+#
+# Der Bauschutz (Parzellen, Laeden, Freistaedte) fragt immer "darf DIESER SPIELER
+#   hier handeln". Eine TNT-Ladung hat keinen Spieler - der Zuender ist laengst weg
+#   oder war ein Creeper -, ein Lavastrom hat keinen, und ein Enderman schon gar
+#   nicht. Darum diese Liste: Sie fragt "gehoert dieser Block jemandem".
+#
+# OHNE EINTRAG GILT KEINE REGEL. Das ist Absicht und die umgekehrte Richtung als
+#   beim Blockbuch darunter: Ein Buch, das zu viel aufschreibt, kostet Platz; ein
+#   Weltschutz, der ungefragt ueberall greift, nimmt dem Spieler das Spiel. In einer
+#   Farmwelt ist TNT das Werkzeug, mit dem gearbeitet wird.
+#
+# ERLAUBTE NAMEN und ihre Wirkung - sie ist ZWEIGETEILT:
+#
+#   WELTWEIT (reine Zerstoerung; wer sie eintraegt, will keine Krater - auch nicht
+#   auf einer freien Parzelle und nicht auf dem Weg):
+#     explosion     TNT, Creeper, Feuerkugeln, Endkristalle, Betten im Nether.
+#                   Der Knall bleibt, der Schaden faellt weg.
+#     feuer         Feuer, das sich AUSBREITET oder einen Block abbrennt. NICHT das
+#                   Anzuenden - das ist eine Spielerhandlung und haengt am
+#                   Bauschutz. Erfasst auch Ranken und Pilze, die sich ausbreiten.
+#     wesen         Enderman, Ziege, Schaf, Kaninchen - jedes Wesen, das einen Block
+#                   veraendert.
+#
+#   NUR UEBER BESITZGRENZEN (Spielinhalt; ganz verbieten naehme mehr, als es dem
+#   Nachbarn gibt):
+#     kolben        Ein Kolben darf keinen Block ueber eine Besitzgrenze schieben
+#                   oder ziehen. Auf der eigenen Parzelle unangetastet.
+#     fluessigkeit  Wasser und Lava duerfen nicht in fremden Besitz fliessen. Vom
+#                   eigenen Grund auf den Weg darf es laufen - sonst funktioniert
+#                   keine Farm am Rand einer Parzelle.
+#
+# KEIN true/false, sondern Namen. Bukkit liest jedes Wort ausser true stumm als
+#   false - aus einem "explosion: ja" wuerde eine Welt ohne Schutz, ohne eine Zeile
+#   Klage. Eine Liste beklagt dagegen jeden Namen, den sie nicht kennt.
+#
+# /freimarken neuladen UEBERNIMMT diese Zeilen - anders als das Blockbuch darunter.
+#   Ein Schutz, der erst beim naechsten Serverstart wirkt, fehlt genau dann, wenn man
+#   ihn braucht.
+weltregeln:
+  # Die Vorgabe fuer jede Welt, die unten nicht steht. LEER ab Werk - siehe oben.
+  regeln: []
+
+  # JE WELT eine eigene Liste - sie gilt STATT der Vorgabe und nicht zusaetzlich.
+  #
+  # Eine Welt, die hier nicht steht, folgt der Vorgabe (also: kein Schutz). Eine
+  # Welt, die es laut welten: nicht gibt, wird beklagt - eine Zeile, die nie wirkt,
+  # sieht man an der Datei nicht.
+  welten:
+    # DIE MARKTSTADT bekommt alles: Hier stehen die Parzellen, die Laeden und die
+    # Markthalle. Ein Krater im Stadtbild ist der Schaden, den niemand zurueckbaut.
+    marktstadt: [explosion, feuer, wesen, kolben, fluessigkeit]
+    # ALTFURT ist die gebaute Stadt - dort soll nichts von allein kaputtgehen.
+    #
+    # OHNE kolben UND fluessigkeit, und das ist kein Vergessen: Die zwei fragen
+    # eine BESITZGRENZE, und ein Parzellenraster gibt es nur in der Marktstadt
+    # (die Weltwache bekommt genau EINE Parzellenwelt). Hier eingetragen waeren
+    # sie zwei Zeilen, die dastehen und nichts tun - genau das, was beim Namen
+    # einer unbekannten Welt beklagt wird. Gegen Spielerhand schuetzt in Altfurt
+    # ohnehin der Bauschutz, nicht diese Liste.
+    altfurt: [explosion, feuer, wesen]
+    # DIE FREISTAEDTE und die beiden Werder: gebaut wird dort auch, nur ohne das
+    # Parzellenraster. Kolben und Fluessigkeit brauchen eine Besitzgrenze, die es
+    # dort nicht gibt - sie stehen darum nicht drin und wuerden nichts tun.
+    freistaedte: [explosion, feuer, wesen]
+    hafenwerder: [explosion, feuer, wesen]
+    wolkenwerder: [explosion, feuer, wesen]
+    # DIE FARMWELTEN bleiben FREI: Dort ist TNT das Werkzeug, mit dem gearbeitet
+    # wird, und zurueckgesetzt wird sie ohnehin mit jeder MC-Fassung.
+    kornmark: []
+    vogtei: []
+    stollenberg: []
+    hochwald: []
+    # Nether und End: gewoehnliches Minecraft, und niemand baut dort dauerhaft.
+    nether: []
+    end: []
+
 # Das Blockbuch (Moderation): wer wann wo was getan hat.
 #
 # NUR BEIM START GELESEN - /freimarken neuladen aendert hier nichts. Was aufgeschrieben

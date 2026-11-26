@@ -74,7 +74,7 @@ class WirtschaftsstandTest {
                 Wechselwerte.VORGABE, Muenzwerte.VORGABE, Anmeldewerte.VORGABE,
                 Lotteriewerte.VORGABE, Wettbewerbswerte.VORGABE, Teamwerte.VORGABE,
                 Meldewerte.VORGABE, Strafwerte.VORGABE,
-                Einsichtswerte.VORGABE);
+                Einsichtswerte.VORGABE, Weltregelwerte.VORGABE);
     }
 
     /**

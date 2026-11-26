@@ -18,6 +18,7 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.Server;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.BlockData;
@@ -640,6 +641,16 @@ final class Serverprobe {
                     // schuetzt, baut daraus seine Frage an die Wache - und seit die
                     // Klickproben beimKlicken wirklich durchlaufen, wird sie gefragt.
                     case "getLocation" -> new org.bukkit.Location(welt, x, y, z);
+                    // Der NACHBARBLOCK, und er kommt aus derselben Tabelle: Ein
+                    // Kolben verschiebt Bloecke, und der Zielort eines Blocks liegt
+                    // einen Schritt in Kolbenrichtung. Ohne diesen Zweig waere die
+                    // halbe Rechnung von Weltwache.kolbenUeberschreitet in keiner
+                    // Probe erreichbar.
+                    case "getRelative" -> {
+                        BlockFace seite = (BlockFace) werte[0];
+                        yield block(griff, welt, x + seite.getModX(),
+                                y + seite.getModY(), z + seite.getModZ());
+                    }
                     case "toString" -> "Blockprobe " + x + "/" + y + "/" + z;
                     case "hashCode" -> (x * 31 + y) * 31 + z;
                     case "equals" -> eigen == (werte == null ? null : werte[0]);

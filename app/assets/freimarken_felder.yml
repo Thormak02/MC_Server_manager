@@ -62,8 +62,10 @@ seiten:
     name: Welten
     hinweis: >-
       Weltgrenzen, Freistaedte, Inseln und Wolkeninseln. Der ganze Abschnitt welten wird
-      NUR BEIM START gelesen, und eine Weltgrenze wird nie nach innen geschoben.
-    bloecke: [welten, freistaedte, inseln, wolken, reisen]
+      NUR BEIM START gelesen, und eine Weltgrenze wird nie nach innen geschoben. Die
+      Weltregeln dagegen uebernimmt /freimarken neuladen sofort - sie stehen hier, weil
+      sie je Welt gelten und nicht je Spieler.
+    bloecke: [welten, weltregeln, freistaedte, inseln, wolken, reisen]
 
   - schluessel: betrieb
     name: Betrieb

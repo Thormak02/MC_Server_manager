@@ -5791,4 +5791,82 @@ class GrenzeTest {
                         + " mehr findet - dann prueft sie nichts. Mehr heisst, dass eine"
                         + " zweite Liste dazugekommen ist; die gehoert hier mitgezaehlt.");
     }
+
+    @Test
+    @DisplayName("31ef - jede Wache, die Listener umsetzt, ist auch ANGEMELDET")
+    void jedeWacheIstAngemeldet() {
+        // DIE REGEL AN EINER STELLE. Bisher hatte jede Wache ihre eigene
+        // handgeschriebene Zeile - 31an (Truhenwache), 31au, 31cr (Rangwache),
+        // 31de (Menuewache) und die Erzwache: fuenfmal dieselbe Fehlergestalt,
+        // fuenfmal eine neue Zeile hinterher. Eine Wache, die niemand von Hand
+        // eintraegt, ist damit stumm nicht angemeldet.
+        //
+        // 31cs haelt die Stufe darunter (jeder Empfaenger traegt @EventHandler),
+        // und zusammen schliessen die zwei die Luecke: gebaut, markiert UND
+        // verdrahtet. Eine Wache, die alle drei Stufen besteht, kann noch das
+        // Falsche tun - aber sie wird gerufen.
+        //
+        // Anerkannt werden die zwei Formen, die das Plugin benutzt:
+        // registerEvents(new Wache(...)) und registerEvents(wache, this) mit einer
+        // Oertlichen, die genauso heisst wie ihre Klasse, nur klein. Eine dritte
+        // Form macht diese Tafel ROT und nicht stumm gruen - das ist die richtige
+        // Richtung: Dann sieht ein Mensch nach, ob die Wache wirklich dranhaengt.
+        String plugin = plugintext();
+        var ohneAnmeldung = new java.util.TreeSet<String>();
+        var gefundene = new java.util.TreeSet<String>();
+        for (Path datei : Quellen.alle()) {
+            String text = Quellen.text(datei);
+            String name = datei.getFileName().toString().replace(".java", "");
+            if (!text.contains("implements Listener")
+                    || name.equals("FreimarkenPlugin")) {
+                continue;
+            }
+            gefundene.add(name);
+            String klein = name.substring(0, 1).toLowerCase(java.util.Locale.ROOT)
+                    + name.substring(1);
+            // IM ARGUMENT VON registerEvents UND NICHT IRGENDWO: Ein blankes
+            // "new Wache(" galt vorher als Nachweis - damit kaeme eine Wache
+            // durch, die irgendwo gebaut und nie angemeldet wird, also genau
+            // die Fehlergestalt, die diese Tafel fangen soll. Gesucht wird
+            // darum je registerEvents( ein Fenster bis zum Ende des Aufrufs.
+            boolean angemeldet = false;
+            int stelle = plugin.indexOf("registerEvents(");
+            while (stelle >= 0 && !angemeldet) {
+                String fenster = plugin.substring(stelle,
+                        Math.min(plugin.length(), stelle + 400));
+                int schluss = fenster.indexOf(", this)");
+                if (schluss > 0) {
+                    fenster = fenster.substring(0, schluss);
+                }
+                String argument = fenster.substring("registerEvents(".length())
+                        .strip();
+                angemeldet = fenster.contains("new " + name + "(")
+                        || argument.equals(klein);
+                stelle = plugin.indexOf("registerEvents(", stelle + 1);
+            }
+            if (angemeldet) {
+                continue;
+            }
+            ohneAnmeldung.add(name);
+        }
+
+        // ERST DIE ZAHL DER FUNDE, dieselbe Begruendung wie bei 31cs: Ein Suchmuster,
+        // das nichts mehr trifft, ist eine Tafel, die gruen ist, ohne etwas geprueft
+        // zu haben. Untergrenze und keine Gleichheit - jede neue Wache darf sie
+        // erhoehen.
+        assertTrue(gefundene.size() >= 29,
+                "nur " + gefundene.size() + " Wachen gefunden (" + gefundene
+                        + ") - es waren 29 am 26.11.2026. Das Muster passt offenbar"
+                        + " nicht mehr auf den Quelltext, und eine Tafel, die nur einen"
+                        + " Teil sieht, ist schlimmer als keine.");
+
+        assertEquals(java.util.Set.of(), ohneAnmeldung,
+                "Diese Klassen setzen Listener um, werden aber in FreimarkenPlugin"
+                        + " nirgends angemeldet. Sie sind gebaut, haben @EventHandler"
+                        + " und werden NIE gerufen - Bukkit meldet dazu nichts, denn"
+                        + " eine nicht angemeldete Klasse ist keine Wache, sondern"
+                        + " Quelltext. Erkannt werden new <Name>( und registerEvents("
+                        + "<name>,  - wird eine Wache auf einem dritten Weg angemeldet,"
+                        + " gehoert dieser Weg hier hinein: " + ohneAnmeldung);
+    }
 }

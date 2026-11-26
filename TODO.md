@@ -1359,6 +1359,58 @@ Nebenbei berichtigt: Entscheidung E8 des Plans ("kein GPL-Code im eigenen Plugin
 Dateien des `paper`-Moduls importieren `org.bukkit`/`io.papermc`. Richtig ist nur,
 dass `core/` und `daten/` keine einzige Bukkit-Zeile enthalten.
 
+### FERTIG 26.11.2026: die Weltregeln - Zerstoerung OHNE Spieler
+
+Die Luecke, die der Klassenkopf der `Schutzwache` seit Monaten woertlich ankuendigt
+(*"Das sind Weltregeln, keine Spielerhandlungen, und sie gehoeren zu einem eigenen
+Schritt"*). Neun Zuhoerer, alle auf HOCH mit `ignoreCancelled`; `/freimarken neuladen`
+uebernimmt sie.
+
+- `weltregeln:` in der `config.yml`: je Welt eine Liste aus `explosion`, `feuer`,
+  `wesen`, `kolben`, `fluessigkeit`. **Ab Werk LEER** - die offene Richtung, anders
+  als beim Blockbuch darunter. Kein `true`/`false`, sondern Namen; ein unbekannter
+  wird mit dem getippten Wort beklagt.
+- WELTWEIT: `explosion`, `feuer`, `wesen` - auch auf freier Parzelle und auf dem Weg.
+  UEBER BESITZGRENZEN und **einseitig**: `kolben`, `fluessigkeit` (vom eigenen Grund
+  nach draussen ist erlaubt, sonst funktioniert keine Farm am Parzellenrand).
+- Marktstadt alle fuenf; Altfurt, Freistaedte, Hafenwerder, Wolkenwerder die drei
+  weltweiten; Kornmark, Vogtei, Stollenberg, Hochwald, Nether, End leer.
+- **52 neue Proben, 5.692 gruen** (Kern 2.367, Plugin 3.325). **33 Einspritzungen,
+  alle gefangen.**
+- Neue Tafel **31ef**: jede Klasse, die `Listener` umsetzt, muss in `FreimarkenPlugin`
+  im Argument eines `registerEvents(` stehen. Loest die fuenf handgeschriebenen
+  Zeilen (31an, 31au, 31cr, 31de, Erzwache) durch EINE Regel ab - 29 Wachen.
+
+**Gefunden und behoben** (Gegenlesen mit vier unabhaengigen Lesarten):
+
+- `wesen` verwarf fallenden **Sand**: `EntityChangeBlockEvent` traegt auch das
+  Landen eines `FallingBlock`. In Marktstadt UND Altfurt kam Sand, Kies, Betonpulver,
+  Amboss und Drachenei beim Bauen nie unten an - auf der eigenen Parzelle.
+- Der **Kolbenrueckzug** rechnete mit `getDirection()`. Gemessen an der benutzten
+  paper-api: `getRetractLocation()` ist `getBlock().getRelative(getDirection(), 2)`
+  - die Bloecke wandern dagegen. Jetzt `getOppositeFace()`.
+- **Bilderrahmen und Gemaelde** fielen trotz `explosion`: sie sind Wesen und stehen
+  in keiner `blockList`. Neunter Zuhoerer `HangingBreakEvent`, nur bei Ursache
+  `EXPLOSION` (`PHYSICS` traegt den Rahmen, dessen Wand jemand abbaut).
+- `Weltregel.giltWeltweit()` hatte **keinen Verbraucher** - die Zweiteilung stand
+  allein darin, welcher Zuhoerer `uebergriff` ruft. Jetzt zwei Artriegel, die bei
+  falscher Verdrahtung werfen.
+- Altfurt hatte `kolben` und `fluessigkeit`, die dort **nie wirken koennen** (das
+  Raster liegt nur in der Marktstadt). Der Leser beklagt das jetzt und nimmt die
+  wirkungslose Regel heraus; sonst behauptete `greift` einen Schutz, den es nicht gibt.
+- `uebergriff` meldete JEDEN Programmfehler als "Besitz nicht nachsehbar", also als
+  Netzproblem - ein `NoSuchElementException` las sich wie ein Datenbankausfall. Der
+  **Fehlertyp** steht jetzt in der Klage, in `Weltwache` UND `Schutzwache`.
+- Der Erklaerkopf des Blockbuchs stand nach dem Einsetzen ueber `weltregeln:` und
+  sagte dort "NUR BEIM START GELESEN" - das Gegenteil. Verschoben.
+
+**Offen:**
+
+- Was **Feuer** mit einem Bilderrahmen macht, meldet Bukkit nicht als eigene Ursache.
+- Ob ein **Dorfbewohner**, der ein Feld erntet und neu bepflanzt, unter `wesen`
+  fallen soll - Frage fuer den Spieltest.
+- `kolben` und `fluessigkeit` wirken nur in der EINEN Parzellenwelt. Mehrere
+  Parzellenwelten braeuchten einen anderen Schnitt.
 ### ENTSCHIEDEN UND GEMESSEN 26.11.2026: fuenf Punkte
 
 **Spielerseite -> eigene Subdomain** (Betreiber: *"erstmal subdomain

@@ -410,6 +410,35 @@ public final class Wirtschaftsstand {
         // Einsicht anliess - ein stummes Neuladen waere genau dann stumm.
         nenneZahl(geaendert, Einsichtswerte.PFAD_DAUER,
                 alt.einsehen().dauerSekunden(), neu.einsehen().dauerSekunden());
+        // DIE WELTREGELN [Schritt 16d]: was eine Welt an Zerstoerung OHNE Spieler
+        // zulaesst - Explosionen, Feuer, Wesen, Kolben, Fluessigkeit.
+        //
+        // DREI NENNUNGEN, und die dritte ist die, die man vergisst: die Vorgabe,
+        // die LISTE der Welten, und je Welt ihre Regeln. Ohne die dritte saehe ein
+        // Betreiber, der marktstadt von [explosion] auf [explosion, feuer] aendert,
+        // keine Zeile - die Menge der Welten ist ja dieselbe geblieben. Dasselbe
+        // Muster wie bei den Teamrollen.
+        //
+        // Bei einem SCHUTZ ist der stumme Wechsel der teuerste aller Faelle: Wer
+        // "nichts geaendert" liest, haelt ihn fuer kaputt - oder glaubt ihn
+        // wirksam, obwohl die Zeile nie uebernommen wurde.
+        nenneMenge(geaendert, Weltregelwerte.PFAD_REGELN,
+                regelnamen(alt.weltregeln().vorgabe()),
+                regelnamen(neu.weltregeln().vorgabe()));
+        nenneMenge(geaendert, Weltregelwerte.PFAD_WELTEN,
+                new TreeSet<>(alt.weltregeln().jeWelt().keySet()),
+                new TreeSet<>(neu.weltregeln().jeWelt().keySet()));
+        for (var eintrag : neu.weltregeln().jeWelt().entrySet()) {
+            var vorher = alt.weltregeln().jeWelt().get(eintrag.getKey());
+            if (vorher == null) {
+                // Fuer eine NEUE Welt ist das keine Aenderung, sondern ihr erster
+                // Wert - und die Zeile darueber nennt sie schon als dazugekommen.
+                continue;
+            }
+            nenneMenge(geaendert,
+                    Weltregelwerte.PFAD_WELTEN + "." + eintrag.getKey(),
+                    regelnamen(vorher), regelnamen(eintrag.getValue()));
+        }
         // Die Wechselstube [Teil F]: zwei Kurse und der Wechseldeckel. Aus demselben
         // Grund wie die Bloecke darueber - sie werden beim Gebrauch gefragt, es wird
         // nichts gebaut und nichts angemeldet. Ohne diese drei Zeilen aenderte sich der
@@ -731,6 +760,22 @@ public final class Wirtschaftsstand {
         }
         zeilen.add(pfad + ": es gilt weiter " + gilt + ", neu gelesen wurde " + gelesen
                 + " - erst ein Neustart uebernimmt das. " + grund);
+    }
+
+    /**
+     * Die Namen einer Regelauswahl, sortiert - fuer {@link #nenneMenge}.
+     *
+     * <p>Sortiert und nicht in der Reihenfolge der Aufzaehlung: Jene Methode
+     * vergleicht Mengen und nennt "dazu" und "weg"; eine unsortierte Menge
+     * machte die Zeile bei jedem Start anders lesbar, obwohl sich nichts geaendert
+     * hat.
+     */
+    private static Set<String> regelnamen(Set<Weltregel> auswahl) {
+        Set<String> namen = new TreeSet<>();
+        for (Weltregel regel : auswahl) {
+            namen.add(regel.schluessel());
+        }
+        return namen;
     }
 
     /**

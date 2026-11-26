@@ -1150,7 +1150,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // braucht weder Datenbank noch Welt - und das Startguthaben steckt darin, das die
         // Kasse zum Bauen braucht. Die Reihenfolge "Ablage vor den Welten" bleibt davon
         // unberuehrt; die Begruendung unten gilt weiter.
-        var werte = Wirtschaftsliste.ausKonfiguration(getConfig(), berufe);
+        var werte = lieseWirtschaft();
         werte.klagen().forEach(getLogger()::severe);
         werte.bericht().forEach(getLogger()::info);
         wirtschaft = new Wirtschaftsstand(werte.werte());
@@ -1478,6 +1478,18 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 spieler -> einsichtsstand.schaut(spieler.getUniqueId(),
                         uhr.instant()));
         getServer().getPluginManager().registerEvents(schutzwache, this);
+        // DIE WELTREGELN [Schritt 16d] - direkt neben der Schutzwache, und das ist
+        // Absicht: Sie beantwortet eine ANDERE Frage (ohne Spieler), holt sie aber
+        // aus DERSELBEN Quelle. Wer die eine findet, findet die andere.
+        //
+        // IMMER angemeldet, auch wenn gerade keine Regel greift: Die Werte kommen
+        // als Halter herein, und ein Neuladen kann eine Regel einschalten. Eine
+        // Wache, die beim Start ausgelassen wird, waere dann nicht da - und der
+        // Betreiber haette die Zeile eingetragen. Das ist der Unterschied zur
+        // Blockwache, die beim Start einmal entschieden wird.
+        getServer().getPluginManager().registerEvents(
+                new Weltwache(() -> wirtschaft.werte().weltregeln(), buch, welt,
+                        getLogger()), this);
         getLogger().info("Ladenschutz aktiv: " + ladenverzeichnis.anzahl()
                 + " Einheiten in " + ladenwelt + " - darin baut, bearbeitet und oeffnet"
                 + " Kisten nur der Mieter. Ein freier Stand ist fuer JEDEN gesperrt."
@@ -1648,6 +1660,38 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + " Abgewiesene Versuche kommen mit, wo sie eingetragen sind: Ein Dutzend"
                 + " davon an einer fremden Parzelle ist der Fund, bei dem nichts"
                 + " passiert ist.");
+    }
+
+    /**
+     * Die Wirtschaftswerte samt WELTREGELN - fuer den Start und fuer das
+     * Neuladen.
+     *
+     * <p>EINE Methode fuer beide Wege, und das ist kein Geschmack: Es gibt zwei
+     * Aufrufstellen, und haette jede ihren eigenen Rumpf, waere eine von ihnen
+     * irgendwann anders. Ist das die des Neuladens, aendert ein Betreiber den
+     * Schutz einer Welt und nichts geschieht - der schlimmste der stillen
+     * Faelle, weil er den Betreiber in Sicherheit wiegt.
+     *
+     * <p>Die Weltregeln liest ein EIGENER Leser: Er braucht die Weltnamen und den
+     * Schluesselmacher, und die Wirtschaftsliste kennt beide nicht. Die Namen
+     * kommen aus der DATEI und nicht aus den gebauten Welten, denn diese
+     * Methode laeuft, bevor die Welten stehen - und die Klage sagt ohnehin
+     * "steht nicht in welten:", also ueber die Datei.
+     */
+    private Wirtschaftsliste.Ergebnis lieseWirtschaft() {
+        var gelesen = Wirtschaftsliste.ausKonfiguration(getConfig(), berufe);
+        var abschnitt = getConfig().getConfigurationSection("welten");
+        var namen = abschnitt == null ? java.util.Set.<String>of()
+                : abschnitt.getKeys(false);
+        var regeln = Weltregelliste.ausKonfiguration(getConfig(), namen,
+                this::weltschluessel, MARKTSTADT);
+        var klagen = new java.util.ArrayList<>(gelesen.klagen());
+        klagen.addAll(regeln.klagen());
+        var bericht = new java.util.ArrayList<>(gelesen.bericht());
+        bericht.addAll(regeln.bericht());
+        return new Wirtschaftsliste.Ergebnis(
+                gelesen.werte().mitWeltregeln(regeln.werte()),
+                java.util.List.copyOf(klagen), java.util.List.copyOf(bericht));
     }
 
     /**
@@ -3497,7 +3541,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Das LAUFENDE Verzeichnis und nicht das der Datei: Gegen die Datei geprueft
         // ginge hoechstens-grundberufe: 7 durch, sobald die Datei sieben Berufe nennt -
         // der laufende Server kennt sechs, und der siebte Platz ist nie fuellbar.
-        var gelesen = Wirtschaftsliste.ausKonfiguration(getConfig(), berufe);
+        var gelesen = lieseWirtschaft();
 
         if (!gelesen.klagen().isEmpty()) {
             lehneAb(empfaenger, wer, gelesen.klagen());

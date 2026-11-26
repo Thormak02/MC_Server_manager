@@ -353,7 +353,13 @@ final class Wirtschaftsliste {
                 raenge.werte(), wechsel.werte(), muenzhaus.werte(),
                 anmeldung.werte(), lotterie.werte(), wettbewerb.werte(),
                 team.werte(), melden.werte(), strafen.werte(),
-                einsehen.werte()), klagen, bericht);
+                einsehen.werte(),
+            // Die WELTREGELN liest Weltregelliste, nicht dieser Leser: Sie
+            // brauchen die Weltnamen und den Schluesselmacher, und dieser
+            // Leser kennt beide nicht. Hier steht die Vorgabe, und das Plugin
+            // setzt die gelesenen mit mitWeltregeln ein - an EINER Stelle
+            // fuer Start und Neuladen.
+            de.freimarken.kern.Weltregelwerte.VORGABE), klagen, bericht);
     }
 
     /**
