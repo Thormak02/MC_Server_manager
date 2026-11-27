@@ -132,6 +132,29 @@ enum BlockSatz implements Satz {
     TAT_SPRENGEN("blockbuch.tat.sprengen", Art.WORT),
 
     /**
+     * Das Wort fuer Feuer - Abbrennen UND Ausbreitung.
+     *
+     * <p>Ein Wort fuer zwei Ereignisse, weil die Tat eine ist: Fuer die Moderation
+     * ist beides "Feuer war hier".
+     */
+    TAT_FEUER("blockbuch.tat.feuer", Art.WORT),
+
+    /** Das Wort fuer ein Wesen, das einen Block geaendert hat. */
+    TAT_WESEN("blockbuch.tat.wesen", Art.WORT),
+
+    /**
+     * Das Wort fuer einen Kolben, der einen Block bewegt hat.
+     *
+     * <p>Im Buch steht diese Tat NUR, wenn sie angehalten wurde - siehe
+     * {@link de.freimarken.kern.Blocktat#nurAbgewiesen}. Das Wort muss darum nicht
+     * erklaeren, dass es geklappt hat; die Zeile sagt "abgewiesen" ohnehin dazu.
+     */
+    TAT_KOLBEN("blockbuch.tat.kolben", Art.WORT),
+
+    /** Das Wort fuer Wasser oder Lava - wie {@link #TAT_KOLBEN} nur angehalten. */
+    TAT_FLUESSIGKEIT("blockbuch.tat.fluessigkeit", Art.WORT),
+
+    /**
      * Die Ueberschrift der Vorschau auf eine Rueckrollung.
      *
      * <p>NENNT ALLE DREI ANGABEN - Ort, Radius und Fenster. Was der Betreiber
@@ -292,6 +315,10 @@ enum BlockSatz implements Satz {
             case ABBAUEN -> TAT_ABBAUEN;
             case BENUTZEN -> TAT_BENUTZEN;
             case SPRENGEN -> TAT_SPRENGEN;
+            case FEUER -> TAT_FEUER;
+            case WESEN -> TAT_WESEN;
+            case KOLBEN -> TAT_KOLBEN;
+            case FLUESSIGKEIT -> TAT_FLUESSIGKEIT;
         };
     }
 }

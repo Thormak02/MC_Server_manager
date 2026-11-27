@@ -3574,19 +3574,24 @@ weltregeln:
     marktstadt: [explosion, feuer, wesen, kolben, fluessigkeit]
     # ALTFURT ist die gebaute Stadt - dort soll nichts von allein kaputtgehen.
     #
-    # OHNE kolben UND fluessigkeit, und das ist kein Vergessen: Die zwei fragen
-    # eine BESITZGRENZE, und ein Parzellenraster gibt es nur in der Marktstadt
-    # (die Weltwache bekommt genau EINE Parzellenwelt). Hier eingetragen waeren
-    # sie zwei Zeilen, die dastehen und nichts tun - genau das, was beim Namen
-    # einer unbekannten Welt beklagt wird. Gegen Spielerhand schuetzt in Altfurt
-    # ohnehin der Bauschutz, nicht diese Liste.
-    altfurt: [explosion, feuer, wesen]
-    # DIE FREISTAEDTE und die beiden Werder: gebaut wird dort auch, nur ohne das
-    # Parzellenraster. Kolben und Fluessigkeit brauchen eine Besitzgrenze, die es
-    # dort nicht gibt - sie stehen darum nicht drin und wuerden nichts tun.
-    freistaedte: [explosion, feuer, wesen]
-    hafenwerder: [explosion, feuer, wesen]
-    wolkenwerder: [explosion, feuer, wesen]
+    # MIT kolben und fluessigkeit, und sie wirken hier ANDERS als in der
+    # Marktstadt: Altfurt hat keine Besitzeinheiten (art: flach, Spielmodus
+    # Abenteuer), also gibt es keine Grenze, die ueberschritten werden koennte -
+    # und darum verbieten die zwei hier schlicht. Kein Kolben bewegt einen Block,
+    # kein Wasser laeuft weiter. Das ist gewollt: Jeder Block in Altfurt ist
+    # gebaut.
+    #
+    # Wer dort doch Redstone will, nimmt kolben aus dieser Zeile.
+    altfurt: [explosion, feuer, wesen, kolben, fluessigkeit]
+    # DIE FREISTAEDTE und die beiden Werder: gebaut wird dort auch, nur mit einem
+    # anderen Raster. Eine Freistadt hat Stadtfelder und darin Grundstuecke, ein
+    # Werder hat Inselfelder, Wolkenwerder Wolkenfelder - alle drei sind
+    # Besitzeinheiten, und damit haben Kolben und Fluessigkeit hier eine Grenze,
+    # die sie ueberschreiten koennen. Sie wirken also wie in der Marktstadt: nur
+    # der Uebergriff wird abgebrochen, auf dem eigenen Grund nichts.
+    freistaedte: [explosion, feuer, wesen, kolben, fluessigkeit]
+    hafenwerder: [explosion, feuer, wesen, kolben, fluessigkeit]
+    wolkenwerder: [explosion, feuer, wesen, kolben, fluessigkeit]
     # DIE FARMWELTEN bleiben FREI: Dort ist TNT das Werkzeug, mit dem gearbeitet
     # wird, und zurueckgesetzt wird sie ohnehin mit jeder MC-Fassung.
     kornmark: []
@@ -3633,8 +3638,16 @@ blockbuch:
   #   abbauen     ein Block wurde abgebaut
   #   benutzen    ein Block wurde benutzt - Truhe, Ofen, Trichter (siehe
   #               benutzbare-bloecke weiter unten)
+  #   feuer       Feuer hat einen Block weggenommen oder sich ausgebreitet -
+  #               auch Ranken und Pilze. Derselbe Name wie bei den Weltregeln.
+  #   wesen       Ein Wesen hat einen Block geaendert - Enderman, Ziege, Schaf,
+  #               Dorfbewohner. Fallender Sand zaehlt NICHT als Wesen.
+  #   kolben      Ein Kolben hat einen Block bewegt. NUR die ANGEHALTENEN - siehe
+  #               unten.
+  #   fluessigkeit Wasser oder Lava ist auf einen Block geflossen. NUR die
+  #               ANGEHALTENEN - siehe unten.
   #   abgewiesen  AUCH die misslungenen Versuche. Das ist keine Tat, sondern ihr Ausgang:
-  #               Das Wort wirkt QUER zu den drei Taten und schaltet keine davon zu. Ein
+  #               Das Wort wirkt QUER zu allen Taten und schaltet keine davon zu. Ein
   #               Dutzend abgewiesener Versuche an einer fremden Parzelle in zwei Minuten
   #               ist der Fund, nach dem du suchst - und es ist einer, bei dem gar nichts
   #               passiert ist.
@@ -3652,7 +3665,19 @@ blockbuch:
   #   /freimarken blockbuch zurueck ueberhaupt gibt. Ohne sie schriebe das Buch von
   #   einem TNT-Grief keine Zeile, und der Rueckweg waere fuer genau den Fall
   #   wirkungslos, fuer den er gebaut wurde.
-  taten: [setzen, abbauen, sprengen, abgewiesen]
+  #
+  # KOLBEN UND FLUESSIGKEIT schreiben NUR, was der Schutz ANGEHALTEN hat, und das
+  #   ist keine Einstellung, sondern eine Eigenschaft dieser zwei Taten: Ein
+  #   Kolben in einer Farm schaltet alle anderthalb Sekunden, fliessendes Wasser
+  #   meldet jeden Fliessschritt - eine Zeile je Vorgang waeren Millionen je
+  #   Woche. Interessant ist bei diesen zwei ohnehin nur der Vorgang, den eine
+  #   Weltregel abgebrochen hat: das ist der Grief-Versuch. Im normalen Spiel
+  #   steht damit keine Zeile, im Griefing-Fall jede.
+  #
+  #   ACHTUNG: Das wirkt nur, wenn die Welt auch abgewiesen zuschaltet. Steht
+  #   kolben in einer Auswahl und abgewiesen nicht, schreibt diese Welt dafuer
+  #   NIE eine Zeile - der Start beklagt das.
+  taten: [setzen, abbauen, sprengen, feuer, wesen, kolben, fluessigkeit, abgewiesen]
 
   # Welche Bloecke die Tat "benutzen" ueberhaupt aufschreibt.
   #
@@ -3778,12 +3803,19 @@ blockbuch:
     # Die Marktstadt ist die eine Welt, in der die Truhenfrage wirklich gestellt wird:
     # Hier stehen die Laeden, hier liegt fremde Ware, und hier ist "wer war in meiner
     # Kiste" der ganze Zweck des Buchs.
-    marktstadt: [setzen, abbauen, benutzen, sprengen, abgewiesen]
-    # Der Nether und das End sind ausgenommen: Dort baut niemand dauerhaft, es gibt
-    # keine Parzellen, und eine Zeile je abgebautem Netherrack ist die groesste
-    # Schreiblast fuer die geringste Frage.
-    nether: []
-    end: []
+    # DIE MARKTSTADT schreibt ALLES mit, auch benutzen: Hier stehen die Parzellen und
+    # die Laeden, hier wird gehandelt, und hier wird gefragt "wer war in meiner Truhe".
+    #
+    # Die vier Weltursachen stehen ausdruecklich dabei. Eine Zeile je Welt gilt STATT
+    # der Vorgabe und nicht zusaetzlich - ohne sie schriebe genau die wichtigste Welt
+    # kein Feuer, kein Wesen und keinen angehaltenen Kolben auf.
+    marktstadt: [setzen, abbauen, benutzen, sprengen, feuer, wesen, kolben, fluessigkeit, abgewiesen]
+    # NETHER UND END: gewoehnliches Minecraft, niemand baut dort dauerhaft - also
+    # kein setzen und kein abbauen, sonst steht dort die haelfte der Tabelle.
+    # Aber die WELTURSACHEN schreiben mit: Wer einen Krater findet, will auch
+    # dort sehen, was passiert ist.
+    nether: [sprengen, feuer, wesen, kolben, fluessigkeit, abgewiesen]
+    end: [sprengen, feuer, wesen, kolben, fluessigkeit, abgewiesen]
 
 welten:
   # NUR BEIM START GELESEN - /freimarken neuladen aendert hier nichts. Welten entstehen

@@ -457,7 +457,16 @@ final class Weltenliste {
         return true;
     }
 
-    private static Weltangabe.Art art(String wort) {
+    /**
+     * Die Weltart zu ihrem Namen in der Datei, oder {@code null}.
+     *
+     * <p>Paketsichtbar, weil {@code FreimarkenPlugin.lieseWirtschaft} dieselbe
+     * Umwandlung braucht: Die Weltregeln werden gelesen, BEVOR die Welten entstehen,
+     * und muessen trotzdem wissen, in welcher Welt gebaut wird. Ein zweiter Parser
+     * dort haette eine andere Liste von Namen gekannt - und die Grenzregel waere
+     * genau in der Welt beklagt worden, in der sie wirkt.
+     */
+    static Weltangabe.Art art(String wort) {
         if (wort == null) {
             return null;
         }

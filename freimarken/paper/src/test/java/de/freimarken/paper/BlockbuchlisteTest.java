@@ -136,6 +136,44 @@ class BlockbuchlisteTest {
     }
 
     @Test
+    @DisplayName("kolben ohne abgewiesen ist eine Klage - die Tat kaeme nie ins Buch")
+    void kolbenOhneAbgewiesenWirdBeklagt() {
+        // DIE GEGENFORM ZU nurAbgewiesenWirdBeklagt, und derselbe Widerspruch in der
+        // anderen Richtung: kolben und fluessigkeit kommen NUR ins Buch, wenn eine
+        // Weltregel sie angehalten hat (Blocktat.nurAbgewiesen) - und "angehalten"
+        // ist genau das, was abgewiesen zuschaltet. Ohne jenes Wort schreibt die Welt
+        // fuer diese zwei nie eine Zeile, und an der Datei sieht man das nicht.
+        var gelesen = lies("""
+                blockbuch:
+                  taten: [setzen, kolben, fluessigkeit]
+                """);
+
+        assertEquals(1, gelesen.klagen().size(), gelesen.klagen().toString());
+        String klage = gelesen.klagen().get(0);
+        assertTrue(klage.contains("kolben") && klage.contains("fluessigkeit"),
+                "die Klage muss BEIDE nennen: " + klage);
+        assertTrue(klage.contains(Blocktat.NAME_ABGEWIESEN),
+                "und das fehlende Wort: " + klage);
+
+        // Die Taten bleiben in der Auswahl - geklagt, nicht verworfen: Wer abgewiesen
+        // nachtraegt, soll nicht auch noch kolben neu eintragen muessen.
+        assertTrue(gelesen.werte().vorgabe().taten().contains(Blocktat.KOLBEN));
+        // Aber geschrieben wird dafuer nichts - das ist der Grund der Klage.
+        assertFalse(gelesen.werte().schreibt("freimarken:marktstadt",
+                Blocktat.KOLBEN, false, "stone"),
+                "ohne abgewiesen kommt auch der ANGEHALTENE Kolben nicht ins Buch");
+
+        // UND DIE GEGENRICHTUNG: MIT abgewiesen keine Klage und eine Zeile.
+        var mit = lies("""
+                blockbuch:
+                  taten: [setzen, kolben, fluessigkeit, abgewiesen]
+                """);
+        assertEquals(List.of(), mit.klagen(), mit.klagen().toString());
+        assertTrue(mit.werte().schreibt("freimarken:marktstadt", Blocktat.KOLBEN,
+                false, "stone"));
+    }
+
+    @Test
     @DisplayName("Eine leere Liste ist ERLAUBT und keine Klage")
     void leereListeIstErlaubt() {
         // Der Weg, das Blockbuch ganz abzuschalten. Kein Rueckfall auf die Vorgabe - wer

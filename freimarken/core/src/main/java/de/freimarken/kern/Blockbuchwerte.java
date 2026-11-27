@@ -101,7 +101,8 @@ public final class Blockbuchwerte {
      */
     public static final Auswahl VORGABE_AUSWAHL =
             new Auswahl(EnumSet.of(Blocktat.SETZEN, Blocktat.ABBAUEN,
-                    Blocktat.SPRENGEN), true);
+                    Blocktat.SPRENGEN, Blocktat.FEUER, Blocktat.WESEN,
+                    Blocktat.KOLBEN, Blocktat.FLUESSIGKEIT), true);
 
     /**
      * Wie viele Zeilen ein Aufraeumschlag hoechstens loescht.
@@ -383,6 +384,13 @@ public final class Blockbuchwerte {
      */
     public boolean schreibt(String weltschluessel, Blocktat tat, boolean gelungen,
                             String block) {
+        // NUR DIE ANGEHALTENEN bei kolben und fluessigkeit, und der Riegel sitzt HIER:
+        // Diese Methode ist die eine Frage, die jeder Ereigniszweig stellt. Zwei Zweige
+        // mit einer eigenen Verzweigung waeren zwei Stellen, an denen die dritte
+        // vergessen wird. Die Begruendung der Sache steht an Blocktat.nurAbgewiesen.
+        if (tat != null && tat.nurAbgewiesen() && gelungen) {
+            return false;
+        }
         if (!fuerWelt(weltschluessel).schreibt(tat, gelungen)) {
             return false;
         }

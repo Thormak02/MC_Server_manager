@@ -39,13 +39,22 @@ class WeltregellisteTest {
     private static final Blockbuchliste.Schluesselmacher MACHER =
             name -> "freimarken:" + name;
 
-    /** Die eine Welt mit Parzellenraster - nur dort kann eine Grenzregel wirken. */
-    private static final String PARZELLENWELT = "marktstadt";
+    /**
+     * Die SCHLUESSEL der Welten, in denen gebaut wird.
+     *
+     * <p>Nur dort kann eine Grenzregel wirken - und das sind seit dem 27.11.2026
+     * alle Bauwelten und nicht mehr nur die Marktstadt. Altfurt steht mit darin,
+     * obwohl es keine Besitzeinheiten hat: Eine ganz gebaute Welt verbietet schlicht.
+     *
+     * <p>SCHLUESSEL und nicht Namen, weil der Leser erst umwandelt und dann prueft.
+     */
+    private static final Set<String> BAUWELTEN =
+            Set.of("freimarken:marktstadt", "freimarken:altfurt");
 
     private static Weltregelliste.Ergebnis lies(String yaml) {
         return Weltregelliste.ausKonfiguration(
                 YamlConfiguration.loadConfiguration(new StringReader(yaml)),
-                WELTEN, MACHER, PARZELLENWELT);
+                WELTEN, MACHER, BAUWELTEN);
     }
 
     @Test
@@ -240,7 +249,7 @@ class WeltregellisteTest {
                           welten:
                             marktstadt: [explosion]
                         """)),
-                WELTEN, name -> name, PARZELLENWELT);
+                WELTEN, name -> name, BAUWELTEN);
 
         assertEquals(1, gelesen.klagen().size(), "" + gelesen.klagen());
         assertTrue(gelesen.klagen().get(0).contains("KEIN FEHLER IN DEINER DATEI"),
@@ -258,7 +267,7 @@ class WeltregellisteTest {
                 () -> Weltregelliste.ausKonfiguration(
                         YamlConfiguration.loadConfiguration(
                                 new StringReader("weltregeln:\n  regeln: []\n")),
-                        WELTEN, null, PARZELLENWELT));
+                        WELTEN, null, BAUWELTEN));
 
         assertTrue(fehler.getMessage().contains("SCHLUESSEL"), fehler.getMessage());
     }
@@ -267,7 +276,7 @@ class WeltregellisteTest {
     @DisplayName("Ohne Konfiguration die Vorgabe - und sie ist leer")
     void ohneWurzelDieVorgabe() {
         var gelesen = Weltregelliste.ausKonfiguration(null, WELTEN, MACHER,
-                PARZELLENWELT);
+                BAUWELTEN);
 
         assertEquals(List.of(), gelesen.klagen());
         assertFalse(gelesen.werte().greiftIrgendwo());
@@ -312,7 +321,7 @@ class WeltregellisteTest {
             assertTrue(welten != null, "der Abschnitt welten: fehlt");
 
             var gelesen = Weltregelliste.ausKonfiguration(datei,
-                    welten.getKeys(false), MACHER, PARZELLENWELT);
+                    welten.getKeys(false), MACHER, bauweltenAus(welten));
 
             assertEquals(List.of(), gelesen.klagen(),
                     "die ausgelieferte Datei klagt: " + gelesen.klagen());
@@ -328,19 +337,23 @@ class WeltregellisteTest {
                                 + regel.schluessel());
             }
 
-            // ALTFURT BEKOMMT DIE DREI WELTWEITEN - UND NUR DIE, und diese
-            // Zeile ist der berichtigte Teil: Vorher stand hier "dort muss
-            // JEDE Regel greifen", und genau diese Zusage hat gedeckt, dass in
-            // der Datei kolben und fluessigkeit standen. Die zwei fragen eine
-            // Besitzgrenze, und ein Parzellenraster gibt es nur in der
-            // Marktstadt - sie taeten dort nichts.
-            for (Weltregel regel : Weltregel.values()) {
-                assertEquals(regel.giltWeltweit(),
-                        gelesen.werte().greift("freimarken:altfurt", regel),
-                        "Altfurt ist die gebaute Stadt, hat aber kein"
-                                + " Parzellenraster: die weltweiten Regeln"
-                                + " muessen greifen, die Grenzregeln koennen es"
-                                + " nicht - " + regel.schluessel());
+            // JEDE BAUWELT BEKOMMT ALLE FUENF [Betreiber 27.11.2026: "soll ueberall
+            // wo gebaut wird wirken"]. Zweimal berichtigt, und beide Male war die
+            // Zusage hier der eigentliche Fund: Zuerst stand "Altfurt muss JEDE
+            // Regel greifen", obwohl kolben dort nichts tat; dann "die Grenzregeln
+            // koennen es nicht", obwohl sie es seit der Umstellung koennen.
+            //
+            // In Altfurt wirken sie ANDERS - es gibt dort keine Einheiten, also
+            // verbieten sie schlicht -, aber sie wirken. Was der Leser liefert, ist
+            // in beiden Faellen dasselbe: die Regel steht in der Auswahl.
+            for (String bauwelt : List.of("freimarken:altfurt",
+                    "freimarken:freistaedte", "freimarken:hafenwerder",
+                    "freimarken:wolkenwerder")) {
+                for (Weltregel regel : Weltregel.values()) {
+                    assertTrue(gelesen.werte().greift(bauwelt, regel),
+                            bauwelt + " ist eine Bauwelt - dort muss JEDE Regel"
+                                    + " greifen, auch " + regel.schluessel());
+                }
             }
             assertFalse(gelesen.werte().greift("freimarken:kornmark",
                             Weltregel.EXPLOSION),
@@ -353,7 +366,7 @@ class WeltregellisteTest {
     }
 
     @Test
-    @DisplayName("Eine Grenzregel ohne Parzellenraster wird beklagt UND herausgenommen")
+    @DisplayName("Eine Grenzregel in einer Welt OHNE Bauland wird beklagt")
     void grenzregelOhneRasterWirdBeklagt() {
         // DIE LUECKE, DIE DAS GEGENLESEN GEFUNDEN HAT. Bei einer UNBEKANNTEN Welt
         // beklagte dieser Leser schon "eine Zeile, die nie wirkt, und an der Datei
@@ -367,31 +380,31 @@ class WeltregellisteTest {
                   regeln: []
                   welten:
                     marktstadt: [explosion, kolben]
-                    altfurt: [explosion, kolben, fluessigkeit]
+                    kornmark: [explosion, kolben, fluessigkeit]
                 """);
 
         assertEquals(1, gelesen.klagen().size(), "" + gelesen.klagen());
         String klage = gelesen.klagen().get(0);
-        assertTrue(klage.contains("altfurt"), klage);
+        assertTrue(klage.contains("kornmark"), klage);
         assertTrue(klage.contains("kolben") && klage.contains("fluessigkeit"),
                 "die Klage muss BEIDE wirkungslosen Regeln nennen: " + klage);
         assertTrue(klage.contains("marktstadt"),
-                "und sagen, wo das Raster liegt: " + klage);
+                "und sagen, wo gebaut wird: " + klage);
         assertTrue(klage.contains("[explosion]"),
                 "und was bleibt: " + klage);
 
-        assertTrue(gelesen.werte().greift("freimarken:altfurt", Weltregel.EXPLOSION),
+        assertTrue(gelesen.werte().greift("freimarken:kornmark", Weltregel.EXPLOSION),
                 "die weltweite Regel bleibt stehen - eine kaputte Angabe darf nicht"
                         + " die ganze Zeile verwerfen");
-        assertFalse(gelesen.werte().greift("freimarken:altfurt", Weltregel.KOLBEN));
-        assertFalse(gelesen.werte().greift("freimarken:altfurt",
+        assertFalse(gelesen.werte().greift("freimarken:kornmark", Weltregel.KOLBEN));
+        assertFalse(gelesen.werte().greift("freimarken:kornmark",
                 Weltregel.FLUESSIGKEIT));
 
-        // DIE GEGENRICHTUNG: In der Parzellenwelt bleibt kolben unangetastet.
+        // DIE GEGENRICHTUNG: In einer Bauwelt bleibt kolben unangetastet.
         // Ohne diesen Satz waere die Probe auch gruen, wenn der Riegel JEDE
         // Grenzregel ueberall herausnaehme - und dann wirkte kolben nirgends.
         assertTrue(gelesen.werte().greift("freimarken:marktstadt", Weltregel.KOLBEN),
-                "in der Marktstadt liegt das Raster, dort gehoert kolben hin");
+                "in der Marktstadt wird gebaut, dort gehoert kolben hin");
     }
 
     @Test
@@ -405,11 +418,32 @@ class WeltregellisteTest {
                         weltregeln:
                           regeln: []
                           welten:
-                            altfurt: [kolben]
+                            kornmark: [kolben]
                         """)),
-                WELTEN, MACHER, "");
+                WELTEN, MACHER, Set.of());
 
         assertEquals(List.of(), gelesen.klagen());
-        assertTrue(gelesen.werte().greift("freimarken:altfurt", Weltregel.KOLBEN));
+        assertTrue(gelesen.werte().greift("freimarken:kornmark", Weltregel.KOLBEN));
+    }
+
+    /**
+     * Die Bauwelt-Schluessel aus dem Abschnitt {@code welten:} der echten Datei.
+     *
+     * <p>Gelesen und nicht abgeschrieben, mit DERSELBEN Entscheidung, die das Plugin
+     * trifft ({@code Weltangabe.Art.hatBauland}): Eine Liste von Hand hier waere eine
+     * zweite Wahrheit, und die Probe prueefte dann ihre eigene Abschrift.
+     */
+    private static Set<String> bauweltenAus(
+            org.bukkit.configuration.ConfigurationSection welten) {
+        var schluessel = new java.util.LinkedHashSet<String>();
+        for (String name : welten.getKeys(false)) {
+            var eintrag = welten.getConfigurationSection(name);
+            var art = Weltenliste.art(eintrag == null ? null
+                    : eintrag.getString("art"));
+            if (art != null && art.hatBauland()) {
+                schluessel.add(MACHER.fuer(name));
+            }
+        }
+        return schluessel;
     }
 }

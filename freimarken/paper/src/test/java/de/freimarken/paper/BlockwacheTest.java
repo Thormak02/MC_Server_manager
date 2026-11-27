@@ -459,12 +459,16 @@ class BlockwacheTest {
         // Gelesen aus der Anmerkung und nicht aus dem Quelltext: Was zaehlt, ist, was
         // Bukkit sieht.
         int gefunden = 0;
+        var ereignisse = new java.util.TreeSet<String>();
         for (var methode : Blockwache.class.getDeclaredMethods()) {
             EventHandler anmerkung = methode.getAnnotation(EventHandler.class);
             if (anmerkung == null) {
                 continue;
             }
             gefunden++;
+            assertEquals(1, methode.getParameterCount(),
+                    methode.getName() + " nimmt nicht genau ein Ereignis");
+            ereignisse.add(methode.getParameterTypes()[0].getSimpleName());
             assertEquals(EventPriority.MONITOR, anmerkung.priority(),
                     methode.getName() + " laeuft nicht auf MONITOR - dann steht der"
                             + " Ausgang noch nicht fest, und ein Schutz, der NACH"
@@ -476,12 +480,108 @@ class BlockwacheTest {
                             + " sucht. Nichts bricht, nichts wird rot; es fehlt nur eine"
                             + " Sorte Zeile.");
         }
-        assertEquals(5, gefunden,
-                "erwartet werden FUENF Haken - setzen, abbauen, benutzen und seit dem"
-                        + " 26.11.2026 die zwei Sprengungen (Wesen und Block). Weniger"
-                        + " heisst, dass diese Probe einen Zweig nicht sieht; mehr"
-                        + " heisst, dass ein neuer dazugekommen ist und hier"
-                        + " mitgezaehlt werden muss.");
+        assertEquals(11, gefunden,
+                "erwartet werden ELF Haken. Weniger heisst, dass diese Probe einen"
+                        + " Zweig nicht sieht; mehr heisst, dass ein neuer"
+                        + " dazugekommen ist und hier mitgezaehlt werden muss."
+                        + " Gefunden: " + ereignisse);
+
+        // UND DIE EREIGNISARTEN, nicht nur ihre Zahl: Zwei Zuhoerer auf dasselbe
+        // Ereignis waeren ebenfalls elf, und ein vergessenes Ereignis liesse sich mit
+        // einem zweiten Haken auf ein schon gedecktes ausgleichen.
+        //
+        // Die sechs unteren kamen am 27.11.2026 dazu [Betreiber: "ueberall mindestens
+        // aufzeichnen"]: Vorher schrieb nur die Sprengung mit, und Feuer, Kolben,
+        // Fluessigkeit und Wesen hatten gar keinen Schluessel, in dem eine Zeile
+        // stehen koennte.
+        assertEquals(java.util.Set.of(
+                        "BlockBreakEvent",
+                        "BlockBurnEvent",
+                        "BlockExplodeEvent",
+                        "BlockFromToEvent",
+                        "BlockPistonExtendEvent",
+                        "BlockPistonRetractEvent",
+                        "BlockPlaceEvent",
+                        "BlockSpreadEvent",
+                        "EntityChangeBlockEvent",
+                        "EntityExplodeEvent",
+                        "PlayerInteractEvent"),
+                ereignisse,
+                "Diese Ereignisse schreibt das Blockbuch mit - jedes genau einmal."
+                        + " Fehlt eines, steht die Tat im Programm und in der"
+                        + " Sprachdatei, aber keine Zeile im Buch; steht eines zu viel"
+                        + " darin, gehoert es in diese Tafel.");
         assertNotNull(wache, "die Wache aus dem Aufbau wird hier mitgeprueft");
+    }
+
+    @Test
+    @DisplayName("Jeder Zweig schreibt seine Tat - und der Sandfall ist ausgenommen")
+    void jederZweigSchreibtSeineTat() {
+        // DIE TAFEL, DIE DIE UNERREICHBAREN ZWEIGE DECKT. Sieben der elf Zuhoerer
+        // nehmen ein Bukkit-Ereignis, das sich ohne laufenden Server nicht bauen
+        // laesst. Am 27.11.2026 sind fuenf Einspritzungen genau hier entwischt: Die
+        // Aufzeichnung war gebaut, gruen und von keiner Probe gehalten.
+        // Map.ofEntries und nicht Map.of: Jenes nimmt hoechstens zehn Paare, und es
+        // sind elf Zuhoerer. Der Uebersetzer hat es selbst gesagt.
+        Map<String, String> erwartet = Map.ofEntries(
+                Map.entry("beimSetzen", "Blocktat.SETZEN"),
+                Map.entry("beimAbbauen", "Blocktat.ABBAUEN"),
+                Map.entry("beimBenutzen", "Blocktat.BENUTZEN"),
+                Map.entry("beimSprengen", "halteSprengungFest("),
+                Map.entry("beimBlocksprengen", "halteSprengungFest("),
+                Map.entry("beimAbbrennen", "Blocktat.FEUER"),
+                Map.entry("beimAusbreiten", "Blocktat.FEUER"),
+                Map.entry("beimWesenblock", "Blocktat.WESEN"),
+                Map.entry("beimKolbenSchieben", "halteBewegungFest("),
+                Map.entry("beimKolbenZiehen", "halteBewegungFest("),
+                Map.entry("beimFliessen", "Blocktat.FLUESSIGKEIT"));
+
+        String quelle = Quellen.text(Quellen.alle().stream()
+                .filter(d -> d.getFileName().toString().equals("Blockwache.java"))
+                .findFirst().orElseThrow());
+        String[] stuecke = quelle.split("@EventHandler");
+        assertEquals(12, stuecke.length,
+                "elf Anmerkungen ergeben zwoelf Stuecke - gefunden: "
+                        + (stuecke.length - 1));
+
+        var gesehen = new java.util.TreeSet<String>();
+        for (int nummer = 1; nummer < stuecke.length; nummer++) {
+            int ende = stuecke[nummer].indexOf("\n    }");
+            assertTrue(ende > 0, "Zweig " + nummer + " endet nicht auf der Ebene"
+                    + " einer Methode");
+            String rumpf = stuecke[nummer].substring(0, ende);
+            String name = null;
+            for (String kandidat : erwartet.keySet()) {
+                if (rumpf.contains(" " + kandidat + "(")) {
+                    name = kandidat;
+                }
+            }
+            assertNotNull(name, "Dieser Zuhoerer steht in keiner Zeile der Tafel -"
+                    + " seine Tat ist damit unbeaufsichtigt:\n" + rumpf);
+            gesehen.add(name);
+            assertTrue(rumpf.contains(erwartet.get(name)),
+                    name + " schreibt nicht " + erwartet.get(name)
+                            + " - entweder die falsche Tat oder gar keine:\n"
+                            + rumpf);
+        }
+        assertEquals(erwartet.keySet(), gesehen,
+                "jede Zeile der Tafel braucht ihren Zuhoerer im Quelltext");
+
+        // DER SANDFALL, und er haengt an DERSELBEN Frage wie der Schutz: Ohne diese
+        // Zeile stuende in jeder Welt eine Zeile fuer jeden gesetzten Sandblock -
+        // und zwar fuer einen Block, den ein SPIELER gesetzt hat.
+        int wesen = -1;
+        for (int nummer = 1; nummer < stuecke.length; nummer++) {
+            if (stuecke[nummer].contains(" beimWesenblock(")) {
+                wesen = nummer;
+            }
+        }
+        assertTrue(wesen > 0, "beimWesenblock nicht gefunden");
+        assertTrue(stuecke[wesen].contains("Weltwache.wesenZaehlt("),
+                "beimWesenblock fragt nicht Weltwache.wesenZaehlt - damit landet"
+                        + " jeder landende Sandblock als Wesen im Buch, und eine"
+                        + " zweite Liste hier liefe von der des Schutzes weg:\n"
+                        + stuecke[wesen].substring(0,
+                                Math.min(400, stuecke[wesen].length())));
     }
 }

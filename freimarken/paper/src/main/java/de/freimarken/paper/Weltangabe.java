@@ -117,7 +117,31 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
          *
          * <p>Der Startwert ist hier ohne Wirkung - es gibt kein Gelaende.
          */
-        WOLKEN
+        WOLKEN;
+
+        /**
+         * Wird in einer Welt dieser Art GEBAUT?
+         *
+         * <p><b>Die EINE Stelle, an der das entschieden wird</b>, und davon haengen
+         * zwei Dinge ab: wo die Grenzregeln {@code kolben} und {@code fluessigkeit}
+         * wirken koennen, und wo der Leser eine solche Zeile beklagt, weil sie nie
+         * wirkt.
+         *
+         * <p>Ein Switch OHNE {@code default}: Kommt eine achte Art dazu, meldet der
+         * Uebersetzer diese Stelle. Mit einem {@code default} waere die neue Art
+         * stumm im falschen Lager - gebaut, eingetragen, ungeschuetzt.
+         *
+         * <p>{@link #FLACH} gehoert dazu, obwohl es dort KEINE Besitzeinheiten gibt:
+         * Eine flache Welt ist die von Hand gebaute (Altfurt), und genau deshalb
+         * darf sich dort nichts von allein bewegen. {@link #LEER} nicht - eine leere
+         * Welt hat noch nichts, und ihre Startinsel kommt mit ihrem eigenen Schritt.
+         */
+        boolean hatBauland() {
+            return switch (this) {
+                case RASTER, STADTFELDER, INSELN, WOLKEN, FLACH -> true;
+                case GEWOEHNLICH, LEER -> false;
+            };
+        }
     }
 
     /** Ob fuer diese Welt ueberhaupt eine Grenze gesetzt werden soll. */

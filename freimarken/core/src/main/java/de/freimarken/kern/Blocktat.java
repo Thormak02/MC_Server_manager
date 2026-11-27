@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Was ein Spieler an einem Block getan hat - die drei Taten, die das Blockbuch kennt.
+ * Was an einem Block geschehen ist - die Taten, die das Blockbuch kennt.
  *
  * <p><b>Eine Aufzaehlung und keine Liste in der Einstellungsdatei</b>, aus demselben
  * Grund wie bei {@link Taetigkeit}: Eine neue Tat braucht einen eigenen Ereigniszweig im
@@ -18,7 +18,15 @@ import java.util.Locale;
  * die Moderation, denn "hier wurde etwas abgewiesen" beantwortet keine Frage. Eine Zeile
  * traegt darum beides: die Tat und ob sie gelungen ist. In der Auswahl steht
  * {@code abgewiesen} daneben als eigener Name ({@link #NAME_ABGEWIESEN}) und schaltet die
- * misslungenen Versuche zu - quer zu allen drei Taten.
+ * misslungenen Versuche zu - quer zu ALLEN Taten.
+ *
+ * <p><b>Nicht jede Tat hat einen Spieler</b> [26.11./27.11.2026]: Eine Sprengung,
+ * ein Feuer, ein Kolben und ein Lavastrom haben keinen. Solche Zeilen tragen
+ * {@link Blockzeile#NIEMAND}, gehen aber durch denselben Hals wie jede andere - siehe
+ * {@code Blockwache.halteFest}.
+ *
+ * <p><b>Zwei Taten werden NUR aufgeschrieben, wenn sie ANGEHALTEN wurden</b> - siehe
+ * {@link #nurAbgewiesen()}.
  *
  * <p>Der Schluessel ist kleingeschrieben: Er steht in der {@code config.yml} als Eintrag
  * in der Liste {@code taten}, und er steht in der Spalte {@code tat} der Tabelle. Beides
@@ -72,7 +80,41 @@ public enum Blocktat {
      * <p>Fuer den RUECKWEG ist sie der wichtigste Fall: Ein gegriefter Bau ist
      * meist gesprengt und nicht abgebaut.
      */
-    SPRENGEN("sprengen");
+    SPRENGEN("sprengen"),
+
+    /**
+     * Feuer hat den Block weggenommen oder sich auf ihn ausgebreitet.
+     *
+     * <p>Derselbe Name wie die Weltregel {@code feuer}, und das ist Absicht: Wer ihn
+     * in beiden Abschnitten eintraegt, meint dasselbe. Erfasst wird auch die
+     * Ausbreitung von Ranken und Pilzen - die Regel heisst nach der SACHE und nicht
+     * nach dem Ereignis, und das Buch folgt ihr darin.
+     */
+    FEUER("feuer"),
+
+    /**
+     * Ein Wesen hat den Block geaendert - Enderman, Ziege, Schaf, Dorfbewohner.
+     *
+     * <p>Der fallende Block ist ausgenommen, und zwar an derselben Stelle wie beim
+     * Schutz ({@code Weltwache.wesenZaehlt}): Sand, der landet, ist kein Wesen,
+     * sondern ein Block in der Luft. Ohne diese Ausnahme stuende in jeder Welt eine
+     * Zeile fuer jeden gesetzten Sandblock.
+     */
+    WESEN("wesen"),
+
+    /**
+     * Ein Kolben hat den Block bewegt.
+     *
+     * <p><b>Nur die ANGEHALTENEN</b> - siehe {@link #nurAbgewiesen()}.
+     */
+    KOLBEN("kolben"),
+
+    /**
+     * Wasser oder Lava ist auf den Block geflossen.
+     *
+     * <p><b>Nur die ANGEHALTENEN</b> - siehe {@link #nurAbgewiesen()}.
+     */
+    FLUESSIGKEIT("fluessigkeit");
 
     /**
      * Der Name, der in der Auswahl die MISSLUNGENEN Versuche zuschaltet.
@@ -130,5 +172,35 @@ public enum Blocktat {
         }
         namen.add(NAME_ABGEWIESEN);
         return namen;
+    }
+
+    /**
+     * Wird diese Tat NUR aufgeschrieben, wenn sie angehalten wurde?
+     *
+     * <p><b>Gezaehlte Groessen, nicht Vorsicht auf Verdacht</b> [Entscheidung des
+     * Betreibers, 27.11.2026]: Ein Kolben in einer Farm schaltet alle anderthalb
+     * Sekunden, und fliessendes Wasser meldet JEDEN Fliessschritt - in einem Bau am
+     * Meer hoert das nie auf. Eine Zeile je Vorgang waeren Millionen je Woche, und
+     * aufgeraeumt wird im Hauptfaden des Spielservers.
+     *
+     * <p>Interessant ist bei diesen zwei ohnehin nur der Vorgang, den der Schutz
+     * ANGEHALTEN hat: Das ist der Uebergriff auf fremden Grund, also der
+     * Grief-Versuch. Im normalen Spiel steht damit keine einzige Zeile, im
+     * Griefing-Fall jede.
+     *
+     * <p>Der Riegel sitzt an EINER Stelle - {@code Blockbuchwerte.schreibt} -, und
+     * nicht an den Ereigniszweigen: Die Blockwache stellt genau eine Frage, und
+     * dieser Zusatz gehoert in diese Frage. Zwei Zweige mit einer eigenen
+     * Verzweigung waeren zwei Stellen, an denen die dritte vergessen wird.
+     *
+     * <p><b>Wirkt nur, wenn die Welt {@code abgewiesen} ueberhaupt zuschaltet.</b>
+     * Steht {@code kolben} in der Auswahl einer Welt, aber {@code abgewiesen} nicht,
+     * schreibt diese Welt dafuer NIE eine Zeile - der Leser beklagt das.
+     */
+    public boolean nurAbgewiesen() {
+        return switch (this) {
+            case KOLBEN, FLUESSIGKEIT -> true;
+            case SETZEN, ABBAUEN, BENUTZEN, SPRENGEN, FEUER, WESEN -> false;
+        };
     }
 }

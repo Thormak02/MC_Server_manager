@@ -263,6 +263,30 @@ final class Blockbuchliste {
                     + " stehen; es ist selbst keine. Gemeint ist vermutlich [setzen,"
                     + " abbauen, " + Blocktat.NAME_ABGEWIESEN + "].");
         }
+        if (!auchAbgewiesen) {
+            // DIESELBE SORTE WIDERSPRUCH IN DER ANDEREN RICHTUNG: kolben und
+            // fluessigkeit werden NUR aufgeschrieben, wenn sie angehalten wurden
+            // (Blocktat.nurAbgewiesen) - und "angehalten" ist genau das, was
+            // abgewiesen zuschaltet. Ohne jenes Wort schreibt diese Welt fuer die
+            // zwei NIE eine Zeile, und an der Datei sieht man das nicht.
+            var stumm = new java.util.ArrayList<String>();
+            for (Blocktat tat : taten) {
+                if (tat.nurAbgewiesen()) {
+                    stumm.add(tat.schluessel());
+                }
+            }
+            if (!stumm.isEmpty()) {
+                klagen.add(pfad + " nennt " + String.join(" und ", stumm)
+                        + ", aber nicht \"" + Blocktat.NAME_ABGEWIESEN + "\" -"
+                        + " damit wird dafuer NIE eine Zeile geschrieben. Diese"
+                        + " Taten kommen nur ins Buch, wenn eine Weltregel sie"
+                        + " ANGEHALTEN hat (ein Kolben in einer Farm schaltet alle"
+                        + " anderthalb Sekunden - jeden Takt aufzuschreiben waeren"
+                        + " Millionen Zeilen je Woche). Gemeint ist vermutlich die"
+                        + " Liste mit \"" + Blocktat.NAME_ABGEWIESEN
+                        + "\" dahinter.");
+            }
+        }
         return new Blockbuchwerte.Auswahl(taten, auchAbgewiesen);
     }
 

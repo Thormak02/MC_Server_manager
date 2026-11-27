@@ -1404,13 +1404,65 @@ uebernimmt sie.
 - Der Erklaerkopf des Blockbuchs stand nach dem Einsetzen ueber `weltregeln:` und
   sagte dort "NUR BEIM START GELESEN" - das Gegenteil. Verschoben.
 
-**Offen:**
 
-- Was **Feuer** mit einem Bilderrahmen macht, meldet Bukkit nicht als eigene Ursache.
-- Ob ein **Dorfbewohner**, der ein Feld erntet und neu bepflanzt, unter `wesen`
-  fallen soll - Frage fuer den Spieltest.
-- `kolben` und `fluessigkeit` wirken nur in der EINEN Parzellenwelt. Mehrere
-  Parzellenwelten braeuchten einen anderen Schnitt.
+### FERTIG 27.11.2026: Grenzregeln in JEDER Bauwelt, Aufzeichnung ueberall
+
+Betreiber: *"soll ueberall wo gebaut wird wirken und ueberall mindestens
+aufzeichnen"*, und bei Kolben/Fluessigkeit *"nur die abgewiesenen"*.
+
+**Wirken.** Die `Weltwache` bekommt eine Karte Weltschluessel -> `Zustaendigkeit`
+statt EINER Parzellenwelt. Die Unterscheidung stand schon in der Datei:
+
+| Welt | `art` | `kolben` / `fluessigkeit` |
+| --- | --- | --- |
+| Marktstadt | `raster` | nur der Uebergriff (Parzellen) |
+| Freistaedte | `stadtfelder` | nur der Uebergriff (Stadtfelder UND Grundstuecke) |
+| Hafenwerder | `inseln` | nur der Uebergriff (Inselfelder) |
+| Wolkenwerder | `wolken` | nur der Uebergriff (Wolkenfelder) |
+| Altfurt | `flach` | **verbietet schlicht** - ganz gebaut, keine Grenze |
+| Farmwelten, Nether, End | `gewoehnlich` | nichts - aber aufgezeichnet |
+
+- `Weltangabe.Art.hatBauland()` ist die EINE Stelle, die das entscheidet, mit einem
+  Switch ohne `default`. `bauwelten()` im Plugin prueft sich dagegen und bricht den
+  Start ab, wenn die zwei auseinanderlaufen.
+- **Fund:** "Das Grundstueck sticht die Stadt" stand nur in `darfBauen`. Ohne diese
+  Rangfolge in der spielerfreien Abfrage schoebe ein Kolben von der Stadt auf ein
+  vergebenes Grundstueck, ohne eine Grenze zu sehen. Die neue
+  `Freistadtbuch.zustaendigeEinheit` steht darum NEBEN `darfBauen`.
+- **Fund:** Nummern allein reichen nicht. `Grundstueck.id()` und `Parzelle.id()`
+  zaehlen in verschiedenen Tabellen, beide ab 1, und in der Freistadtwelt liegen
+  genau diese zwei Arten nebeneinander. Die `Einheit` traegt darum **Art UND
+  Nummer**. Der Fehler haette von der Fuellung der Datenbank abgehangen - auf einem
+  Probeserver also nie.
+- Die Buecher werden LAZY gefragt: `Inselbuch` und Co. entstehen erst spaeter im
+  Start, die Wache wird vorher angemeldet. Fehlt ein Buch, lautet die Antwort
+  "niemandem" und die Grenzregel greift dort nicht.
+
+**Aufzeichnen.** Vier neue Blocktaten - `feuer`, `wesen`, `kolben`, `fluessigkeit`,
+mit DENSELBEN Namen wie die Weltregeln - und sechs neue Zuhoerer in der
+`Blockwache` (elf jetzt), alle auf MONITOR ohne `ignoreCancelled`, damit auch das
+vom Schutz Verhinderte im Buch landet.
+
+- `kolben` und `fluessigkeit` schreiben **nur die ANGEHALTENEN**
+  (`Blocktat.nurAbgewiesen`): Ein Kolben in einer Farm schaltet alle anderthalb
+  Sekunden, fliessendes Wasser meldet jeden Schritt - jeden Takt zu schreiben waeren
+  Millionen Zeilen je Woche. Der Riegel sitzt an der EINEN Frage
+  (`Blockbuchwerte.schreibt`), nicht an den Zweigen.
+- Nether und End schreiben nicht mehr `[]`, sondern die Weltursachen. Die Marktstadt
+  bekommt sie ausdruecklich dazu - eine Zeile je Welt gilt STATT der Vorgabe.
+- Wer `kolben` eintraegt und `abgewiesen` weglaesst, bekommt eine Klage: Ohne jenes
+  Wort schriebe die Welt dafuer nie eine Zeile.
+
+**ENTSCHIEDEN (Chat 26./27.11.2026):**
+
+- ~~Was Feuer mit einem Bilderrahmen macht~~ - **zu klein, egal.** Bukkit meldet
+  dafuer keine eigene Ursache; `RemoveCause.EXPLOSION` bleibt die einzige
+  abgefangene.
+- Ein **Dorfbewohner**, der ein Feld erntet und neu bepflanzt, **faellt unter
+  `wesen`**. So ist es gebaut (nur `FALLING_BLOCK` ist ausgenommen) - jetzt als
+  Entscheidung festgeschrieben, damit es niemand spaeter "richtet".
+- ~~Mehrere Parzellenwelten braeuchten einen anderen Schnitt~~ - **gebaut**, siehe
+  oben.
 ### ENTSCHIEDEN UND GEMESSEN 26.11.2026: fuenf Punkte
 
 **Spielerseite -> eigene Subdomain** (Betreiber: *"erstmal subdomain

@@ -1,10 +1,11 @@
 package de.freimarken.paper;
 
-import de.freimarken.kern.Besitzbuch;
-import de.freimarken.kern.Parzelle;
+import de.freimarken.kern.Einheit;
 import de.freimarken.kern.Weltregel;
 import de.freimarken.kern.Weltregelwerte;
+import de.freimarken.kern.Zustaendigkeit;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -42,19 +43,27 @@ import org.bukkit.event.hanging.HangingBreakEvent;
  * gar nicht. Die Frage hier ist eine andere: "gehoert dieser Block jemandem".
  *
  * <p><b>Sie kommt aber aus DERSELBEN Quelle</b>, und das ist der Teil, auf den es
- * ankommt: {@link Besitzbuch#zustaendigerBesitz}. Dieselbe Methode, die
- * {@code darfHandeln} ueber {@code darfBauen} fragt. Eine zweite Vorstellung davon, wem
- * ein Block gehoert, waere genau die Luecke, vor der der erste Absatz jener Doku warnt -
- * sie liefen eines Tages auseinander, und dann waere eine der beiden falsch.
+ * ankommt: {@link Zustaendigkeit}, und dahinter dasselbe Buch, das auch
+ * {@code darfBauen} beantwortet. Eine zweite Vorstellung davon, wem ein Block gehoert,
+ * waere genau die Luecke, vor der der erste Absatz jener Doku warnt - sie liefen eines
+ * Tages auseinander, und dann waere eine der beiden falsch.
  *
- * <p><b>ACHT ZUHOERER, ZWEI WIRKUNGEN</b> - die Teilung steht in
+ * <p><b>JEDE BAUWELT, nicht nur die Marktstadt</b> [27.11.2026, Betreiber: "soll
+ * ueberall wo gebaut wird wirken"]: Die Wache bekommt eine Karte Weltschluessel ->
+ * {@link Zustaendigkeit}. Marktstadt (Parzellen), Freistaedte (Stadtfelder und
+ * Grundstuecke), Hafenwerder (Inseln) und Wolkenwerder (Wolken) haben Besitzeinheiten;
+ * Altfurt ist GANZ GEBAUT und hat keine - dort gibt es keine Grenze, und darum
+ * verbietet die Grenzregel dort schlicht. Eine Welt, die in der Karte fehlt, ist keine
+ * Bauwelt: dort greifen nur die weltweiten Regeln.
+ *
+ * <p><b>NEUN ZUHOERER, ZWEI WIRKUNGEN</b> - die Teilung steht in
  * {@link Weltregel#giltWeltweit} und wird hier nur ANGEWENDET:
  *
  * <ul>
  *   <li><b>Weltweit</b> (Explosion, Feuer, Wesen): Greift die Regel in dieser Welt, wird
- *       abgebrochen - ohne eine einzige Abfrage ans Besitzbuch. Das ist nicht nur
- *       einfacher, es ist auch richtig: Wer keine Krater will, will sie auch nicht auf
- *       einer freien Parzelle.</li>
+ *       abgebrochen - ohne eine einzige Abfrage an die Zustaendigkeit. Das ist nicht
+ *       nur einfacher, es ist auch richtig: Wer keine Krater will, will sie auch
+ *       nicht auf einer freien Parzelle.</li>
  *   <li><b>Ueber Grenzen</b> (Kolben, Fluessigkeit): Abgebrochen wird nur der
  *       UEBERGRIFF - wenn das Ziel jemandem gehoert und die Quelle nicht demselben.</li>
  * </ul>
@@ -75,28 +84,46 @@ public final class Weltwache implements Listener {
     private static final long KLAGEPAUSE_MS = 60_000L;
 
     private final Supplier<Weltregelwerte> werte;
-    private final Besitzbuch buch;
-    private final String parzellenwelt;
+    private final Map<String, Zustaendigkeit> bauwelten;
     private final Logger protokoll;
 
     private long letzteKlage;
 
     /**
-     * @param werte         der Halter, nicht das Abbild - siehe den Kopf
-     * @param buch          dieselbe Quelle, die {@code darfHandeln} fragt
-     * @param parzellenwelt der Schluessel der Welt mit dem Parzellenraster; nur dort
-     *                      kann ein Block jemandem gehoeren
+     * @param werte     der Halter, nicht das Abbild - siehe den Kopf
+     * @param bauwelten je BAUWELT eine Zustaendigkeit, nach Weltschluessel. Jede
+     *                  kommt aus demselben Buch, das auch {@code darfBauen}
+     *                  beantwortet. Eine Welt, die hier FEHLT, ist keine Bauwelt:
+     *                  dort greifen die weltweiten Regeln, die Grenzregeln nicht.
+     *                  Die Karte darf leer sein - ein Server ohne Freistaedte und
+     *                  Werder hat nur die Marktstadt.
      */
-    public Weltwache(Supplier<Weltregelwerte> werte, Besitzbuch buch,
-                     String parzellenwelt, Logger protokoll) {
-        if (werte == null || buch == null || parzellenwelt == null
-                || protokoll == null) {
-            throw new IllegalArgumentException("Werte, Besitzbuch, Parzellenwelt und"
-                    + " Protokoll sind Pflicht");
+    public Weltwache(Supplier<Weltregelwerte> werte,
+                     Map<String, Zustaendigkeit> bauwelten, Logger protokoll) {
+        if (werte == null || bauwelten == null || protokoll == null) {
+            throw new IllegalArgumentException("Werte, Bauwelten und Protokoll"
+                    + " sind Pflicht");
+        }
+        for (Map.Entry<String, Zustaendigkeit> eintrag : bauwelten.entrySet()) {
+            // DERSELBE WALL wie in Weltregelwerte: Ein WeltNAME statt eines
+            // Schluessels traefe im Ereignis NIE, und die Welt waere stumm
+            // ungeschuetzt - der teuerste Fall, weil nichts bricht.
+            if (eintrag.getKey() == null || eintrag.getKey().indexOf(':') < 0) {
+                throw new IllegalArgumentException("\"" + eintrag.getKey()
+                        + "\" ist ein WeltNAME und kein Weltschluessel -"
+                        + " erwartet wird die Form \"namensraum:name\", wie"
+                        + " World.key().asString() sie liefert");
+            }
+            if (eintrag.getValue() == null) {
+                throw new IllegalArgumentException("Die Bauwelt \""
+                        + eintrag.getKey() + "\" hat keine Zustaendigkeit. Fuer"
+                        + " eine Welt ohne Besitzeinheiten gibt es"
+                        + " Zustaendigkeit.ganzGebauteWelt(); ein null waere eine"
+                        + " Bauwelt, in der die Grenzregeln stumm nichts tun.");
+            }
         }
         this.werte = werte;
-        this.buch = buch;
-        this.parzellenwelt = parzellenwelt;
+        this.bauwelten = Map.copyOf(bauwelten);
         this.protokoll = protokoll;
     }
 
@@ -297,7 +324,7 @@ public final class Weltwache implements Listener {
      * Bukkit gibt ihn fuer eine entladene Welt - und heisst "nicht unsere Sache".
      */
     // DIE DREI ENTSCHEIDUNGEN SIND PAKETSICHTBAR UND NICHT PRIVAT, und das ist
-    // kein Nachlassen: Die acht Zweige darueber sind Bukkit-Ereignisse, und die
+    // kein Nachlassen: Die neun Zweige darueber sind Bukkit-Ereignisse, und die
     // lassen sich ohne laufenden Server nicht bauen - eine Rechnung dahinter waere
     // in keiner Probe erreichbar. Dieselbe Begruendung wie bei jeder Naht dieses
     // Projekts, nur umgekehrt angewandt: Hier wird nicht die Rechnung
@@ -355,20 +382,41 @@ public final class Weltwache implements Listener {
      */
     boolean uebergriff(Location von, Location nach) {
         World welt = nach.getWorld();
-        if (welt == null || !parzellenwelt.equals(welt.key().asString())) {
-            // Keine Parzellenwelt: Dort kann ein Block niemandem gehoeren, also gibt es
-            // keine Grenze zu ueberschreiten. Die weltweiten Regeln greifen trotzdem.
+        if (welt == null) {
             return false;
         }
+        String schluessel = welt.key().asString();
+        Zustaendigkeit wer = bauwelten.get(schluessel);
+        if (wer == null) {
+            // KEINE BAUWELT. In einer Farmwelt gehoert kein Block jemandem, also
+            // gibt es keine Grenze zu ueberschreiten. Die weltweiten Regeln
+            // greifen trotzdem - wer dort keine Krater will, traegt explosion
+            // ein.
+            return false;
+        }
+        if (wer.ganzGebaut()) {
+            // ALTFURT: kein Raster, keine Einheiten, Spielmodus Abenteuer. Dort
+            // gibt es keine Grenze, die ueberschritten werden koennte - und
+            // genau deshalb waere "niemandem gehoert etwas, also erlaubt" die
+            // falsche Antwort. In einer ganz gebauten Welt ist JEDE Bewegung von
+            // Bloecken ein Eingriff.
+            //
+            // Wer dort doch Redstone will, nimmt kolben aus der Liste dieser
+            // Welt - die Entscheidung bleibt in der Datei.
+            return true;
+        }
         try {
-            Optional<Parzelle> ziel = buch.zustaendigerBesitz(parzellenwelt,
-                    nach.getBlockX(), nach.getBlockZ());
+            Optional<Einheit> ziel = wer.fuer(schluessel, nach.getBlockX(),
+                    nach.getBlockZ());
             if (ziel.isEmpty()) {
                 return false;
             }
-            Optional<Parzelle> quelle = buch.zustaendigerBesitz(parzellenwelt,
-                    von.getBlockX(), von.getBlockZ());
-            return quelle.isEmpty() || quelle.get().id() != ziel.get().id();
+            Optional<Einheit> quelle = wer.fuer(schluessel, von.getBlockX(),
+                    von.getBlockZ());
+            // Verglichen wird die ganze EINHEIT - Art UND Nummer. Ein Vergleich
+            // der Nummern allein hielte Grundstueck 5 fuer Stadtfeld 5; die
+            // Begruendung steht an Einheit.
+            return quelle.isEmpty() || !quelle.get().equals(ziel.get());
         } catch (RuntimeException fehler) {
             klageUeberAblage(fehler);
             return true;

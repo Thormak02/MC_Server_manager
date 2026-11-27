@@ -1513,4 +1513,69 @@ public final class Freistadtbuch {
                         .toList(),
                 Stadtfeldplan.ANKUNFTSFELD);
     }
+
+    /**
+     * Die Art einer Einheit, die ein vergebenes Grundstueck ist.
+     *
+     * <p>Als Konstante, weil die Grundstuecke in einer EIGENEN Tabelle zaehlen und
+     * darum keine {@link Art} tragen - anders als eine {@link Parzelle}, die ihre Art
+     * selbst kennt. Genau diese zwei Zaehler sind der Grund, warum eine
+     * {@link Einheit} ihre Art mitfuehrt.
+     */
+    public static final String ART_GRUNDSTUECK = "grundstueck";
+
+    /**
+     * Welche Einheit diesen Block regelt - OHNE Spieler.
+     *
+     * <p><b>Die Frage der Weltregeln</b>, siehe {@link Zustaendigkeit}: Ein Lavastrom
+     * hat keinen Spieler, muss aber wissen, ob er eine Besitzgrenze ueberschreitet.
+     *
+     * <p><b>Dieselbe Rangfolge wie {@link #darfBauen}, und darum steht sie hier:</b>
+     * Erst die Leere, dann Grenze und Ankunftsfeld, dann die Stadt - und zuletzt
+     * STICHT DAS GRUNDSTUECK DIE STADT. Eine zweite Fassung dieser Reihenfolge in
+     * einer Wache liefe eines Tages auseinander, und dann waere eine von beiden
+     * falsch.
+     *
+     * <p><b>Art UND Nummer</b>, nicht die Nummer allein: Grundstueck und Stadtfeld
+     * zaehlen in verschiedenen Tabellen, beide ab 1. Die Begruendung steht an
+     * {@link Einheit}.
+     *
+     * <p><b>Der Zustand wird NICHT gefragt</b>, anders als in {@code darfBauen}: Eine
+     * verfallene Stadt ist trotzdem jemandes Bau. Dass dort niemand mehr bauen darf,
+     * heisst nicht, dass Lava hineinlaufen soll - sie kann wieder vergeben werden,
+     * und dann liegt ein Krater darin.
+     *
+     * <p>Eine Stoerung der Ablage wird NICHT gefangen - wie bei {@code darfBauen} und
+     * aus demselben Grund: Der Aufrufer bricht ab. Siehe {@link Zustaendigkeit}.
+     */
+    public Optional<Einheit> zustaendigeEinheit(String welt, int blockX,
+                                                int blockZ) {
+        if (plan.feldBei(blockX, blockZ) != Stadtfeldplan.Feld.STADTFELD) {
+            return Optional.empty();
+        }
+        int feldX = plan.feldNummer(blockX);
+        int feldZ = plan.feldNummer(blockZ);
+        if (!grenze.enthaeltFeld(feldX, feldZ)
+                || plan.istAnkunftsfeld(feldX, feldZ)) {
+            return Optional.empty();
+        }
+        Optional<Parzelle> stadt = lager.finde(welt, feldX, feldZ);
+        if (stadt.isEmpty()) {
+            return Optional.empty();
+        }
+        if (grundstuecke != null) {
+            Optional<Grundstueck> darauf = grundstuecke.anZelle(welt,
+                    plan.zelleVon(blockX), plan.zelleVon(blockZ));
+            if (darauf.isPresent()) {
+                return Optional.of(
+                        new Einheit(ART_GRUNDSTUECK, darauf.get().id()));
+            }
+        }
+        // Die Art kommt aus der ZEILE und nicht aus einer Konstante hier: Eine
+        // Parzelle kennt ihre Art selbst, und Marktstadt, Freistaedte, Werder und
+        // Wolken teilen dasselbe Lager - die Nummern sind damit ohnehin
+        // unterscheidbar, und die Art sagt zusaetzlich, WAS da liegt.
+        return Optional.of(new Einheit(stadt.get().art().schluessel(),
+                stadt.get().id()));
+    }
 }

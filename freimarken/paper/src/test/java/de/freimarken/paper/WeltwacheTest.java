@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
+import de.freimarken.kern.Einheit;
 import de.freimarken.kern.Lagerattrappe;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Rasterplan;
@@ -18,6 +19,7 @@ import de.freimarken.kern.Weltregel;
 import de.freimarken.kern.Weltregelwerte;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
+import de.freimarken.kern.Zustaendigkeit;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -65,6 +67,8 @@ class WeltwacheTest {
 
     private static final String MARKTSTADT = "freimarken:marktstadt";
     private static final String KORNMARK = "freimarken:kornmark";
+    private static final String ALTFURT = "freimarken:altfurt";
+    private static final String FREISTAEDTE = "freimarken:freistaedte";
     private static final UUID ANNA = Spielerprobe.kennungAus(1);
     private static final UUID BERT = Spielerprobe.kennungAus(2);
 
@@ -107,7 +111,20 @@ class WeltwacheTest {
     private Weltwache wacheMitBuch(Besitzbuch welches, Weltregel... fuerDieMarktstadt) {
         Weltregelwerte werte = new Weltregelwerte(Set.of(),
                 Map.of(MARKTSTADT, Set.of(fuerDieMarktstadt), KORNMARK, Set.of()));
-        return new Weltwache(() -> werte, welches, MARKTSTADT, mitschreiber());
+        return new Weltwache(() -> werte, Map.of(MARKTSTADT, ausBuch(welches)),
+                mitschreiber());
+    }
+
+    /**
+     * Die Zustaendigkeit der Marktstadt - dieselbe Form, die das Plugin baut.
+     *
+     * <p>Die ART kommt aus der ZEILE und nicht aus einer Konstante: Marktstadt,
+     * Freistaedte, Werder und Wolken teilen dasselbe Lager, und eine Parzelle
+     * kennt ihre Art selbst.
+     */
+    private static Zustaendigkeit ausBuch(Besitzbuch welches) {
+        return (welt, x, z) -> welches.zustaendigerBesitz(welt, x, z)
+                .map(p -> new Einheit(p.art().schluessel(), p.id()));
     }
 
     /** Ein Protokoll, das seine Meldungen BEHAELT - fuer die Klage ueber die Ablage. */
@@ -419,8 +436,8 @@ class WeltwacheTest {
         // man ihn braucht - mitten in einem Grief. Darum kommen die Werte als Halter
         // herein; dieselbe Bauart wie beim Wirtschaftsstand.
         Weltregelwerte[] halter = {new Weltregelwerte(Set.of(), Map.of())};
-        Weltwache wache = new Weltwache(() -> halter[0], buch, MARKTSTADT,
-                mitschreiber());
+        Weltwache wache = new Weltwache(() -> halter[0],
+                Map.of(MARKTSTADT, ausBuch(buch)), mitschreiber());
 
         assertFalse(wache.greift(mitteVon(0, 0), Weltregel.EXPLOSION),
                 "noch nichts eingetragen");
@@ -585,19 +602,41 @@ class WeltwacheTest {
     // === Werkzeug ===========================================================
 
     @Test
-    @DisplayName("Die Wache braucht alle vier Angaben")
+    @DisplayName("Die Wache braucht alle drei Angaben - und echte Weltschluessel")
     void wacheBrauchtAlleAngaben() {
         Logger protokoll = mitschreiber();
         Weltregelwerte werte = Weltregelwerte.VORGABE;
+        Map<String, Zustaendigkeit> karte = Map.of(MARKTSTADT, ausBuch(buch));
 
         for (Runnable versuch : List.<Runnable>of(
-                () -> new Weltwache(null, buch, MARKTSTADT, protokoll),
-                () -> new Weltwache(() -> werte, null, MARKTSTADT, protokoll),
-                () -> new Weltwache(() -> werte, buch, null, protokoll),
-                () -> new Weltwache(() -> werte, buch, MARKTSTADT, null))) {
+                () -> new Weltwache(null, karte, protokoll),
+                () -> new Weltwache(() -> werte, null, protokoll),
+                () -> new Weltwache(() -> werte, karte, null))) {
             assertThrows(IllegalArgumentException.class, versuch::run);
         }
-        assertNotNull(new Weltwache(() -> werte, buch, MARKTSTADT, protokoll));
+
+        // DER WALL GEGEN DEN WELTNAMEN, hier zum zweiten Mal: Eine Karte nach
+        // Namen traefe im Ereignis NIE, und die Welt waere stumm ungeschuetzt.
+        // Derselbe Riegel steht in Weltregelwerte - und muss hier noch einmal
+        // stehen, weil diese Karte NICHT durch jenen Konstruktor geht.
+        var ohneNamensraum = Map.of("marktstadt", ausBuch(buch));
+        var fehler = assertThrows(IllegalArgumentException.class,
+                () -> new Weltwache(() -> werte, ohneNamensraum, protokoll));
+        assertTrue(fehler.getMessage().contains("marktstadt")
+                        && fehler.getMessage().contains("namensraum:name"),
+                fehler.getMessage());
+
+        // UND EINE BAUWELT OHNE ZUSTAENDIGKEIT: Ein null waere eine Welt, in der
+        // die Grenzregeln stumm nichts tun. Fuer eine Welt ohne Einheiten gibt
+        // es Zustaendigkeit.ganzGebauteWelt().
+        var karteMitLuecke = new java.util.HashMap<String, Zustaendigkeit>();
+        karteMitLuecke.put(MARKTSTADT, null);
+        var luecke = assertThrows(IllegalArgumentException.class,
+                () -> new Weltwache(() -> werte, karteMitLuecke, protokoll));
+        assertTrue(luecke.getMessage().contains("ganzGebauteWelt"),
+                luecke.getMessage());
+
+        assertNotNull(new Weltwache(() -> werte, karte, protokoll));
     }
 
     private static Path wachenDatei() {
@@ -838,5 +877,82 @@ class WeltwacheTest {
                 "beimKolbenSchieben darf NICHT verdrehen: dort wandern die Bloecke"
                         + " mit der Richtung. Beide gleich zu behandeln ist genau"
                         + " der Fehler, nur in die andere Richtung.");
+    }
+
+    // === Die anderen Bauwelten =========================================
+
+    @Test
+    @DisplayName("In einer GANZ GEBAUTEN Welt verbietet die Grenzregel schlicht")
+    void ganzGebauteWeltVerbietetSchlicht() {
+        // ALTFURT [Betreiber 27.11.2026: "soll ueberall wo gebaut wird wirken"]:
+        // kein Raster, keine Einheiten, Spielmodus Abenteuer. Dort gibt es keine
+        // Grenze, die ueberschritten werden koennte - und genau deshalb waere
+        // "niemandem gehoert etwas, also erlaubt" die falsche Antwort. Jeder Block
+        // in Altfurt ist gebaut.
+        World altfurt = Serverprobe.welt(ALTFURT);
+        Weltregelwerte werte = new Weltregelwerte(Set.of(),
+                Map.of(ALTFURT, Set.of(Weltregel.KOLBEN, Weltregel.FLUESSIGKEIT)));
+        Weltwache wache = new Weltwache(() -> werte,
+                Map.of(ALTFURT, Zustaendigkeit.ganzGebauteWelt()), mitschreiber());
+
+        assertTrue(wache.uebergriff(in(altfurt, 0, 0), in(altfurt, 1, 0)),
+                "zwei Stellen, die beide niemandem gehoeren - und trotzdem verboten");
+        assertTrue(wache.uebergriff(in(altfurt, 500, 500), in(altfurt, 500, 501)));
+
+        // UND DIE GEGENRICHTUNG: Dass es trotzdem an der Regel haengt. Ohne diesen
+        // Satz waere die Probe auch gruen, wenn in Altfurt alles verboten waere.
+        Weltwache ohneRegel = new Weltwache(
+                () -> new Weltregelwerte(Set.of(), Map.of(ALTFURT, Set.of())),
+                Map.of(ALTFURT, Zustaendigkeit.ganzGebauteWelt()), mitschreiber());
+        assertFalse(ohneRegel.kolbenUeberschreitet(
+                altfurt.getBlockAt(0, 64, 0),
+                List.of(altfurt.getBlockAt(1, 64, 0)), BlockFace.EAST),
+                "ohne Eintrag schiebt der Kolben auch in Altfurt");
+    }
+
+    @Test
+    @DisplayName("Eine Welt, die NICHT in der Karte steht, ist keine Bauwelt")
+    void weltOhneEintragIstKeineBauwelt() {
+        // Die Farmwelten. Dort gehoert kein Block jemandem, also gibt es keine
+        // Grenze - die weltweiten Regeln greifen trotzdem, und genau das prueft der
+        // zweite Satz.
+        Weltregelwerte werte = new Weltregelwerte(
+                Set.of(Weltregel.KOLBEN, Weltregel.EXPLOSION), Map.of());
+        Weltwache wache = new Weltwache(() -> werte,
+                Map.of(MARKTSTADT, ausBuch(buch)), mitschreiber());
+
+        assertFalse(wache.uebergriff(in(kornmark, 0, 0), in(kornmark, 1, 0)),
+                "keine Bauwelt, keine Grenze");
+        assertTrue(wache.greift(in(kornmark, 0, 0), Weltregel.EXPLOSION),
+                "die weltweite Regel gilt dort weiter - sonst braeuchte eine"
+                        + " Farmwelt keinen Eintrag, um Krater zu verbieten");
+    }
+
+    @Test
+    @DisplayName("Gleiche Nummer, andere ART: NICHT dieselbe Einheit")
+    void gleicheNummerAndereArtIstNichtDieselbeEinheit() {
+        // DER FEHLER, DEN EINE REINE NUMMER MACHEN WUERDE, und er haengt von der
+        // Fuellung der Datenbank ab - also tritt er auf einem Probeserver nie auf:
+        // Grundstuecke zaehlen in einer EIGENEN Tabelle, Parzellen im Besitzlager,
+        // beide ab 1. In der Freistadtwelt liegen genau diese zwei Arten
+        // nebeneinander.
+        //
+        // Mit einem Vergleich der Nummern allein hiesse Grundstueck 5 dasselbe wie
+        // Stadtfeld 5, und der Uebergriff ginge durch. Hier wird das festgenagelt.
+        World freistadt = Serverprobe.welt(FREISTAEDTE);
+        Weltregelwerte werte = new Weltregelwerte(Set.of(),
+                Map.of(FREISTAEDTE, Set.of(Weltregel.FLUESSIGKEIT)));
+        Weltwache wache = new Weltwache(() -> werte,
+                Map.of(FREISTAEDTE, (welt, x, z) -> x < 100
+                        ? Optional.of(new Einheit("stadtfeld", 5L))
+                        : Optional.of(new Einheit("grundstueck", 5L))),
+                mitschreiber());
+
+        assertTrue(wache.uebergriff(in(freistadt, 50, 0), in(freistadt, 150, 0)),
+                "dieselbe Nummer 5, aber zwei verschiedene Tabellen - das sind zwei"
+                        + " Grundstuecke, und dazwischen liegt eine Grenze");
+        assertFalse(wache.uebergriff(in(freistadt, 50, 0), in(freistadt, 60, 0)),
+                "innerhalb derselben Einheit nicht - sonst waere der Satz darueber"
+                        + " auch gruen, wenn JEDE Bewegung ein Uebergriff waere");
     }
 }

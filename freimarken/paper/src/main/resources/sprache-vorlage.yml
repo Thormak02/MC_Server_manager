@@ -2643,15 +2643,22 @@ blockbuch:
   #   Buch durchgeht - sonst waere die Antwort ein Freispruch fuer einen Namen, den
   #   niemand traegt.
   unbekannt: "<warnung>Den Spieler {name} kennt dieser Server nicht.</warnung>"
-  # Die Woerter fuer die drei Taten. KEINE Farbtags: Sie werden in die Zeilen darueber
+  # Die Woerter fuer die Taten. KEINE Farbtags: Sie werden in die Zeilen darueber
   #   eingesetzt und sind dort ein Blatt - ein Tag darin stuende woertlich im Chat.
   tat:
     setzen: "setzte"
     abbauen: "baute ab"
     benutzen: "benutzte"
-    # Eine Sprengung hat oft keinen Taeter - darum ein Wort, das ohne einen
-    # auskommt. "sprengte weg" liest sich mit "niemand" davor richtig.
+    # DIE VIER WELTURSACHEN haben oft keinen Taeter - darum Woerter, die ohne einen
+    #   auskommen. Jedes liest sich mit "niemand" davor richtig: "niemand sprengte
+    #   weg", "niemand verbrannte", "niemand veraenderte".
     sprengen: "sprengte weg"
+    feuer: "verbrannte"
+    wesen: "veraenderte"
+    # Kolben und Fluessigkeit stehen im Buch NUR, wenn sie angehalten wurden - die
+    #   Zeile sagt "abgewiesen" ohnehin dazu. Darum ein Wort fuer den Versuch.
+    kolben: "schob"
+    fluessigkeit: "floss auf"
   # DER RUECKWEG - /freimarken blockbuch zurueck. Der groesste Eingriff, den dieses
   #   Plugin in eine fertige Welt macht, und darum zweistufig: erst eine Vorschau mit
   #   Zahlen, dann ein Befehl mit "bestaetigen" dahinter.

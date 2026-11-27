@@ -15,8 +15,14 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockBurnEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
+import org.bukkit.event.block.BlockFromToEvent;
+import org.bukkit.event.block.BlockPistonExtendEvent;
+import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.BlockSpreadEvent;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
@@ -393,5 +399,94 @@ final class Blockwache implements Listener {
     /** Nur fuer die Proben: wie viele Zeilen noch auf dem Stapel liegen. */
     int imStapel() {
         return buch.imStapel();
+    }
+
+    /**
+     * Ein Block brennt ab - oder Feuer, Ranken und Pilze breiten sich aus.
+     *
+     * <p>Zwei Ereignisse, eine Tat: {@code BlockBurnEvent} nimmt den Block weg,
+     * {@code BlockSpreadEvent} setzt einen neuen. Fuer die Moderation ist beides
+     * "Feuer war hier", und die Weltregel {@code feuer} fasst sie auch zusammen -
+     * das Buch folgt ihr darin, damit ein Betreiber nicht zwei Namen fuer eine
+     * Sache lernen muss.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void beimAbbrennen(BlockBurnEvent ereignis) {
+        halteFest(Blockzeile.NIEMAND, ereignis.getBlock(), Blocktat.FEUER,
+                !ereignis.isCancelled(), zustandVon(ereignis.getBlock()));
+    }
+
+    /** Feuer, Ranken und Pilze breiten sich aus - siehe {@link #beimAbbrennen}. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void beimAusbreiten(BlockSpreadEvent ereignis) {
+        halteFest(Blockzeile.NIEMAND, ereignis.getBlock(), Blocktat.FEUER,
+                !ereignis.isCancelled(), zustandVon(ereignis.getBlock()));
+    }
+
+    /**
+     * Ein Wesen aendert einen Block - Enderman, Ziege, Schaf, Dorfbewohner.
+     *
+     * <p><b>Der fallende Block ist ausgenommen, und zwar ueber DIESELBE Frage, die
+     * auch der Schutz stellt</b> ({@link Weltwache#wesenZaehlt}). Eine zweite Liste
+     * hier liefe eines Tages auseinander - und dann stuende im Buch eine Zeile fuer
+     * jeden gesetzten Sandblock, waehrend der Schutz ihn durchlaesst.
+     *
+     * <p>Der Taeter wird GEFRAGT und nicht auf NIEMAND gesetzt: Ein Spieler kann
+     * selbst das aendernde Wesen sein.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void beimWesenblock(EntityChangeBlockEvent ereignis) {
+        if (!Weltwache.wesenZaehlt(ereignis.getEntityType())) {
+            return;
+        }
+        halteFest(taeterVon(ereignis.getEntity()), ereignis.getBlock(),
+                Blocktat.WESEN, !ereignis.isCancelled(),
+                zustandVon(ereignis.getBlock()));
+    }
+
+    /**
+     * Ein Kolben schiebt - aufgeschrieben wird nur, was ANGEHALTEN wurde.
+     *
+     * <p>Die Begruendung steht an {@link Blocktat#nurAbgewiesen}: Ein Kolben in einer
+     * Farm schaltet alle anderthalb Sekunden. Der Riegel sitzt in
+     * {@code Blockbuchwerte.schreibt} und nicht hier - dieser Zweig gibt alles herein
+     * und laesst die eine Frage entscheiden.
+     *
+     * <p>Eine Zeile JE BEWEGTEM BLOCK, wie bei der Sprengung: Eine Zeile mit einer
+     * Blockliste traege mehrere Orte, und die Frage "was ist an DIESEM Block
+     * geschehen" muesste jede Liste durchsuchen.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void beimKolbenSchieben(BlockPistonExtendEvent ereignis) {
+        halteBewegungFest(ereignis.getBlocks(), !ereignis.isCancelled());
+    }
+
+    /** Ein Kolben zieht - siehe {@link #beimKolbenSchieben}. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void beimKolbenZiehen(BlockPistonRetractEvent ereignis) {
+        halteBewegungFest(ereignis.getBlocks(), !ereignis.isCancelled());
+    }
+
+    /**
+     * Wasser oder Lava fliesst - aufgeschrieben wird nur, was ANGEHALTEN wurde.
+     *
+     * <p>Aufgeschrieben wird der ZIELblock und nicht die Quelle: Die Frage der
+     * Moderation ist "was ist an dieser Stelle passiert", und passiert ist es dort,
+     * wo die Fluessigkeit ankommt. Der Vorzustand nennt, was vorher dort stand.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void beimFliessen(BlockFromToEvent ereignis) {
+        halteFest(Blockzeile.NIEMAND, ereignis.getToBlock(),
+                Blocktat.FLUESSIGKEIT, !ereignis.isCancelled(),
+                zustandVon(ereignis.getToBlock()));
+    }
+
+    /** Je bewegtem Block eine Zeile - durch denselben Hals wie jede Tat. */
+    private void halteBewegungFest(java.util.List<Block> bloecke,
+                                   boolean gelungen) {
+        for (Block block : bloecke) {
+            halteFest(Blockzeile.NIEMAND, block, Blocktat.KOLBEN, gelungen,
+                    zustandVon(block));
+        }
     }
 }

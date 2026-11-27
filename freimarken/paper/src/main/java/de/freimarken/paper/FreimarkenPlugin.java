@@ -40,6 +40,7 @@ import de.freimarken.kern.Bauplan;
 import de.freimarken.kern.Bautenverzeichnis;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
+import de.freimarken.kern.Einheit;
 import de.freimarken.kern.Blockbuchablage;
 import de.freimarken.kern.Blockbuchwerte;
 import de.freimarken.kern.Aufgabenbuch;
@@ -124,12 +125,14 @@ import de.freimarken.kern.ZwischenspeicherBerufe;
 import de.freimarken.kern.ZwischenspeicherGrundstuecke;
 import de.freimarken.kern.ZwischenspeicherLager;
 import de.freimarken.kern.ZwischenspeicherShops;
+import de.freimarken.kern.Zustaendigkeit;
 import de.freimarken.kern.ZwischenspeicherWolken;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1488,8 +1491,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Betreiber haette die Zeile eingetragen. Das ist der Unterschied zur
         // Blockwache, die beim Start einmal entschieden wird.
         getServer().getPluginManager().registerEvents(
-                new Weltwache(() -> wirtschaft.werte().weltregeln(), buch, welt,
-                        getLogger()), this);
+                new Weltwache(() -> wirtschaft.werte().weltregeln(),
+                        bauwelten(liste.welten()), getLogger()), this);
         getLogger().info("Ladenschutz aktiv: " + ladenverzeichnis.anzahl()
                 + " Einheiten in " + ladenwelt + " - darin baut, bearbeitet und oeffnet"
                 + " Kisten nur der Mieter. Ein freier Stand ist fuer JEDEN gesperrt."
@@ -1683,8 +1686,22 @@ public final class FreimarkenPlugin extends JavaPlugin {
         var abschnitt = getConfig().getConfigurationSection("welten");
         var namen = abschnitt == null ? java.util.Set.<String>of()
                 : abschnitt.getKeys(false);
+        // DIE BAUWELTEN, und sie kommen hier unmittelbar aus der Datei: Diese
+        // Methode laeuft, BEVOR die Welten entstehen - liste.welten() gibt es noch
+        // nicht. Gelesen wird mit demselben Parser (Weltenliste.art) und derselben
+        // Entscheidung (Weltangabe.Art.hatBauland), damit nicht zwei Stellen zwei
+        // Listen von Bauwelten kennen.
+        var bauwelten = new LinkedHashSet<String>();
+        for (String name : namen) {
+            var eintrag = abschnitt.getConfigurationSection(name);
+            var art = Weltenliste.art(eintrag == null ? null
+                    : eintrag.getString("art"));
+            if (art != null && art.hatBauland()) {
+                bauwelten.add(weltschluessel(name));
+            }
+        }
         var regeln = Weltregelliste.ausKonfiguration(getConfig(), namen,
-                this::weltschluessel, MARKTSTADT);
+                this::weltschluessel, bauwelten);
         var klagen = new java.util.ArrayList<>(gelesen.klagen());
         klagen.addAll(regeln.klagen());
         var bericht = new java.util.ArrayList<>(gelesen.bericht());
@@ -5421,5 +5438,81 @@ public final class FreimarkenPlugin extends JavaPlugin {
                             + " (Ursprung " + plan.ursprungX(parzelleX) + "/"
                             + plan.ursprungZ(parzelleZ) + ")", NamedTextColor.GRAY));
         }
+    }
+
+    /**
+     * Je BAUWELT eine Zustaendigkeit - abgeleitet aus {@code art:} in der config.yml.
+     *
+     * <p><b>Die Unterscheidung steht schon in der Datei</b> und wird hier nur
+     * angewandt: {@code raster} hat Parzellen, {@code stadtfelder} hat Stadtfelder
+     * und Grundstuecke, {@code inseln} und {@code wolken} haben Felder. {@code flach}
+     * ist eine von Hand gebaute Welt ohne Einheiten - dort gibt es keine Grenze, und
+     * die Grenzregel verbietet schlicht. {@code gewoehnlich} und {@code leer} sind
+     * keine Bauwelten; dort greifen nur die weltweiten Regeln.
+     *
+     * <p><b>Der Switch hat KEIN default</b>, und das ist die tragende Zeile: Kommt
+     * eine achte Weltart dazu, meldet der Uebersetzer diese Stelle. Mit einem
+     * {@code default} waere die neue Art stumm keine Bauwelt - gebaut, eingetragen,
+     * und ungeschuetzt.
+     *
+     * <p><b>Die Buecher werden erst im Ereignis gefragt</b>, nicht hier: Inselbuch,
+     * Wolkenbuch, Freistadtbuch und Grundstuecksbuch entstehen spaeter im Start, die
+     * Weltwache wird aber vorher angemeldet. Fehlt ein Buch - weil seine Welt nicht
+     * da ist oder ihre Einrichtung scheiterte -, lautet die Antwort "niemandem", und
+     * die Grenzregel greift dort nicht. Das ist die richtige Richtung: Ein Schutz,
+     * der ohne Ablage raet, ist schlimmer als keiner.
+     *
+     * <p>Die ART der Einheit kommt aus der Zeile ({@code Parzelle.art()}) und nicht
+     * aus einer Konstante: Marktstadt, Freistaedte, Werder und Wolken teilen dasselbe
+     * Lager. Nur das Grundstueck zaehlt in einer eigenen Tabelle - siehe
+     * {@link de.freimarken.kern.Einheit}.
+     */
+    private Map<String, Zustaendigkeit> bauwelten(List<Weltangabe> angaben) {
+        Map<String, Zustaendigkeit> karte = new LinkedHashMap<>();
+        for (Weltangabe angabe : angaben) {
+            Zustaendigkeit wer = switch (angabe.art()) {
+                case RASTER -> (w, x, z) -> buch == null
+                        ? java.util.Optional.<Einheit>empty()
+                        : buch.zustaendigerBesitz(w, x, z)
+                                .map(p -> new Einheit(p.art().schluessel(), p.id()));
+                case STADTFELDER -> (w, x, z) -> freistadtbuch == null
+                        ? java.util.Optional.<Einheit>empty()
+                        : freistadtbuch.zustaendigeEinheit(w, x, z);
+                case INSELN -> (w, x, z) -> inselbuch == null
+                        ? java.util.Optional.<Einheit>empty()
+                        : inselbuch.inselAn(w, x, z)
+                                .map(p -> new Einheit(p.art().schluessel(), p.id()));
+                case WOLKEN -> (w, x, z) -> wolkenbuch == null
+                        ? java.util.Optional.<Einheit>empty()
+                        : wolkenbuch.inselAn(w, x, z)
+                                .map(p -> new Einheit(p.art().schluessel(), p.id()));
+                case FLACH -> Zustaendigkeit.ganzGebauteWelt();
+                // KEINE Bauwelt: In einer Farmwelt gehoert kein Block jemandem, und
+                // eine leere Welt hat noch nichts. Wer dort keine Krater will,
+                // traegt explosion ein - das gilt weltweit und braucht keinen Besitz.
+                case GEWOEHNLICH, LEER -> null;
+            };
+            // DER RIEGEL GEGEN DAS AUSEINANDERLAUFEN: Zwei Stellen entscheiden
+            // ueber dieselbe Sache - der Switch darueber (welche Art bekommt
+            // welche Zustaendigkeit) und Weltangabe.Art.hatBauland (wo der Leser
+            // eine Grenzregel stehen laesst). Driften sie auseinander, laesst der
+            // Leser die Regel stehen und die Wache wendet sie nie an - stumm.
+            //
+            // GEWORFEN und nicht geklagt: Das ist ein Fehler im Plugin und keine
+            // Eingabe des Betreibers.
+            if ((wer != null) != angabe.art().hatBauland()) {
+                throw new IllegalStateException("Die Weltart " + angabe.art()
+                        + " sagt hatBauland=" + angabe.art().hatBauland()
+                        + ", bekommt in bauwelten() aber "
+                        + (wer == null ? "KEINE" : "eine")
+                        + " Zustaendigkeit. Die zwei Stellen muessen dasselbe"
+                        + " sagen, sonst laesst der Leser eine Grenzregel stehen,"
+                        + " die nie angewandt wird.");
+            }
+            if (wer != null) {
+                karte.put(weltschluessel(angabe.name()), wer);
+            }
+        }
+        return Map.copyOf(karte);
     }
 }

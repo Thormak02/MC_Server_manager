@@ -44,15 +44,17 @@ final class Weltregelliste {
      * @param wurzel         die ganze Konfiguration, darf {@code null} sein
      * @param bekannteWelten die Weltnamen, die es laut {@code welten:} gibt
      * @param macher         wandelt einen Weltnamen in den Schluessel um
-     * @param parzellenwelt  der NAME der einen Welt mit Parzellenraster; nur
-     *                       dort kann eine Grenzregel ueberhaupt wirken. Leer
-     *                       heisst "nicht bekannt" - dann wird nicht geprueeft,
-     *                       denn ein Leser soll keine Parzellenwelt erfinden.
+     * @param bauwelten      die SCHLUESSEL der Welten, in denen gebaut wird -
+     *                       dort und nur dort kann eine Grenzregel wirken. Die
+     *                       Menge kommt aus {@code Weltangabe.Art.hatBauland},
+     *                       damit diese Frage an einer Stelle entschieden wird.
+     *                       Eine LEERE Menge heisst "nicht bekannt" und nimmt
+     *                       nichts heraus: Ein Leser soll keine Bauwelt erfinden.
      */
     static Ergebnis ausKonfiguration(ConfigurationSection wurzel,
                                      Set<String> bekannteWelten,
                                      Blockbuchliste.Schluesselmacher macher,
-                                     String parzellenwelt) {
+                                     Set<String> bauwelten) {
         List<String> klagen = new ArrayList<>();
         List<String> bericht = new ArrayList<>();
         if (wurzel == null) {
@@ -72,7 +74,7 @@ final class Weltregelliste {
         Map<String, Set<Weltregel>> jeWelt = jeWelt(
                 wurzel.getConfigurationSection(Weltregelwerte.PFAD_WELTEN),
                 bekannteWelten == null ? Set.of() : bekannteWelten, macher, klagen,
-                bericht, parzellenwelt);
+                bericht, bauwelten);
 
         Weltregelwerte werte = new Weltregelwerte(vorgabe, jeWelt);
         nenneWasGilt(werte, bericht);
@@ -141,7 +143,7 @@ final class Weltregelliste {
     private static Map<String, Set<Weltregel>> jeWelt(
             ConfigurationSection abschnitt, Set<String> bekannteWelten,
             Blockbuchliste.Schluesselmacher macher, List<String> klagen,
-            List<String> bericht, String parzellenwelt) {
+            List<String> bericht, Set<String> bauwelten) {
         Map<String, Set<Weltregel>> jeWelt = new LinkedHashMap<>();
         if (abschnitt == null) {
             // BERICHT und keine Klage, derselbe Grund wie bei der Blockbuchliste: Eine
@@ -186,7 +188,7 @@ final class Weltregelliste {
             jeWelt.put(schluessel, ohneWirkungslose(
                     auswahl(abschnitt, weltname, pfad,
                             Weltregelwerte.VORGABE_REGELN, klagen, bericht),
-                    sauber, parzellenwelt, pfad, klagen));
+                    schluessel, bauwelten, pfad, klagen));
         }
         return jeWelt;
     }
@@ -215,9 +217,13 @@ final class Weltregelliste {
                     + Weltregelwerte.wieEingetragen(eintrag.getValue()));
         }
         bericht.add("Weltregeln: " + String.join(", ", teile)
-                + ". Explosion, Feuer und Wesen gelten WELTWEIT; Kolben und"
-                + " Fluessigkeit nur ueber Besitzgrenzen. /freimarken neuladen"
-                + " uebernimmt diese Zeilen.");
+                + ". Explosion, Feuer und Wesen gelten WELTWEIT. Kolben und"
+                + " Fluessigkeit nur ueber BESITZGRENZEN - in einer Welt mit"
+                + " Parzellen, Stadtfeldern, Inseln oder Wolken wird damit nur der"
+                + " Uebergriff auf fremden Grund abgebrochen. In einer ganz gebauten"
+                + " Welt (art: flach, etwa Altfurt) gibt es keine Grenze: dort"
+                + " verbieten die zwei schlicht jede Bewegung. In einer Farmwelt tun"
+                + " sie nichts. /freimarken neuladen uebernimmt diese Zeilen.");
     }
 
     /**
@@ -265,12 +271,12 @@ final class Weltregelliste {
      * soll an EINER Stelle eingeordnet werden.
      */
     private static Set<Weltregel> ohneWirkungslose(Set<Weltregel> gewaehlt,
-                                                   String weltname,
-                                                   String parzellenwelt,
+                                                   String schluessel,
+                                                   Set<String> bauwelten,
                                                    String pfad,
                                                    List<String> klagen) {
-        if (parzellenwelt == null || parzellenwelt.isBlank()
-                || parzellenwelt.equals(weltname)) {
+        if (bauwelten == null || bauwelten.isEmpty()
+                || bauwelten.contains(schluessel)) {
             return gewaehlt;
         }
         Set<Weltregel> wirkungslos = EnumSet.noneOf(Weltregel.class);
@@ -287,10 +293,13 @@ final class Weltregelliste {
         bleibt.removeAll(wirkungslos);
         klagen.add(pfad + ": " + Weltregelwerte.wieEingetragen(wirkungslos)
                 + " wirkt in dieser Welt nicht und wurde herausgenommen. Diese"
-                + " Regeln fragen eine BESITZGRENZE, und ein Parzellenraster gibt"
-                + " es nur in \"" + parzellenwelt + "\". Es bleibt "
-                + Weltregelwerte.wieEingetragen(bleibt) + ". Gegen Spielerhand"
-                + " schuetzt in dieser Welt der Bauschutz, nicht diese Liste.");
+                + " Regeln fragen eine BESITZGRENZE, und in dieser Welt wird nicht"
+                + " gebaut - sie hat weder Parzellen noch Stadtfelder, Inseln oder"
+                + " Wolken, und sie ist auch keine von Hand gebaute Welt. Gebaut"
+                + " wird in: "
+                + String.join(", ", new java.util.TreeSet<>(bauwelten))
+                + ". Es bleibt " + Weltregelwerte.wieEingetragen(bleibt)
+                + ".");
         return bleibt;
     }
 }

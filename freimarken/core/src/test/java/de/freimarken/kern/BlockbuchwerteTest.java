@@ -306,4 +306,91 @@ class BlockbuchwerteTest {
                         + " Konstante ABGEWIESEN koennte nicht mehr sagen, WAS"
                         + " abgewiesen wurde");
     }
+
+    // === Die Weltursachen und "nur die abgewiesenen" [27.11.2026] ==========
+
+    @Test
+    @DisplayName("Zwei Taten schreiben NUR, wenn sie angehalten wurden")
+    void zweiTatenSchreibenNurDieAngehaltenen() {
+        // DIE ENTSCHEIDUNG DES BETREIBERS vom 27.11.2026, und sie ist eine Zahl:
+        // Ein Kolben in einer Farm schaltet alle anderthalb Sekunden, fliessendes
+        // Wasser meldet jeden Fliessschritt. Eine Zeile je Vorgang waeren Millionen
+        // je Woche; interessant ist nur der Vorgang, den eine Weltregel ANGEHALTEN
+        // hat.
+        //
+        // Zwei feste Paarungen zuerst, danach die ganze Aufzaehlung: Die Schleife
+        // allein holte ihre Erwartung aus dem Gepruefen.
+        assertTrue(Blocktat.KOLBEN.nurAbgewiesen());
+        assertFalse(Blocktat.SPRENGEN.nurAbgewiesen(),
+                "eine Sprengung ist selten und immer interessant - sie wird auch"
+                        + " aufgeschrieben, wenn sie gelungen ist");
+
+        int nur = 0;
+        for (Blocktat tat : Blocktat.values()) {
+            if (tat.nurAbgewiesen()) {
+                nur++;
+            }
+        }
+        assertEquals(2, nur,
+                "genau zwei Taten sind so teuer: kolben und fluessigkeit. Kommt"
+                        + " eine dritte dazu, gehoert sie hier mitgezaehlt - und"
+                        + " wenn eine verschwindet, schreibt sie ab sofort jeden"
+                        + " Takt mit.");
+    }
+
+    @Test
+    @DisplayName("Ein GELUNGENER Kolben kommt nicht ins Buch - ein angehaltener schon")
+    void gelungenerKolbenKommtNichtInsBuch() {
+        // DER RIEGEL AN DER EINEN FRAGE. Die Welt nennt kolben UND abgewiesen - also
+        // waere ohne diesen Riegel jeder Takt eine Zeile.
+        Blockbuchwerte werte = werte(auswahl(true, Blocktat.KOLBEN,
+                Blocktat.SPRENGEN), Map.of());
+
+        assertFalse(werte.schreibt(MARKTSTADT, Blocktat.KOLBEN, true, "stone"),
+                "ein Kolben, der geschoben HAT, ist kein Fund - und es waeren"
+                        + " Millionen Zeilen je Woche");
+        assertTrue(werte.schreibt(MARKTSTADT, Blocktat.KOLBEN, false, "stone"),
+                "ein ANGEHALTENER Kolben ist der Grief-Versuch, und der gehoert ins"
+                        + " Buch");
+
+        // DIE GEGENRICHTUNG: Bei einer gewoehnlichen Tat gilt der Riegel NICHT.
+        // Ohne diesen Satz waere die Probe auch gruen, wenn gar nichts Gelungenes
+        // mehr geschrieben wuerde - und das Buch waere leer.
+        assertTrue(werte.schreibt(MARKTSTADT, Blocktat.SPRENGEN, true, "stone"),
+                "eine gelungene Sprengung gehoert ins Buch");
+    }
+
+    @Test
+    @DisplayName("Nennt die Welt kolben NICHT, hilft auch ein Abbruch nichts")
+    void ohneKolbenInDerAuswahlSchreibtNichts() {
+        // Der Riegel schaltet nichts ZU: Er nimmt nur heraus. Eine Welt, die kolben
+        // nicht nennt, schreibt auch den angehaltenen nicht auf.
+        Blockbuchwerte werte = werte(auswahl(true, Blocktat.SPRENGEN), Map.of());
+
+        assertFalse(werte.schreibt(MARKTSTADT, Blocktat.KOLBEN, false, "stone"));
+    }
+
+    @Test
+    @DisplayName("Die Vorgabe des Programms nennt JEDE Weltursache")
+    void vorgabeNenntJedeWeltursache() {
+        // "Ueberall mindestens aufzeichnen" [Betreiber 27.11.2026]: Eine Welt ohne
+        // eigene Zeile erbt die Vorgabe - und wenn dort eine Weltursache fehlt,
+        // schreibt genau die Mehrzahl der Welten sie nie auf. Tafel 31ed sieht das
+        // nicht: Sie liest die LISTEN der config.yml, und dort steht die Tat ja.
+        for (Blocktat tat : List.of(Blocktat.SPRENGEN, Blocktat.FEUER,
+                Blocktat.WESEN, Blocktat.KOLBEN, Blocktat.FLUESSIGKEIT)) {
+            assertTrue(Blockbuchwerte.VORGABE_AUSWAHL.taten().contains(tat),
+                    tat.schluessel() + " fehlt in der Vorgabe - damit schreibt jede"
+                            + " Welt ohne eigene Zeile diese Ursache NIE auf");
+        }
+        assertTrue(Blockbuchwerte.VORGABE_AUSWAHL.auchAbgewiesen(),
+                "ohne abgewiesen schriebe die Vorgabe fuer kolben und fluessigkeit"
+                        + " nie eine Zeile - die zwei kommen nur angehalten ins"
+                        + " Buch");
+
+        // UND benutzen fehlt weiter mit Absicht - die haeufigste Tat.
+        assertFalse(Blockbuchwerte.VORGABE_AUSWAHL.taten()
+                        .contains(Blocktat.BENUTZEN),
+                "benutzen gehoert der Welt, in der die Truhenfrage gestellt wird");
+    }
 }

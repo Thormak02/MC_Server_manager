@@ -1658,4 +1658,67 @@ class FreistadtbuchTest {
         assertThrows(IllegalArgumentException.class, () -> buch.auflage(parzelle));
     }
 
+
+    // ------------------------------- Die Zustaendigkeit OHNE Spieler (Weltregeln)
+
+    @Test
+    @DisplayName("zustaendigeEinheit: das Grundstueck sticht die Stadt - ohne Spieler")
+    void zustaendigeEinheitLaesstDasGrundstueckStechen() {
+        // DIE FRAGE DER WELTREGELN. Ein Lavastrom hat keinen Spieler, muss aber
+        // wissen, ob er eine Besitzgrenze ueberschreitet. Die Rangfolge muss
+        // dieselbe sein wie in darfBauen: Ein vergebenes Grundstueck ist eine
+        // EIGENE Einheit, sonst schoebe ein Kolben von der Stadt darauf, ohne eine
+        // Grenze zu sehen.
+        buch.gruende(WELT, anna, "annastadt", VIELE);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+        SpeicherGrundstuecke grundstuecke = new SpeicherGrundstuecke();
+        buch.gibGrundstuecke(grundstuecke);
+        Stadtfeldplan plan = buch.plan();
+        int zelleX = plan.ersteZelle(stadt.x());
+        int zelleZ = plan.ersteZelle(stadt.z());
+        int blockX = plan.zellenAnfang(zelleX) + 3;
+        int blockZ = plan.zellenAnfang(zelleZ) + 3;
+        int danebenX = plan.zellenAnfang(zelleX + 1) + 3;
+
+        // VORHER: beide Stellen gehoeren derselben Einheit - der Stadt.
+        assertEquals(buch.zustaendigeEinheit(WELT, blockX, blockZ),
+                buch.zustaendigeEinheit(WELT, danebenX, blockZ),
+                "ohne Grundstueck ist die ganze Stadt eine Einheit - sonst stuende"
+                        + " in Annas Stadt jeder Kolben still");
+
+        Grundstueck bertsLand = grundstuecke.anlegen(WELT, stadt.id(),
+                Zellquader.eineZelle(zelleX, zelleZ), bert, 5_000L);
+
+        var darauf = buch.zustaendigeEinheit(WELT, blockX, blockZ);
+        var daneben = buch.zustaendigeEinheit(WELT, danebenX, blockZ);
+        assertTrue(darauf.isPresent() && daneben.isPresent(), "beide vergeben");
+        assertEquals(new Einheit(Freistadtbuch.ART_GRUNDSTUECK, bertsLand.id()),
+                darauf.get(),
+                "auf dem vergebenen Grundstueck ist das GRUNDSTUECK zustaendig");
+        assertEquals(new Einheit(stadt.art().schluessel(), stadt.id()),
+                daneben.get(),
+                "eine Zelle weiter wieder die Stadt");
+        assertNotEquals(darauf.get(), daneben.get(),
+                "und damit liegt zwischen den zwei Stellen eine Grenze - genau das"
+                        + " braucht die Weltwache");
+    }
+
+    @Test
+    @DisplayName("zustaendigeEinheit: in der LEERE und auf freiem Feld niemand")
+    void zustaendigeEinheitIstInDerLeereLeer() {
+        // Dieselben zwei Faelle, die darfBauen mit LEERE und FREIES_FELD beantwortet.
+        // Ohne sie naennte feldNummer mitten in der Leere das Feld DAVOR, und die
+        // Antwort waere die Stadt des Nachbarn.
+        buch.gruende(WELT, anna, "annastadt", VIELE);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+        Stadtfeldplan plan = buch.plan();
+
+        int leereX = plan.feldAnfang(stadt.x()) - 1;
+        assertNotEquals(Stadtfeldplan.Feld.STADTFELD,
+                plan.feldBei(leereX, plan.feldAnfang(stadt.z()) + 3),
+                "die Probe braucht wirklich eine Stelle in der Leere");
+        assertTrue(buch.zustaendigeEinheit(WELT, leereX,
+                        plan.feldAnfang(stadt.z()) + 3).isEmpty(),
+                "in der Leere gehoert niemandem etwas");
+    }
 }
