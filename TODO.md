@@ -1245,9 +1245,31 @@ Jetzt steht `blockbuch` und `blockbuch zurueck \<radius> \<minuten>` mit drin,
 **dreifach festgenagelt** (BildGleichTest, FreimarkenBefehlTest, SendewegTest) und
 im Startlauf durch das echte MiniMessage geprueft.
 
-OFFEN, eigener Punkt: Dieselbe Zeile ist fuer ein Dutzend weitere Befehle
-unvollstaendig - team, strafe, meldung, portal, einsehen, geld, goldgeld, besitz,
-altfurt, messstelle.
+~~OFFEN, eigener Punkt: Dieselbe Zeile ist fuer ein Dutzend weitere Befehle
+unvollstaendig.~~ **FERTIG 27.11.2026** - und die Zahl war falsch: Gemessen am
+GEBAUTEN Befehlsbaum fehlten **fuenf** (altfurt, besitz, geld, goldgeld,
+messstelle). `team`, `strafe`, `meldung`, `portal` und `einsehen` sind gar keine
+Unterbefehle von `/freimarken`, sie haben ihre eigene Zeile in `/hilfe`.
+
+**Die Zeile kann jetzt nicht mehr veralten.** Zwei neue Tafeln in
+`FreimarkenBefehlTest` gehen den gebauten Baum ab, nicht eine Liste von Hand:
+
+- `jederZweigStehtInDerUebersicht` - jeder Zweig braucht ein Wort in einer der zwei
+  Uebersichtszeilen. Ein neuer Zweig macht sie rot.
+- `uebersichtNenntKeinenErfundenenZweig` - die Gegenrichtung, gegen das Wort, das
+  nach einer Umbenennung stehen bleibt. Geht den Baum VOLLSTAENDIG ab:
+  `bestaetigen` liegt fuenf Ebenen tief unter `besitz freigeben <x> <z>`.
+
+Warum keine Liste von Hand: **`geld` und `goldgeld` entstehen im Programm aus der
+WAEHRUNG** (`geldbaum(...)`), nicht aus einem `literal("geld")`. Eine abgeschriebene
+Liste haette genau die zwei nicht gekannt - also die zwei, mit denen ein Betreiber
+Geld bewegt. Genau das war beim Messen der erste Fund.
+
+Nur `vorgenerieren` fehlt mit Absicht (laeuft einmal beim Einrichten, Last fuer
+Minuten) - mit Grund in `NICHT_IN_DER_UEBERSICHT`.
+
+Vier Einspritzungen, alle gefangen; Zeile im Startlauf an der Konsole geprueft.
+Drei alte Tafeln zogen nach (BildGleich 11, FreimarkenBefehl 44b, Sendeweg 33am).
 
 ### FUND 26.11.2026: ein Properties-Zerleger ist VERSCHWUNDEN
 

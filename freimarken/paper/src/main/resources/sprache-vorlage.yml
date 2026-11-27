@@ -1609,10 +1609,29 @@ stand:
   #   Argument steht im Hilfeplan ausdruecklich am Eintrag /team.
   # GENANNT WIRD DER GANZE WEG und nicht nur das Wort: Sonst raet der Moderator,
   #   was danach kommt. Wie bei "parzelle \<x> \<z>".
-  # Diese Zeile ist fuer ein Dutzend weitere Befehle unvollstaendig (team, strafe,
-  #   meldung, portal, einsehen, geld, goldgeld, besitz, altfurt, messstelle) - das
-  #   steht im TODO und ist ein eigener Punkt.
-  befehle-verwaltung: "<gedaempft>/freimarken welt · parzelle \\<x> \\<z> · neuladen · blockbuch · blockbuch zurueck \\<radius> \\<minuten></gedaempft>"
+  # VOLLSTAENDIG seit dem 27.11.2026, und eine Tafel haelt das:
+  #   FreimarkenBefehlTest.jederZweigStehtInDerUebersicht geht den GEBAUTEN
+  #   Befehlsbaum ab und verlangt fuer jeden Zweig ein Wort in dieser oder der
+  #   Zeile darueber. Die Gegenrichtung haelt die Tafel daneben: ein Wort hier,
+  #   das kein Zweig ist, macht sie rot.
+  #
+  #   Die Liste von Hand waere der falsche Bau gewesen - "geld" und "goldgeld"
+  #   entstehen im Programm aus der WAEHRUNG, nicht aus einem literal("geld").
+  #   Eine abgeschriebene Liste haette genau die zwei nicht gekannt, also die zwei,
+  #   mit denen ein Betreiber Geld bewegt.
+  #
+  # BERICHTIGT: Hier stand, die Zeile sei "fuer ein Dutzend weitere Befehle
+  #   unvollstaendig (team, strafe, meldung, portal, einsehen, ...)". Gemessen am
+  #   Baum fehlten FUENF, und team, strafe, meldung, portal und einsehen sind gar
+  #   keine Unterbefehle von /freimarken - sie haben ihre eigene Zeile in /hilfe.
+  #
+  # NUR vorgenerieren fehlt mit Absicht: Er laeuft einmal beim Einrichten und
+  #   erzeugt Last fuer Minuten. Wer ihn braucht, bekommt ihn im Startbericht
+  #   genannt; in einer Zeile, die bei jedem /freimarken kommt, waere er eine
+  #   Einladung. Nimmst du einen anderen hier heraus, bleibt er trotzdem tippbar -
+  #   der Befehlsbaum steht im Programm, nicht in dieser Datei -, aber die Tafel
+  #   wird rot.
+  befehle-verwaltung: "<gedaempft>/freimarken welt · parzelle \\<x> \\<z> · neuladen · messstelle · blockbuch · blockbuch zurueck \\<radius> \\<minuten> · geld \\<spieler> \\<betrag> · goldgeld \\<spieler> \\<betrag> · besitz uebertragen \\<x> \\<z> \\<spieler> · besitz freigeben \\<x> \\<z> bestaetigen · altfurt sichern \\<bau></gedaempft>"
 
 # /FREIMARKEN PREIS - was die naechste Parzelle kostet.
 #

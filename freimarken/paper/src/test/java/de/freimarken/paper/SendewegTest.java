@@ -1777,7 +1777,7 @@ class SendewegTest {
                 &#a5b4bfStand 0.1.0 · Java 25 · 1.21.4
                 &#d9564dAblage fluechtig - nichts ueberlebt den Neustart
                 &#a5b4bf/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
-                &#6e7a82/freimarken welt · parzelle <x> <z> · neuladen · blockbuch · blockbuch zurueck <radius> <minuten>
+                &#6e7a82/freimarken welt · parzelle <x> <z> · neuladen · messstelle · blockbuch · blockbuch zurueck <radius> <minuten> · geld <spieler> <betrag> · goldgeld <spieler> <betrag> · besitz uebertragen <x> <z> <spieler> · besitz freigeben <x> <z> bestaetigen · altfurt sichern <bau>
                 == stand/mariadb-ohne-recht
                 &#c6a15bDer Freimarkenbund
                 &#a5b4bfStand 0.1.0 · Java 25 · 1.21.4
@@ -1788,7 +1788,7 @@ class SendewegTest {
                 &#a5b4bfStand 0.1.0 · Java 25 · 1.21.4
                 &#6e7a82Ablage MariaDB
                 &#a5b4bf/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
-                &#6e7a82/freimarken welt · parzelle <x> <z> · neuladen · blockbuch · blockbuch zurueck <radius> <minuten>
+                &#6e7a82/freimarken welt · parzelle <x> <z> · neuladen · messstelle · blockbuch · blockbuch zurueck <radius> <minuten> · geld <spieler> <betrag> · goldgeld <spieler> <betrag> · besitz uebertragen <x> <z> <spieler> · besitz freigeben <x> <z> bestaetigen · altfurt sichern <bau>
                 == preis/gratis
                 &#73bf96Die erste Parzelle ist gratis.
                 &#6e7a82Bisher ausgegeben: 0 Mark

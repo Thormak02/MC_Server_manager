@@ -758,8 +758,12 @@ class BildGleichTest {
                                 + " · /freimarken spielzeit"),
                 new Zeile(BundSatz.STAND_BEFEHLE_VERWALTUNG, 1L, Einsatz.keine(),
                         "&#6e7a82/freimarken welt · parzelle <x> <z> · neuladen"
-                                + " · blockbuch · blockbuch zurueck <radius>"
-                                + " <minuten>"),
+                                + " · messstelle · blockbuch · blockbuch"
+                                + " zurueck <radius> <minuten> · geld <spieler>"
+                                + " <betrag> · goldgeld <spieler> <betrag>"
+                                + " · besitz uebertragen <x> <z> <spieler>"
+                                + " · besitz freigeben <x> <z> bestaetigen"
+                                + " · altfurt sichern <bau>"),
                 new Zeile(BundSatz.PREIS_GRATIS, 1L, Einsatz.keine(),
                         "&#73bf96Die erste Parzelle ist gratis."),
                 // Der zweite Farbwechsel MITTEN im Satz nach der Schutzwache - und

@@ -2,14 +2,17 @@ package de.freimarken.paper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import net.kyori.adventure.audience.Audience;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -178,11 +181,17 @@ class FreimarkenBefehlTest {
 
         assertEquals(5, mitRecht.chatBild().size(), "vier Zeilen plus die Verwaltung: "
                 + mitRecht.chatBild());
-        // BLOCKBUCH UND RUECKWEG STEHEN SEIT DEM 26.11.2026 MIT DRIN: /hilfe kennt
-        // den Rueckweg nicht (er ist ein Unterzweig ohne eigene Beschreibung), und
-        // ein Befehl, den niemand findet, ist einer, den niemand benutzt.
+        // VOLLSTAENDIG SEIT DEM 27.11.2026: Jeder Zweig des Baums steht hier, und
+        // jederZweigStehtInDerUebersicht haelt das - eine neue Verzweigung macht
+        // jene Tafel rot, und diese Zeile hier zieht nach.
+        //
+        // NUR vorgenerieren fehlt mit Absicht; die Begruendung steht in der
+        // Sprachvorlage und in NICHT_IN_DER_UEBERSICHT.
         assertEquals("&#6e7a82/freimarken welt · parzelle <x> <z> · neuladen"
-                        + " · blockbuch · blockbuch zurueck <radius> <minuten>",
+                        + " · messstelle · blockbuch · blockbuch zurueck <radius>"
+                        + " <minuten> · geld <spieler> <betrag> · goldgeld <spieler>"
+                        + " <betrag> · besitz uebertragen <x> <z> <spieler> · besitz"
+                        + " freigeben <x> <z> bestaetigen · altfurt sichern <bau>",
                 mitRecht.chatBild().get(4),
                 "und sie steht ZULETZT - ein Spieler liest sie sonst vor den Befehlen,"
                         + " die ihn angehen");
@@ -504,4 +513,124 @@ class FreimarkenBefehlTest {
         assertEquals(List.of(), gerufen, "Vorschlaege sichern nichts");
     }
 
+
+    /** Dieselbe Sprache, die der Baum bekommt - fuer die Uebersichtszeilen. */
+    private static Sprache sprache() {
+        return Sprachprobe.spracheAusDemJar();
+    }
+
+    // === Die Uebersicht und der Baum ====================================
+
+    /**
+     * Zweige, die mit ABSICHT in keiner Uebersichtszeile stehen.
+     *
+     * <p>Je Eintrag ein Grund, und der Grund steht hier und nicht im TODO: Wer einen
+     * Zweig hier eintraegt, nimmt ihn aus der Tafel - das soll man begruenden
+     * muessen.
+     */
+    private static final Map<String, String> NICHT_IN_DER_UEBERSICHT = Map.of(
+            "vorgenerieren", "Laeuft einmal beim Einrichten und erzeugt Last fuer"
+                    + " Minuten. Wer ihn braucht, bekommt ihn im Startbericht"
+                    + " genannt; in einer Zeile, die bei jedem /freimarken kommt,"
+                    + " waere er eine Einladung.",
+            "preis", "Steht in der Spielerzeile mit seinem Argument\\<anzahl> und"
+                    + " wird darum von der Wortsuche unten nicht als blankes Wort"
+                    + " gefunden - er IST genannt.");
+
+    @Test
+    @DisplayName("Jeder Zweig von /freimarken steht in einer Uebersichtszeile")
+    void jederZweigStehtInDerUebersicht() {
+        // DER BAUM IST DIE QUELLE, nicht eine Liste von Hand: "geld" und "goldgeld"
+        // entstehen aus der Waehrung, also findet sie keine Textsuche nach
+        // literal("geld"). Eine abgeschriebene Liste haette genau die zwei nicht
+        // gekannt - und das sind die zwei, mit denen ein Betreiber Geld bewegt.
+        var zweige = new java.util.TreeSet<String>();
+        for (var kind : bund().freimarken().getChildren()) {
+            zweige.add(kind.getName());
+        }
+        assertTrue(zweige.size() >= 10,
+                "nur " + zweige.size() + " Zweige gefunden (" + zweige + ") - dann"
+                        + " geht diese Tafel den Baum nicht mehr ab, und sie ist"
+                        + " gruen, ohne etwas geprueft zu haben");
+
+        String uebersicht = Sprachprobe.nurText(sprache().eineZeile(
+                        BundSatz.STAND_BEFEHLE, Einsatz.keine()))
+                + " " + Sprachprobe.nurText(sprache().eineZeile(
+                        BundSatz.STAND_BEFEHLE_VERWALTUNG, Einsatz.keine()));
+
+        var fehlen = new java.util.TreeSet<String>();
+        for (String zweig : zweige) {
+            if (NICHT_IN_DER_UEBERSICHT.containsKey(zweig)) {
+                continue;
+            }
+            if (!uebersicht.contains(zweig)) {
+                fehlen.add(zweig);
+            }
+        }
+        assertEquals(java.util.Set.of(), fehlen,
+                "Diese Zweige von /freimarken gibt es im Baum, aber in keiner der"
+                        + " zwei Uebersichtszeilen (bund.stand.befehle und"
+                        + " bund.stand.befehle-verwaltung). Ein Befehl, den niemand"
+                        + " nennt, ist einer, auf den niemand kommt: /hilfe kennt"
+                        + " Unterzweige nicht, und die plugin.yml liest kein"
+                        + " Moderator. Entweder in die Zeile eintragen oder mit"
+                        + " Grund in NICHT_IN_DER_UEBERSICHT: " + fehlen
+                        + " -- Uebersicht ist: " + uebersicht);
+    }
+
+    @Test
+    @DisplayName("Die Uebersicht nennt keinen Zweig, den es nicht gibt")
+    void uebersichtNenntKeinenErfundenenZweig() {
+        // DIE GEGENRICHTUNG, und sie faengt den Fall, der nach einer Umbenennung
+        // bleibt: Die Zeile nennt weiter das alte Wort, der Baum kennt es nicht mehr,
+        // und der Moderator tippt etwas, das Brigadier mit einer englischen Meldung
+        // abweist.
+        // GANZ hinunter und nicht zwei Ebenen: "bestaetigen" liegt unter
+        // besitz > freigeben > <x> > <z>, also fuenf Ebenen tief. Mit zwei Ebenen
+        // meldete die Tafel es als erfundenen Befehl - und ein Fehltreffer ist eine
+        // Einladung, die Tafel auszunehmen.
+        var zweige = new java.util.TreeSet<String>();
+        var offen = new java.util.ArrayDeque<
+                com.mojang.brigadier.tree.CommandNode<CommandSourceStack>>();
+        offen.add(bund().freimarken());
+        while (!offen.isEmpty()) {
+            var knoten = offen.poll();
+            zweige.add(knoten.getName());
+            offen.addAll(knoten.getChildren());
+        }
+
+        // Woerter, die in den Zeilen stehen duerfen, ohne ein Zweig zu sein.
+        //
+        // "zurueck" steht hier aus einem Grund, der NUR fuer diese Probe gilt: Der
+        // blockbuch-Zweig ist hier ein Platzhalter ohne Unterzweige (siehe bund()),
+        // also kennt dieser Baum sein "zurueck" nicht. Dass es den Zweig wirklich
+        // gibt, haelt BlockBefehlTest.
+        var erlaubt = new java.util.TreeSet<>(java.util.List.of(
+                "freimarken", "parzelle", "mark", "team", "hilfe", "zurueck"));
+
+        var erfunden = new java.util.TreeSet<String>();
+        for (String satz : java.util.List.of(
+                Sprachprobe.nurText(sprache().eineZeile(BundSatz.STAND_BEFEHLE,
+                        Einsatz.keine())),
+                Sprachprobe.nurText(sprache().eineZeile(
+                        BundSatz.STAND_BEFEHLE_VERWALTUNG, Einsatz.keine())))) {
+            // DIE ARGUMENTE HERAUS, und zwar VOR dem Zerlegen: "\<anzahl>" ist ein
+            // Hilfetext fuer den Spieler und kein Zweig. Ohne diesen Schnitt meldete
+            // die Tafel anzahl, radius und minuten als erfundene Befehle - und ein
+            // Fehltreffer in einer Tafel ist eine Einladung, sie auszunehmen.
+            for (String wort : satz.replaceAll("<[^>]*>", " ").split("[^a-z-]+")) {
+                if (wort.length() < 4 || erlaubt.contains(wort)
+                        || zweige.contains(wort)) {
+                    continue;
+                }
+                erfunden.add(wort);
+            }
+        }
+        assertEquals(java.util.Set.of(), erfunden,
+                "Diese Woerter stehen in der Uebersicht, sind aber kein Zweig des"
+                        + " Befehlsbaums - ein Moderator tippt sie und bekommt"
+                        + " Brigadiers englische Absage. Entweder berichtigen oder,"
+                        + " wenn es ein anderer Befehl des Plugins ist, oben in"
+                        + " erlaubt eintragen: " + erfunden);
+    }
 }
