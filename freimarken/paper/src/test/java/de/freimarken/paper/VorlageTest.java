@@ -925,6 +925,12 @@ class VorlageTest {
             // PFENNIGE sind am 10.11.2026 mit dem Sortiment gegangen.
             "Freistadtliste.java -> \"Mark einmalig\"",
             "Freistadtliste.java -> \" Mark je Gruendung, \"",
+            // Der Preis des STADTRECHTS in der Rechenprobe [Fund des Startlaufs
+            // 27.11.2026]: Er stand in keiner einzigen Startzeile, und er
+            // entscheidet, ob in einer Stadt gehandelt werden darf. Dieselbe
+            // Stelle wie die zwei Zeilen darueber - Startbericht, an den
+            // Betreiber, nie an einen Spieler.
+            "Freistadtliste.java -> \" Mark aus der Stadtkasse - ohne das handelt in der\"",
             // Die Klage ueber eine unbrauchbare Ladengebuehr - sie geht in den
             // Startbericht, also an den Betreiber [Teil E6].
             "Freistadtliste.java -> \" Mark - verworfen. Eine 0 ist\"",

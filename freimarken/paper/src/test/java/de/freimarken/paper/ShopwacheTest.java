@@ -383,8 +383,8 @@ class ShopwacheTest {
         // Stellvertreter - dasselbe Muster wie in MesswacheTest.
         return new Shopwache(
                 new Shopbuch(welche, null, null,
-                        new Wirtschaftsstand(Wirtschaftswerte.VORGABE), null,
-                        Logger.getAnonymousLogger()), null,
+                        new Wirtschaftsstand(Wirtschaftswerte.VORGABE), null, 
+                IN_DER_MALL, KEIN_BAULAND, Logger.getAnonymousLogger()), null,
                 Sprachprobe.spracheAusDemJar(), tat -> tat.run(),
                 Logger.getAnonymousLogger());
     }
@@ -565,4 +565,20 @@ class ShopwacheTest {
             return false;
         }
     }
+
+    /**
+     * Diese Proben stehen IN DER MALL - sie pruefen den Shop und nicht den Ort.
+     *
+     * <p>Seit dem 27.11.2026 darf ein Kistenshop nur in einer Ladeneinheit oder in
+     * einer Freistadt mit Stadtrecht stehen ("in der parzelle sind shops verboten").
+     * Diese Datei prueft, was ein Shop TUT - Ware, Preise, Zugriff, Gebuehr. Wo er
+     * stehen darf, prueft ShopOrtTest; waere die Naht hier "nirgends erlaubt", sagte
+     * jede Probe dieser Datei nur noch KEIN_HANDELSPLATZ.
+     */
+    private static final Shopbuch.Ladenfrage IN_DER_MALL =
+            (welt, x, y, z) -> true;
+
+    /** Kein privates Bauland - die Begruendung steht an {@link #IN_DER_MALL}. */
+    private static final Shopbuch.Baulandfrage KEIN_BAULAND =
+            (welt, x, z) -> false;
 }

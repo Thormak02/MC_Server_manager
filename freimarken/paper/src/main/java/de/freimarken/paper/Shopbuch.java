@@ -78,6 +78,21 @@ final class Shopbuch {
          * Stadt und den Grund - der Satz an den Spieler nennt beides.
          */
         KEIN_LADENRECHT,
+
+        /**
+         * Hier darf ueberhaupt kein Shop stehen - nicht auf privatem Bauland.
+         *
+         * <p>[Chat 27.11.2026] "in der parzelle sind shops verboten, nur in der
+         * mall oder in der eigenen stadt mit freihandels lizens / stadtrecht
+         * erlaubt (kostet geld)". Betrifft die Parzelle, den Werder, die
+         * Wolkeninsel und jede Farmwelt.
+         *
+         * <p>Ein eigener Bescheid und nicht {@link #KEIN_LADENRECHT}: Jener
+         * sagt "deine Stadt erfuellt etwas nicht" und hat einen naechsten
+         * Schritt. Dieser sagt "hier nicht, geh woanders hin" - eine andere
+         * Absage mit einer anderen Antwort.
+         */
+        KEIN_HANDELSPLATZ,
         /**
          * Die Stadt nimmt eine Ladengebuehr, und er kann sie nicht zahlen [Teil E6].
          *
@@ -204,6 +219,43 @@ final class Shopbuch {
      */
     private final Freistadtbuch freistaedte;
 
+    /**
+     * Ob an dieser Stelle eine Ladeneinheit liegt - die Mall.
+     *
+     * <p>Eine Naht und kein Verzeichnis hier: Das Nachsehen braucht einen
+     * {@code Location} und damit Bukkit, und {@code Ladenschutz.einheitAn} ist
+     * schon die EINE Stelle, die es tut. Ein zweites Verzeichnis in diesem Buch
+     * liefe von jenem weg.
+     */
+    interface Ladenfrage {
+
+        /**
+         * Ob diese Stelle in einer Ladeneinheit liegt.
+         *
+         * <p>MIT der Hoehe: Eine Ladeneinheit ist ein QUADER, und in einer
+         * Markthalle liegen mehrere Stockwerke uebereinander. Ohne y waere der
+         * Laden im Erdgeschoss die Erlaubnis fuer das Dach darueber.
+         */
+        boolean inEinerEinheit(String welt, int x, int y, int z);
+    }
+
+    /**
+     * Ob an dieser Stelle PRIVATES Bauland liegt - Parzelle, Werder, Wolke.
+     *
+     * <p>Dieselbe Quelle, die die Weltregeln fragen
+     * ({@code de.freimarken.kern.Zustaendigkeit}): "gehoert dieser Block
+     * jemandem". Eine zweite Vorstellung davon waere genau die Luecke, vor der
+     * jene Schnittstelle warnt.
+     */
+    interface Baulandfrage {
+
+        /** Ob diese Stelle zu einer Besitzeinheit gehoert. */
+        boolean istPrivatesBauland(String welt, int x, int z);
+    }
+
+    private final Ladenfrage laeden;
+    private final Baulandfrage bauland;
+
     private final Logger protokoll;
 
     /**
@@ -223,7 +275,7 @@ final class Shopbuch {
      */
     Shopbuch(Shopablage ablage, Warenleser waren, Zugriff zugriff,
             Wirtschaftsstand wirtschaft, Freistadtbuch freistaedte,
-            Logger protokoll) {
+            Ladenfrage laeden, Baulandfrage bauland, Logger protokoll) {
         if (wirtschaft == null) {
             throw new IllegalArgumentException("Ohne Wirtschaftsstand gibt es kein"
                     + " Bundwort - und das wird im AUGENBLICK des Schildschreibens"
@@ -234,6 +286,8 @@ final class Shopbuch {
         this.zugriff = zugriff;
         this.wirtschaft = wirtschaft;
         this.freistaedte = freistaedte;
+        this.laeden = laeden;
+        this.bauland = bauland;
         this.protokoll = protokoll;
     }
 
@@ -294,7 +348,7 @@ final class Shopbuch {
         // dem Spieler nicht zu erfahren, wem die Kiste gehoert - er kaufte ein
         // Grundstueck, das nichts aendert. Eine Absage, die auf einen Ausweg zeigt,
         // den es nicht gibt, ist schlechter als gar keine.
-        Anlage ohneLadenrecht = ladenrechtsabsage(welt, kisteX, kisteZ,
+        Anlage ohneLadenrecht = ortsabsage(welt, kisteX, kisteY, kisteZ,
                 schild.bundshop());
         if (ohneLadenrecht != null) {
             return ohneLadenrecht;
@@ -525,10 +579,29 @@ final class Shopbuch {
      * Ein Nein bei stummem Lager hielte auch den Shop in der Wildnis auf, mit dem die
      * Freistaedte nichts zu tun haben. Die Klage steht im Protokoll.
      */
-    private Anlage ladenrechtsabsage(String welt, int kisteX, int kisteZ,
+    private Anlage ortsabsage(String welt, int kisteX, int kisteY, int kisteZ,
             boolean bundshop) {
-        if (freistaedte == null || bundshop) {
+        // DER BETREIBER UEBERALL: Ein Bundshop ist kein Spielerhandel, und die
+        // Markthalle selbst besteht aus ihnen.
+        if (bundshop) {
             return null;
+        }
+        // DIE FREISTADT ZUERST, und das ist eine Entscheidung mit Grund: Ihre Absage
+        // ist die SPRECHENDE - sie nennt die Stadt und was ihr fehlt. Die Mall
+        // danach, denn dort gibt es nichts zu erklaeren.
+        //
+        // UEBERSCHNEIDEN KOENNEN SICH DIE ZWEI NICHT: Eine Ladeneinheit liegt in der
+        // Ladenwelt, eine Freistadt in der Stadtfelderwelt. Die Reihenfolge ist
+        // darum im Spiel ohne Wirkung - und in einer Probe entscheidet sie, ob die
+        // Stadtfrage ueberhaupt gestellt wird.
+        if (freistaedte == null) {
+            // Ohne Freistadtbuch ist die Stadtfrage nicht zu beantworten. Dann
+            // bleibt die Mall - und sonst das Verbot. Das ist die richtige Richtung:
+            // Ein Shop auf einer Parzelle soll auch dann nicht entstehen, wenn ein
+            // Buch fehlt.
+            return inDerMall(welt, kisteX, kisteY, kisteZ)
+                    ? null
+                    : baulandabsage(welt, kisteX, kisteZ);
         }
         try {
             // DIE WELT KOMMT HIER BELIEBIG HEREIN - ein Shopschild kann in jeder
@@ -539,7 +612,13 @@ final class Shopbuch {
             // steht dort - samt dem Fall, der ihn noetig machte.
             Optional<Parzelle> stadt = freistaedte.stadtAn(welt, kisteX, kisteZ);
             if (stadt.isEmpty()) {
-                return null;
+                // KEINE STADT - dann bleibt die Mall, und sonst ist hier kein
+                // Handelsplatz. Bis zum 27.11.2026 stand hier ein return null,
+                // also "erlaubt", und genau dadurch konnte ein Shop auf einer
+                // Parzelle stehen.
+                return inDerMall(welt, kisteX, kisteY, kisteZ)
+                        ? null
+                        : baulandabsage(welt, kisteX, kisteZ);
             }
             Freistadtbuch.Auflage auflage = freistaedte.darfLaden(stadt.get());
             if (auflage.erfuellt()) {
@@ -617,5 +696,56 @@ final class Shopbuch {
 
     private static Anlage absage(Bescheid bescheid) {
         return new Anlage(bescheid, null, null, 0, null, null, 0L);
+    }
+
+    /**
+     * Die Absage fuer eine Stelle, die kein Handelsplatz ist.
+     *
+     * <p>Getrennt von {@link #ortsabsage}, weil DREI Zweige dort hierher fuehren:
+     * keine Stadt, kein Freistadtbuch, und eine Stoerung. Dreimal derselbe Rumpf
+     * waere dreimal dieselbe Entscheidung - und beim naechsten Zweig vergessen.
+     *
+     * <p><b>Auf privatem Bauland ist es ein VERBOT, sonst auch</b>: Der Betreiber
+     * sagt "nur in der mall oder in der eigenen stadt". Die Unterscheidung steht
+     * trotzdem im Protokoll, denn sie erklaert dem Betreiber, warum ein Spieler
+     * fragt - auf seiner eigenen Parzelle ist die Absage ueberraschender als
+     * mitten in der Wildnis.
+     */
+    private Anlage baulandabsage(String welt, int kisteX, int kisteZ) {
+        boolean privat = false;
+        if (bauland != null) {
+            try {
+                privat = bauland.istPrivatesBauland(welt, kisteX, kisteZ);
+            } catch (RuntimeException fehler) {
+                // Die Absage steht ohnehin fest; die Art ist nur fuer das
+                // Protokoll. Ein Ausfall darf sie nicht aufhalten.
+                protokoll.log(Level.WARNING, "Das Bauland an " + welt + " "
+                        + kisteX + "/" + kisteZ + " ist nicht zu lesen - die"
+                        + " Absage bleibt, nur ihre Art steht nicht fest: "
+                        + fehler.getClass().getSimpleName() + ": "
+                        + fehler.getMessage());
+            }
+        }
+        protokoll.info("Kistenshop abgelehnt: " + welt + " " + kisteX + "/"
+                + kisteZ + " ist kein Handelsplatz"
+                + (privat ? " (privates Bauland)" : "")
+                + " - erlaubt sind eine Ladeneinheit und eine Freistadt mit"
+                + " Stadtrecht.");
+        return absage(Bescheid.KEIN_HANDELSPLATZ);
+    }
+
+    /**
+     * Liegt diese Stelle in einer Ladeneinheit - der Mall?
+     *
+     * <p>Wer dort bauen darf, ist ihr Mieter: Das haelt der {@code Ladenschutz}, und
+     * darum fragt dieser Zweig nicht noch einmal nach dem Mieter - ohne Baurecht kommt
+     * das Schild gar nicht zustande.
+     *
+     * <p>Herausgezogen, weil ZWEI Zweige von {@link #ortsabsage} hierher fuehren: mit
+     * und ohne Freistadtbuch. Zweimal derselbe Rumpf waere zweimal dieselbe
+     * Entscheidung.
+     */
+    private boolean inDerMall(String welt, int x, int y, int z) {
+        return laeden != null && laeden.inEinerEinheit(welt, x, y, z);
     }
 }

@@ -2309,6 +2309,33 @@ freistaedte:
   #   Geld geht in die STADTKASSE und ist damit neben der Marktgebuehr die zweite
   #   Einnahme einer Stadt.
   #
+  # DAS STADTRECHT - was eine Stadt EINMAL zahlt, damit in ihr gehandelt werden darf.
+  #
+  # Chat 27.11.2026: "in der parzelle sind shops verboten, nur in der mall oder in
+  #   der eigenen stadt mit freihandels lizens / stadtrecht erlaubt (kostet geld)".
+  #   Ein Kistenshop geht damit an genau zwei Orten: in einer Ladeneinheit der
+  #   Markthalle und in einer Freistadt, die dieses Recht gekauft hat. Auf einer
+  #   Parzelle, einem Werder, einer Wolkeninsel und in jeder Farmwelt geht er nicht.
+  #
+  # GEZAHLT WIRD AUS DER STADTKASSE, einmal, und die BUCHUNG ist der Nachweis - es
+  #   gibt keine Spalte "Stadtrecht" an der Stadt. Wer die Kasse ansieht, findet den
+  #   Grund "Stadtrecht" und damit den Beleg; eine zweite Spalte waere ein zweiter
+  #   Ort fuer dieselbe Tatsache. Verkauft der Besitzer die Stadt, geht das Recht mit.
+  #
+  # ZUSAETZLICH zur Auflage (auflage.ladenrecht) und nicht statt ihr: Erst Regeltext
+  #   und ein Stadtbuerger, DANN das Geld. Die Absage sagt immer, was gerade fehlt -
+  #   sonst zahlt jemand und erfaehrt danach, dass er noch Regeln schreiben muss.
+  #
+  # 0 HEISST "KEIN STADTRECHT NOETIG". Das ist der Ausschalter, und er ist notwendig:
+  #   Gekauft heisst "es gibt eine Buchung", und eine Buchung ueber 0 Mark summiert
+  #   sich zu 0 - jede Stadt saehe fuer immer unbezahlt aus. Bei 0 wird darum gar
+  #   nicht gefragt.
+  #
+  # NUR BEIM START GELESEN? Nein - /freimarken neuladen uebernimmt diese Zahl. Wer sie
+  #   senkt, macht das Recht sofort billiger; wer sie auf 0 stellt, schaltet die Regel
+  #   ab. Schon gekaufte Rechte bleiben - die Buchung steht ja im Buch.
+  stadtrecht-preis: 25000
+
   # BEIDE GETRENNT EINSTELLBAR, und jede 0 ist ein Ausschalter:
   ladengebuehr:
     # EINMALIG beim Anlegen eines neuen Kistenshops in der Stadt. Wer nicht zahlen kann,

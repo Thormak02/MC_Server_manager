@@ -233,6 +233,18 @@ enum ShopSatz implements Satz {
     SHOP_KEIN_LADENRECHT("shop.absage.kein-ladenrecht", Art.SATZ, "stadt", "was"),
 
     /**
+     * Hier darf ueberhaupt kein Spielershop stehen.
+     *
+     * <p>[Chat 27.11.2026] "in der parzelle sind shops verboten, nur in der mall oder
+     * in der eigenen stadt mit freihandels lizens / stadtrecht erlaubt (kostet geld)".
+     *
+     * <p>OHNE Platzhalter, und das ist Absicht: Die Absage nennt keine Stelle, sondern
+     * die zwei Orte, an denen es GEHT. Ein Spieler, der liest "nicht hier", fragt
+     * "wo denn" - diese Zeile muss die Antwort gleich mitbringen.
+     */
+    SHOP_KEIN_HANDELSPLATZ("shop.absage.kein-handelsplatz", Art.SATZ),
+
+    /**
      * Die Stadt nimmt eine Ladengebuehr, und sein Geld reicht nicht [Teil E6].
      *
      * <p>Ein anderer Satz als {@link #SHOP_KEIN_LADENRECHT}: Dort darf NIEMAND einen

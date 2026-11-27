@@ -642,6 +642,40 @@ final class Freistadttext {
         };
     }
 
+    /**
+     * Wie ein Kauf des Stadtrechts ausgegangen ist.
+     *
+     * <p>Drei Lagen teilen ihren Satz mit dem Abhebezug - keine Stadt, eine fremde
+     * Stadt, eine Stoerung. Dieselbe Entscheidung wie dort: Ein zweiter Satz fuer
+     * dieselbe Lage waere ein zweites Wort dafuer, und ein Spieler lese je nach
+     * Zweig etwas anderes ueber dasselbe.
+     */
+    static List<Component> stadtrechtZeilen(Sprache sprache,
+            Freistadtbuch.Stadtrechtentscheid entscheid,
+            Function<UUID, String> namenVon) {
+        return switch (entscheid.bescheid()) {
+            case GEKAUFT -> sprache.bau(FreistadtSatz.STADTRECHT_GEKAUFT, 1L,
+                    Einsatz.von("preis", sprache.betrag(entscheid.preis()))
+                            .mit("rest", sprache.betrag(entscheid.stand())));
+            case SCHON_GEKAUFT -> sprache.bau(FreistadtSatz.STADTRECHT_SCHON, 1L,
+                    Einsatz.keine());
+            case NICHT_NOETIG -> sprache.bau(
+                    FreistadtSatz.STADTRECHT_NICHT_NOETIG, 1L, Einsatz.keine());
+            case ZU_WENIG -> sprache.bau(FreistadtSatz.STADTRECHT_ZU_WENIG, 1L,
+                    Einsatz.von("preis", sprache.betrag(entscheid.preis()))
+                            .mit("stand", sprache.betrag(entscheid.stand())));
+            case FREMDE_STADT -> sprache.bau(FreistadtSatz.KASSE_NICHT_DEINE, 1L,
+                    Einsatz.von("stadt", entscheid.stadt().orElseThrow().name())
+                            .mit("besitzer", namenVon.apply(
+                                    entscheid.stadt().orElseThrow()
+                                            .eigentuemer())));
+            case KEINE_STADT -> sprache.bau(FreistadtSatz.KEINE_STADT, 1L,
+                    Einsatz.keine());
+            case GESTOERT -> sprache.bau(FreistadtSatz.GRUNDSTUECK_GESTOERT, 1L,
+                    Einsatz.keine());
+        };
+    }
+
     // --- Teil E2: der Regeltext -----------------------------------------------
 
     /**

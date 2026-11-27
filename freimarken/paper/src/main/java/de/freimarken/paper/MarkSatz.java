@@ -405,6 +405,16 @@ enum MarkSatz implements Satz {
             Art.WORT),
 
     /**
+     * Das Wort fuer das gekaufte STADTRECHT einer Freistadt.
+     *
+     * <p>Der Grund IST der Nachweis, dass die Stadt handeln darf - siehe
+     * {@link de.freimarken.kern.Buchungsgrund#STADTRECHT}. Darum muss das Wort im
+     * Verlauf der Stadtkasse stehen und nicht nur eine Zahl: Wer die Kasse liest, soll
+     * sehen, wofuer das Geld weg ist.
+     */
+    VERLAUF_GRUND_STADTRECHT("mark.verlauf.grund.stadtrecht", Art.WORT),
+
+    /**
      * Die Tafel des Muenzhauses - der Kopf von {@code /mark muenzhaus} [Teil G].
      *
      * <p>Der ORT, den Plan 2.1 nennt: Kontostand, Verlauf, Wechseldeckel und der Katalog

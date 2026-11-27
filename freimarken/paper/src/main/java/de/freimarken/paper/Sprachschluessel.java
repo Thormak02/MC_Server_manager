@@ -326,6 +326,7 @@ final class Sprachschluessel {
             case OHNE_REGELN -> FreistadtSatz.AUFLAGE_OHNE_REGELN;
             case OHNE_BUERGER -> FreistadtSatz.AUFLAGE_OHNE_BUERGER;
             case OHNE_BEIDES -> FreistadtSatz.AUFLAGE_OHNE_BEIDES;
+            case OHNE_STADTRECHT -> FreistadtSatz.AUFLAGE_OHNE_STADTRECHT;
             // ERFUELLT kommt hier nicht an - jeder Aufrufer prueft erfuellt() vorher.
             // Dass es trotzdem dasteht, ist Absicht: Eine stille Ausnahme waere eine
             // Absage ohne Grund, ein Wurf ist ein Eintrag im Logbuch mit Zeile.
@@ -370,6 +371,7 @@ final class Sprachschluessel {
             case WARE_UNBEKANNT -> ShopSatz.SHOP_WARE_UNBEKANNT;
             case KEIN_BUNDRECHT -> ShopSatz.SHOP_KEIN_BUNDRECHT;
             case KEIN_LADENRECHT -> ShopSatz.SHOP_KEIN_LADENRECHT;
+            case KEIN_HANDELSPLATZ -> ShopSatz.SHOP_KEIN_HANDELSPLATZ;
             case LADENGEBUEHR_ZU_TEUER -> ShopSatz.SHOP_LADENGEBUEHR_ZU_TEUER;
             case GESTOERT -> ShopSatz.SHOP_GESTOERT;
             case ABGEBAUT, KEIN_SHOP -> throw new IllegalArgumentException(bescheid

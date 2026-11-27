@@ -742,7 +742,17 @@ public final class Freistadtbuch {
         OHNE_BUERGER,
 
         /** Beides fehlt - der Zustand jeder frisch gegruendeten Stadt. */
-        OHNE_BEIDES;
+        OHNE_BEIDES,
+
+        /**
+         * Substanz da, aber das STADTRECHT ist nicht gekauft.
+         *
+         * <p>ZULETZT geprueft, und das ist die Reihenfolge, auf die es ankommt:
+         * Erst erfaehrt der Stadtbesitzer, welche Substanz fehlt (Regeltext,
+         * Buerger), dann das Geld. Umgekehrt zahlte er 25.000 Mark und erfuehre
+         * danach, dass er auch noch Regeln schreiben muss.
+         */
+        OHNE_STADTRECHT;
 
         /** Ob die Auflage erfuellt ist. */
         public boolean erfuellt() {
@@ -877,15 +887,23 @@ public final class Freistadtbuch {
      *         den der Satz an den Spieler nennt
      */
     public Auflage darfLaden(Parzelle stadt) {
-        if (!wirtschaft.werte().freistaedte().auflageLadenrecht()) {
-            return Auflage.ERFUELLT;
+        if (wirtschaft.werte().freistaedte().auflageLadenrecht()) {
+            if (grundstuecke == null) {
+                // Siehe das Javadoc: Hier faellt die Regel aus, und der
+                // Startbericht sagt es. Ohne diesen Zweig waere es die
+                // Vollsperre.
+                return Auflage.ERFUELLT;
+            }
+            Auflage substanz = auflage(stadt);
+            if (!substanz.erfuellt()) {
+                return substanz;
+            }
         }
-        if (grundstuecke == null) {
-            // Siehe das Javadoc: Hier faellt die Regel aus, und der Startbericht sagt
-            // es. Ohne diesen Zweig waere es die Vollsperre.
-            return Auflage.ERFUELLT;
-        }
-        return auflage(stadt);
+        // DAS STADTRECHT ZULETZT [Chat 27.11.2026]: "Stadt kauft einmal,
+        // Auflage bleibt dazu". Erst die Substanz, dann das Geld - sonst zahlt
+        // jemand und erfaehrt danach, dass ihm noch Regeln und ein Buerger
+        // fehlen.
+        return hatStadtrecht(stadt) ? Auflage.ERFUELLT : Auflage.OHNE_STADTRECHT;
     }
 
     // --- Teil E5: der Verfall -------------------------------------------------
@@ -1577,5 +1595,163 @@ public final class Freistadtbuch {
         // unterscheidbar, und die Art sagt zusaetzlich, WAS da liegt.
         return Optional.of(new Einheit(stadt.get().art().schluessel(),
                 stadt.get().id()));
+    }
+
+    /**
+     * Hat diese Stadt das Stadtrecht gekauft?
+     *
+     * <p><b>Die BUCHUNG ist der Nachweis</b>, und darum steht das Stadtrecht nicht
+     * als Spalte an der Parzelle: Gekauft heisst "es gibt eine Buchung des Grundes
+     * {@link Buchungsgrund#STADTRECHT} auf die Stadtkasse". Eine eigene Spalte waere
+     * ein zweiter Ort fuer dieselbe Tatsache - und im Buch stuende das Geld dann
+     * ohne Grund.
+     *
+     * <p><b>Bei Preis 0 wird gar nicht gefragt</b>, und das ist kein Entgegenkommen,
+     * sondern notwendig: Eine Buchung ueber 0 Mark summiert sich zu 0, und die Stadt
+     * saehe fuer immer unbezahlt aus. Ein Betreiber, der 0 eintraegt, will die Regel
+     * nicht - siehe {@link Freistadtwerte#VORGABE_STADTRECHT_PREIS}.
+     *
+     * <p>Gefragt wird {@code != 0} und nicht ein Vorzeichen: Eine Ausgabe steht
+     * NEGATIV im Buch, und ein {@code > 0} faende sie nie.
+     *
+     * <p>Faellt die Kasse aus, wirft sie durch - wie {@code darfBauen} und aus
+     * demselben Grund: Der Aufrufer entscheidet, und er entscheidet NEIN.
+     */
+    public boolean hatStadtrecht(Parzelle stadt) {
+        if (stadt == null || !stadt.istFreistadt()) {
+            throw new IllegalArgumentException("Ein Stadtrecht haben nur"
+                    + " Freistaedte");
+        }
+        if (wirtschaft.werte().freistaedte().stadtrechtPreis() <= 0L) {
+            return true;
+        }
+        // Gefragt wird ueber die Stadtkasse und nicht mit stadt.kasse(): Jene Methode
+        // bildet das Konto an EINER Stelle (Stadtkasse.konto) - eine Stadt ohne
+        // eigene Kassenkennung bekommt dort die abgeleitete.
+        return stadtkasse.summeSeit(stadt, java.time.Instant.EPOCH,
+                Buchungsgrund.STADTRECHT) != 0L;
+    }
+
+    // --- Das Stadtrecht kaufen [Chat 27.11.2026] ------------------------------
+
+    /** Wie ein Kauf des Stadtrechts ausgegangen ist. */
+    public enum Stadtrechtbescheid {
+
+        /** Gekauft - ab jetzt darf in dieser Stadt gehandelt werden. */
+        GEKAUFT,
+
+        /** Hier steht keine Freistadt. */
+        KEINE_STADT,
+
+        /** Die Stadt gehoert einem anderen. */
+        FREMDE_STADT,
+
+        /** Die Stadt hat es schon - ein zweites Mal zahlt niemand. */
+        SCHON_GEKAUFT,
+
+        /**
+         * Der Betreiber hat den Preis auf 0 gestellt - es ist nicht noetig.
+         *
+         * <p>Ein eigener Bescheid und nicht {@link #SCHON_GEKAUFT}: Jener sagt "du
+         * hast bezahlt", dieser "hier zahlt niemand". Wer das zweite liest und das
+         * erste erwartet, sucht eine Buchung, die es nie gab.
+         */
+        NICHT_NOETIG,
+
+        /** So viel liegt nicht in der Stadtkasse. */
+        ZU_WENIG,
+
+        /** Die Ablage oder die Kasse war stumm. */
+        GESTOERT
+    }
+
+    /**
+     * Das Ergebnis eines Kaufs.
+     *
+     * @param stadt  die Stadt, um die es ging - bei KEINE_STADT leer
+     * @param preis  was das Recht kostet; auch bei ZU_WENIG gefuellt, damit der Satz
+     *               die Zahl nennen kann
+     * @param stand  was NACHHER in der Kasse liegt. Zurueckgegeben und nicht vom
+     *               Aufrufer nachgefragt - dieselbe Begruendung wie beim
+     *               {@link Kassenentscheid}: Ein zweiter Blick koennte etwas
+     *               anderes sehen
+     */
+    public record Stadtrechtentscheid(Stadtrechtbescheid bescheid,
+                                      Optional<Parzelle> stadt, long preis,
+                                      long stand) {
+    }
+
+    /**
+     * Das Stadtrecht fuer die Stadt an dieser Stelle kaufen.
+     *
+     * <p><b>Aus der STADTKASSE und nicht aus der Tasche des Besitzers:</b> Die Stadt
+     * kauft das Recht, nicht er. Verkauft er sie, geht es mit - und genau dafuer
+     * haengt der Nachweis an der Kasse und nicht am Spieler.
+     *
+     * <p>Die Reihenfolge der Riegel ist die von {@link #hebeAb}, und aus demselben
+     * Grund: erst die Stadt, dann der Stand, dann der Besitz - der Satz an einen
+     * Fremden nennt nie das Guthaben.
+     *
+     * <p><b>SCHON_GEKAUFT vor ZU_WENIG</b>, und das ist wichtig: Eine Stadt, die das
+     * Recht hat und gerade kein Geld, soll nicht "zu wenig" lesen. Sonst zahlt der
+     * Besitzer ein zweites Mal ein, um etwas zu kaufen, das er hat.
+     */
+    public Stadtrechtentscheid kaufeStadtrecht(String welt, UUID spieler,
+                                               int blockX, int blockZ) {
+        long preis = wirtschaft.werte().freistaedte().stadtrechtPreis();
+        Optional<Parzelle> stadt;
+        try {
+            stadt = stadtAn(welt, blockX, blockZ);
+        } catch (RuntimeException fehler) {
+            return new Stadtrechtentscheid(Stadtrechtbescheid.GESTOERT,
+                    Optional.empty(), preis, 0L);
+        }
+        if (stadt.isEmpty()) {
+            return new Stadtrechtentscheid(Stadtrechtbescheid.KEINE_STADT,
+                    Optional.empty(), preis, 0L);
+        }
+        Parzelle hier = stadt.get();
+        long stand;
+        boolean schon;
+        try {
+            stand = stadtkasse.stand(hier);
+            schon = hatStadtrecht(hier);
+        } catch (RuntimeException fehler) {
+            return new Stadtrechtentscheid(Stadtrechtbescheid.GESTOERT, stadt,
+                    preis, 0L);
+        }
+        if (spieler == null || !hier.gehoert(spieler)) {
+            return new Stadtrechtentscheid(Stadtrechtbescheid.FREMDE_STADT, stadt,
+                    preis, 0L);
+        }
+        if (preis <= 0L) {
+            // Der Betreiber hat die Regel abgeschaltet. hatStadtrecht gibt dann
+            // ohnehin true - ein Kauf waere ein Griff in die Kasse fuer nichts.
+            return new Stadtrechtentscheid(Stadtrechtbescheid.NICHT_NOETIG, stadt,
+                    0L, stand);
+        }
+        if (schon) {
+            return new Stadtrechtentscheid(Stadtrechtbescheid.SCHON_GEKAUFT, stadt,
+                    preis, stand);
+        }
+        if (preis > stand) {
+            // Die Zahl kommt MIT: Der Besitzer soll ausrechnen koennen, was fehlt.
+            return new Stadtrechtentscheid(Stadtrechtbescheid.ZU_WENIG, stadt, preis,
+                    stand);
+        }
+        try {
+            if (!stadtkasse.abbuchen(hier, preis, Buchungsgrund.STADTRECHT)) {
+                // Zwischen Lesen und Abbuchen hat sich der Stand geaendert - eine
+                // Ladengebuehr derselben Stadt kann dazwischenkommen. Die Antwort
+                // ist dieselbe wie oben, mit dem NEUEN Stand.
+                return new Stadtrechtentscheid(Stadtrechtbescheid.ZU_WENIG, stadt,
+                        preis, stadtkasse.stand(hier));
+            }
+            return new Stadtrechtentscheid(Stadtrechtbescheid.GEKAUFT, stadt, preis,
+                    stadtkasse.stand(hier));
+        } catch (RuntimeException fehler) {
+            return new Stadtrechtentscheid(Stadtrechtbescheid.GESTOERT, stadt, preis,
+                    stand);
+        }
     }
 }

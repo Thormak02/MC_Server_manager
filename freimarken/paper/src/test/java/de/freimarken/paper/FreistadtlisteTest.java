@@ -245,4 +245,43 @@ class FreistadtlisteTest {
                 "und die Vorgabe gilt weiter - NICHT false");
     }
 
+
+    // --- Das Stadtrecht im Startbericht [Fund 27.11.2026] --------------------
+
+    @Test
+    @DisplayName("Die Rechenprobe nennt den Preis des Stadtrechts - mit der Zahl")
+    void rechenprobeNenntDasStadtrecht() {
+        // DER FUND DES STARTLAUFS: Im ganzen Startprotokoll stand das Wort
+        // "Stadtrecht" nicht einmal. Eine Einstellung, die entscheidet, ob in
+        // einer Stadt gehandelt werden darf, war unsichtbar - und kein Probenlauf
+        // sieht so etwas, weil keine Probe den Bericht als GANZES liest.
+        String satz = Freistadtliste.rechenprobe(Freistadtwerte.VORGABE);
+
+        assertTrue(satz.contains("Stadtrecht"), satz);
+        // DIE ZAHL selbst, und nicht nur das Wort: Darum geht es bei einer
+        // Rechenprobe - sie ist die einzige Schranke gegen den Wert, der im
+        // erlaubten Bereich liegt und trotzdem falsch ist.
+        assertTrue(satz.contains(String.valueOf(Freistadtwerte.VORGABE_STADTRECHT_PREIS)),
+                "die Zahl muss dastehen, sonst sieht niemand den fehlenden"
+                        + " Nullenblock: " + satz);
+        assertTrue(satz.contains("Stadtkasse"),
+                "und WOHER das Geld kommt - nicht aus der Tasche des Besitzers: "
+                        + satz);
+    }
+
+    @Test
+    @DisplayName("Bei Preis 0 sagt die Rechenprobe AUS - nicht einfach nichts")
+    void rechenprobeSagtAusBeiNull() {
+        // DIE GEGENRICHTUNG, und ohne sie waere die Probe darueber auch gruen,
+        // wenn die Zeile bei 0 eine 0 nennte: Der Betreiber liese dann
+        // "Stadtrecht einmalig 0 Mark" und hielte es fuer gratis statt fuer
+        // abgeschaltet. Die zwei sind nicht dasselbe - bei 0 gibt es gar keine
+        // Buchung, siehe VORGABE_STADTRECHT_PREIS.
+        String satz = Freistadtliste.rechenprobe(
+                Freistadtwerte.VORGABE.mitStadtrechtPreis(0L));
+
+        assertTrue(satz.contains("Stadtrecht: AUS"), satz);
+        assertFalse(satz.contains("Stadtrecht einmalig"),
+                "bei 0 darf dort keine Zahl stehen: " + satz);
+    }
 }

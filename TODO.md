@@ -2170,6 +2170,141 @@ Schritt 10.
   - Die Kommentare nennen die Platzhalter NICHT verlaesslich: 39 von 638 vollstaendig, 332 gar nicht. Als Quelle unbrauchbar.
 - ~~OFFEN: MariaDB-Treiber und die drei Spieldaten-Seiten. Der Manager hat KEINEN MySQL/MariaDB-Treiber in `requirements.txt`.~~ 22.11. BEIDES GEBAUT: Treiber `pymysql==1.1.1` (requirements.txt) in Teil C, die drei Seiten in Teil D.
 
+### FERTIG 27.11.2026: die /freimarken-Adminzeile
+
+- Die Uebersicht nennt jeden Zweig, den es gibt. Zwei Tafeln halten das in BEIDE
+  Richtungen: `jederZweigStehtInDerUebersicht` liest den gebauten Brigadier-Baum,
+  `uebersichtNenntKeinenErfundenenZweig` die andere Richtung.
+- FUND: `bestaetigen` liegt fuenf Ebenen tief - der erste Baumgang fand es nicht.
+  Der Gang ist jetzt vollstaendig rekursiv.
+- FUND: Ein Literal neben einem Wortargument braucht sein eigenes `.executes`,
+  sonst antwortet Brigadier auf Englisch. Siehe die Notiz dazu.
+
+### FERTIG 27.11.2026: Stadtrecht und die Ortsregel fuer Kistenshops
+
+Betreiber: *"in der parzelle sind shops verboten, nur in der mall oder in der
+eigenen stadt mit freihandels lizens / stadtrecht erlaubt (kostet geld)"*, und
+zur Form: *"Stadt kauft einmal, Auflage bleibt dazu"*.
+
+**Wo ein Shop stehen darf** - vier Zweige an EINER Stelle (`Shopbuch.ortsabsage`),
+in der Reihenfolge der Erlaubnis:
+
+| Ort | Shop? |
+| --- | --- |
+| Bundshop (Bundwort im Schild) | ueberall - er ist kein Spielerhandel |
+| Ladeneinheit (die Mall) | ja; wer dort bauen darf, ist Mieter |
+| Freistadt mit Auflage UND Stadtrecht | ja |
+| Parzelle, Werder, Wolkeninsel, Farmwelt | **nein**, `KEIN_HANDELSPLATZ` |
+
+- "Nur" ist woertlich genommen: Ein Werder und eine Wolkeninsel sind privates
+  Bauland wie eine Parzelle. Sag Bescheid, wenn das zu weit geht.
+- Die Freistadt wird VOR der Mall gefragt, obwohl sich die zwei nie
+  ueberschneiden koennen (verschiedene Welten): Ihre Absage ist die sprechende -
+  sie nennt die Stadt und was ihr fehlt. In einer Probe entscheidet die
+  Reihenfolge, ob die Stadtfrage ueberhaupt gestellt wird.
+- Zwei Naehte (`Ladenfrage`, `Baulandfrage`), weil beide Bukkit brauchen; die
+  Rechnung steht im Shopbuch und ist damit ohne Server pruefbar.
+
+**Das Stadtrecht** kostet `freistaedte.stadtrecht-preis` (ab Werk 25 000),
+`/freistadt stadtrecht`, gezahlt aus der STADTKASSE.
+
+- Der Nachweis IST die Buchung: `summeSeit(kasse, EPOCH, STADTRECHT) != 0`. Keine
+  eigene Spalte - die waere ein zweiter Ort fuer dieselbe Tatsache, und im Buch
+  stuende das Geld dann ohne Grund.
+- Gefragt wird `!= 0` und nicht `> 0`: Eine Ausgabe steht NEGATIV im Buch.
+- **Preis 0 schaltet die Regel aus**, und das ist notwendig, nicht nur bequem:
+  Eine Buchung ueber 0 Mark summiert sich zu 0, jede Stadt saehe fuer immer
+  unbezahlt aus. Bei 0 wird darum gar nicht gefragt.
+- Die Stadt kauft, nicht ihr Besitzer. Verkauft er sie, geht das Recht mit -
+  genau dafuer haengt es an der Kasse.
+- Reihenfolge in `darfLaden`: **erst die Substanz** (Regeltext, Stadtbuerger),
+  dann das Geld. Umgekehrt zahlte jemand 25 000 und erfuehre danach, dass ihm
+  noch Regeln fehlen. Neuer Wert `Auflage.OHNE_STADTRECHT`.
+- Reihenfolge in `kaufeStadtrecht`: `SCHON_GEKAUFT` **vor** `ZU_WENIG`. Eine
+  Stadt mit dem Recht und leerer Kasse soll nicht "zu wenig" lesen - sonst zahlt
+  der Besitzer ein, um zu kaufen, was er hat.
+- Ein Fremder erfaehrt den Stand der Stadtkasse nicht (`stand` bleibt 0) -
+  dieselbe Reihenfolge wie bei `hebeAb`.
+- Proben: 7 fuer `kaufeStadtrecht` (jeder Bescheid), 5 fuer die Ortsregel,
+  `stadtrechtFehltOhneKauf`. 5716 -> 5728 Proben, beide Module gruen.
+
+#### FUND DES STARTLAUFS 27.11.2026: das Stadtrecht stand in keiner Startzeile
+
+Im ganzen Startprotokoll kam das Wort *Stadtrecht* nicht ein einziges Mal vor -
+bei einer Einstellung, die entscheidet, ob in einer Stadt ueberhaupt gehandelt
+werden darf. Kein Probenlauf sieht das: Keine Probe liest den Bericht als Ganzes.
+
+- Das Javadoc von `Freistadtliste.rechenprobe` nennt selbst den Grund, warum die
+  Zahl dort stehen muss: *"Wer hier 4.000 Mark statt 400.000 Mark liest, sieht den
+  fehlenden Nullenblock - keine Zahlengrenze sieht ihn."* Fuer 25.000 gilt das
+  genauso.
+- Die Zeile nennt jetzt Preis, Herkunft (Stadtkasse) und bei 0 ein **AUS** statt
+  einer 0 - "Stadtrecht einmalig 0 Mark" liest sich wie gratis und ist etwas
+  anderes als abgeschaltet.
+- HINTER dem Rueckweg bei `hoechstzahl: 0`: Wo nicht gegruendet wird, gibt es
+  keine Stadt, die ein Recht kaufen koennte.
+- Zwei Proben in `FreistadtlisteTest` halten beide Richtungen. `VorlageTest` 10e
+  bekam eine Zeile: Jedes Geldwort im Programm steht dort mit seiner
+  Begruendung, und der Wert kommt aus dem ROTEN Lauf.
+- Was der Startlauf NICHT zeigen konnte: `/freistadt` und `/freistadt stadtrecht`
+  schweigen auf der Konsole, weil beide spielerpflichtig sind - wortgleich mit
+  "gibt es nicht". Das ist der Grund, warum Tafel 31eg daneben noetig ist.
+
+#### FUND 27.11.2026: 34 Befehlszweige, die niemand hielt - Tafel 31eg
+
+Gemessen beim Einspritzen des eigenen Baus: Nimmt man aus `FreistadtBefehle` den
+Block
+
+```java
+                .then(Commands.literal("stadtrecht")
+                        .executes(this::kaufeStadtrecht))
+```
+
+heraus, bleiben **alle 3343 Proben gruen**. Der Befehl waere gebaut, geprueft und
+unsichtbar wirkungslos - ein Spieler bekaeme "Unknown command".
+
+Eine Lesesuche ueber alle 27 Befehlsklassen (218 Knoten) fand **34 Zweige in
+derselben Lage**, keinen davon widerlegt:
+
+| Klasse | Zweige | ohne Halter |
+| --- | --- | --- |
+| `/parzelle` + `/mark` | 37 | **17** |
+| `/freistadt` | 32 | **6** |
+| `/strafe`, `/bannliste` | 12 | **5** |
+| `/portal` | 8 | **3** |
+| `/freimarken spielzeit` | 2 | **2** |
+| `/wolke` | 18 | 1 |
+| `/freimarken` (BundBefehle) | 26 | 0 |
+
+- WARUM `/freimarken` die einzige lueckenlose ist: Sie hat einen BAUMLAUF
+  (`jederZweigStehtInDerUebersicht` geht `getChildren()` ab) UND eine
+  Uebersichtszeile als zweites Artefakt. Verschwindet ein Zweig, nennt die Zeile
+  ein Wort, das der Baum nicht mehr kennt - die Gegenrichtung wird rot.
+- Was einen Zweig NICHT haelt: eine Probe, die die Behandlungsmethode direkt ruft
+  (`buch.kaufeStadtrecht`), eine BildGleich-Probe ueber den Satztext, eine Tafel
+  ueber `plugin.yml`. Alle drei bleiben gruen, wenn der `.then`-Block weg ist -
+  die Methode steht ja noch da.
+- **Tafel 31eg** schliesst alle 34 auf einmal: je Befehlsklasse die Anzahl ALLER
+  Knoten und die verschiedenen Knotenwoerter, wie sie im Quelltext stehen. Der
+  Erwartungswert ist aus dem gruenen Stand GEERNTET, nicht abgeschrieben.
+- Gelesen wird der Argumenttext, nicht der aufgeloeste Name: In `StrafBefehle`
+  heisst ein Zweig `art.kuerzel()`, in `ParzellenBefehle` entsteht er aus
+  `Richtung.values()`. Ein Leser nur fuer Literale saehe genau die nicht.
+- Nachweis (5 Einspritzungen, 5 gefangen): der entwischte Fall selbst; derselbe
+  Fall in einer anderen Klasse; `AUFHEBEN` -> `VERLAUF` (Konstante);
+  **eines von drei `bestaetigen`** weg, wo nur die ZAHL sich aendert; und ein
+  Zweig, der DAZUkommt. Vier davon fing nur 31eg.
+- OFFEN, eine Ebene hoeher: Dass eine Befehlsklasse ueberhaupt ANGEMELDET ist,
+  haelt keine Probe. Der Nachweis ist die Startzeile `Befehle angemeldet: ...`,
+  und der Kommentar an `registriereBefehle` sagt warum: Auf der Konsole antwortet
+  ein spielerpflichtiger Befehl wortgleich wie einer, den es nicht gibt. Ein
+  Baumlauf je Klasse scheitert daran, dass die meisten zum Bauen einen Server
+  brauchen.
+- OFFEN, eine Ebene tiefer: Ein Dispatch je Zweig (`CommandDispatcher.execute`)
+  waere die staerkste Form - er prueft Dasein UND Erreichbarkeit. `/strafe`,
+  `/parzelle` und `/freistadt` haben solche Proben fuer EINEN Teil ihrer Zweige;
+  die Lesesuche nennt je Zweig, welche.
+
 ### Teil B: Zugangsdaten, Besitzbefehl, Geldschranke - 22.11.2026
 
 - FUND, behoben: `nicht-im-dashboard: datenbank` stand mit Begruendung im Katalog, und KEIN Programmpfad las die Abbildung. `gesperrt` kannte nur `welten.*` und `parzellen.*`. Ein untergeschobenes `feld:datenbank.passwort` wurde also geschrieben - und `protokoll_text` legte altes UND neues Kennwort im Klartext ins Protokoll, das ab Moderator zu lesen ist.
@@ -2287,7 +2422,7 @@ Schritt 10.
 - FUND, behoben: `eigentuemerSetzenAendertSonstNichts` verglich nur Felder, die ohnehin auf ihrem Vorgabewert standen. Jetzt steht eine FREISTADT mit Name, Kasse, Regeln, Buergerrechten, Zustand und Besuchstag vorher auf anderen Werten - und eine Freistadt ohne Namen wirft.
 - FUND, behoben: Keine Probe fuellte den Zwischenspeicher VOR dem Besitzwechsel, darum war das `leeren()` ungedeckt. Jetzt in `schreibenLeertImmer`, wo das `finde` darueber die tragende Zeile ist. Ohne das Leeren laesst `darfBauen` bis zu 30 s den Vorbesitzer weiterbauen und weist den neuen auf seiner eigenen Parzelle ab.
 - FUND, behoben: Mein Einschub in plugin.yml hat den Geld-Kommentar von seinem Schluessel getrennt - wer nachsah, was `freimarken.besitz` erlaubt, las die Saetze ueber Geldbuchungen.
-- OFFEN (gemeldet, nicht behoben): Kistenshops wechseln NICHT mit. Die Tabelle `kistenshop` haengt an Welt und Schildkoordinate, nicht an der Parzelle. Ein Shop des Vorbesitzers liegt danach auf fremdem Grund und ist fuer BEIDE verschlossen - `Schutzwache` weist den Vorbesitzer ab, `Shopwache` den neuen. Nur `freimarken.ueberall` kommt heran. Hilfetext und Antwort sagen es jetzt; eine Loesung braucht einen eigenen Schritt.
+- ~~OFFEN: Kistenshops wechseln NICHT mit.~~ **ERLEDIGT 27.11.2026** durch die Ortsregel: Auf einer Parzelle entsteht gar kein Shop mehr, darum kann beim Besitzwechsel auch keiner auf fremdem Grund liegen. Der Rest des Absatzes beschreibt den alten Stand. Kistenshops wechseln NICHT mit. Die Tabelle `kistenshop` haengt an Welt und Schildkoordinate, nicht an der Parzelle. Ein Shop des Vorbesitzers liegt danach auf fremdem Grund und ist fuer BEIDE verschlossen - `Schutzwache` weist den Vorbesitzer ab, `Shopwache` den neuen. Nur `freimarken.ueberall` kommt heran. Hilfetext und Antwort sagen es jetzt; eine Loesung braucht einen eigenen Schritt.
 - WIDERLEGT (drei Behauptungen): Der Dateieditor zeigt und schreibt `datenbank.passwort` weiter - das ist die aufgeschriebene Entscheidung, nicht eine Luecke, und er ist Admin-Sache. Und die Datapack-Funktion ist eine im Docstring benannte blinde Stelle.
 - LEHRE: Der Einspritzungstreiber meldete "5 von 5 versuchten" und hatte genau die zwei Faelle des Sicherheitsriegels UEBERSPRUNGEN - der Anker trug einen echten Umbruch statt der zwei Zeichen. Die erwartete Fallzahl gehoert ins Programm.
 

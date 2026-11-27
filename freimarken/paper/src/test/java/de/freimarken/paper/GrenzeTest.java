@@ -3767,10 +3767,22 @@ class GrenzeTest {
 
         // Und die andere Richtung, denn ein null uebersetzt sich genauso gut: Es darf
         // nicht an die Stelle des Buches geraten.
-        assertFalse(werte.contains("null"),
-                "an dieser Stelle steht ein null - und null heisst hier 'es gibt keine"
-                        + " Freistaedte', also laesst der Riegel jeden Shop durch: "
-                        + werte);
+        // GESUCHT WIRD EIN null-ARGUMENT und nicht das Wort null, und diese Schaerfung
+        // ist gemessen: Seit dem 27.11.2026 gibt der Bau zwei Lambdas herein, und eine
+        // davon vergleicht selbst gegen null (wer != null). Mit der blanken Wortsuche
+        // war die Tafel rot, ohne dass ein Argument fehlte - und ein Fehltreffer in
+        // einer Tafel ist eine Einladung, sie auszunehmen. Ein Argument steht als
+        // ", null" oder "(null" da; ein Vergleich hat immer einen Operator davor.
+        var nullargumente = new java.util.ArrayList<String>();
+        for (String form : java.util.List.of(", null,", ", null)", "(null,")) {
+            if (werte.contains(form)) {
+                nullargumente.add(form);
+            }
+        }
+        assertEquals(java.util.List.of(), nullargumente,
+                "an dieser Stelle steht ein null als ARGUMENT - und null heisst hier"
+                        + " 'es gibt keine Freistaedte', also laesst der Riegel jeden"
+                        + " Shop durch: " + werte);
 
         // Die REIHENFOLGE im Start: Das Feld muss gefuellt sein, wenn das Shopbuch
         // entsteht. Beide Zweige stehen in onEnable, und ihre Reihenfolge ist die
@@ -5868,5 +5880,198 @@ class GrenzeTest {
                         + " Quelltext. Erkannt werden new <Name>( und registerEvents("
                         + "<name>,  - wird eine Wache auf einem dritten Weg angemeldet,"
                         + " gehoert dieser Weg hier hinein: " + ohneAnmeldung);
+    }
+
+    // --- 31eg: die Befehlsbaeume [Fund 27.11.2026] ----------------------------
+
+    /**
+     * Je Befehlsklasse: wie viele Knoten sie baut und welche - aus dem Quelltext.
+     *
+     * <p><b>Der Fund, der diese Tafel noetig macht:</b> Nimmt man aus
+     * {@code FreistadtBefehle} den Block
+     * {@code .then(Commands.literal(\"stadtrecht\").executes(this::kaufeStadtrecht))}
+     * heraus, bleiben ALLE Proben des Moduls gruen. Der Befehl waere gebaut,
+     * geprueft und unsichtbar wirkungslos - ein Spieler bekaeme
+     * \"Unknown command\", und keine Probe sagte es. Eine
+     * Lesesuche ueber alle 27 Befehlsklassen fand 34 Zweige in derselben Lage.
+     *
+     * <p><b>Warum der Quelltext und nicht der Baum:</b> Der Baumlauf in
+     * {@code FreimarkenBefehlTest} ist die staerkere Form, und /freimarken ist
+     * genau darum die einzige Klasse ohne Luecke - sie hat einen Baumlauf UND
+     * eine Uebersichtszeile als zweites Artefakt. Beides laesst sich nicht
+     * 27-mal nachbauen: Die meisten Befehlsklassen brauchen zum Bauen einen
+     * Server. Der Quelltext liegt fuer jede gleich da.
+     *
+     * <p><b>Gehalten wird der TEXT und die ZAHL:</b> die verschiedenen
+     * Knotenwoerter so, wie sie im Quelltext stehen (ein Literal mit
+     * Anfuehrungszeichen, eine Konstante ohne), und davor die Anzahl ALLER
+     * Knoten. Die Zahl allein waere schwach, die Liste allein saehe nicht, dass
+     * von zwei {@code \"bestaetigen\"} eines verschwindet.
+     *
+     * <p>Eine Umordnung im Baum laesst sie gruen - das ist gewollt. Ein neuer
+     * Zweig macht sie ROT: Wer einen Befehl dazubaut, traegt ihn hier ein und
+     * hat damit entschieden, dass es ihn geben soll.
+     *
+     * <p>GEERNTET aus dem gruenen Stand vom 27.11.2026, nicht abgeschrieben -
+     * von Hand fehlte genau der Zweig, den man gerade nicht sieht.
+     */
+    private static final Map<String, String> ZWEIGE_JE_BEFEHLSKLASSE =
+            Map.ofEntries(
+                Map.entry("AnfragenBefehle", "4: \"spieler\", \"tpaccept\", \"tpdeny\", befehlsname"),
+                Map.entry("BerufeBefehle",
+                        "7: \"liste\", \"stand\", \"verlassen\", \"waehlen\", "
+                                + "ARGUMENT, BESTAETIGEN"),
+                Map.entry("BlockBefehle", "3: \"blockbuch\", \"name\", \"spieler\""),
+                Map.entry("BundBefehle",
+                        "26: \"altfurt\", \"bau\", \"besessen\", \"besitz\", "
+                                + "\"bestaetigen\", \"betrag\", \"freigeben\", "
+                                + "\"freimarken\", \"messstelle\", \"neuladen\", "
+                                + "\"parzelle\", \"preis\", \"sichern\", \"spieler\", "
+                                + "\"uebertragen\", \"vorgenerieren\", \"welt\", \"x\", "
+                                + "\"z\", waehrung.befehlswort()"),
+                Map.entry("EinsichtBefehle", "3: AN, ARGUMENT, AUS"),
+                Map.entry("FreistadtBefehle",
+                        "32: \"abheben\", \"an\", \"anbieten\", \"angebote\", "
+                                + "\"anlegen\", \"aufgeben\", \"aufloesen\", \"aus\", "
+                                + "\"bestaetigen\", \"ecke\", \"gruenden\", \"grundstueck\", "
+                                + "\"kasse\", \"kaufen\", \"liste\", \"loeschen\", "
+                                + "\"raeumen\", \"rechte\", \"regeln\", \"stadtbuerger\", "
+                                + "\"stadtrecht\", \"zurueckziehen\", ARGUMENT, "
+                                + "ARGUMENT_BETRAG, ARGUMENT_NAME, ARGUMENT_PREIS, "
+                                + "ARGUMENT_RECHT, ARGUMENT_TEXT"),
+                Map.entry("HilfeBefehle", "1: ARGUMENT"),
+                Map.entry("LadenBefehle",
+                        "7: \"abholfach\", \"kuendigen\", \"liste\", \"mieten\", "
+                                + "\"verlaengern\", ARGUMENT, ARGUMENT_NAME"),
+                Map.entry("LotterieBefehle", "2: ARGUMENT, ZIEHEN"),
+                Map.entry("MarktBefehle", "3: \"liste\", \"seite\", ARGUMENT"),
+                Map.entry("MeldeBefehle", "3: \"grund\", \"spieler\", ARGUMENT"),
+                Map.entry("MeldungBefehle",
+                        "8: \"nummer\", \"vermerk\", ABSCHLIESSEN, ABWEISEN, "
+                                + "ANNEHMEN, ARGUMENT, HIN"),
+                Map.entry("MenueBefehle", "1: ARGUMENT"),
+                Map.entry("ParzellenBefehle",
+                        "37: \"alles\", \"anzahl\", \"aufgeben\", \"auftrennen\", "
+                                + "\"bestaetigen\", \"hinzu\", \"info\", \"kaufen\", "
+                                + "\"liste\", \"mark\", \"mitbauer\", \"muenzhaus\", "
+                                + "\"nehmen\", \"parzelle\", \"posten\", \"spieler\", "
+                                + "\"tauschen\", \"verkaufen\", \"verlauf\", \"weg\", \"x\", "
+                                + "\"z\", \"zusammenlegen\", richtung.wort()"),
+                Map.entry("PortalBefehle",
+                        "8: ARGUMENT, ECKE, ENTFERNEN, LISTE, NEULADEN, SETZEN, "
+                                + "WELT"),
+                Map.entry("RangBefehle", "2: \"leiter\", ARGUMENT"),
+                Map.entry("RegelnBefehle", "3: ANNEHMEN, ARGUMENT, IM_CHAT"),
+                Map.entry("RueckrollBefehle",
+                        "8: \"minuten\", \"radius\", \"welt\", \"x\", \"y\", "
+                                + "\"z\", BEI, ZURUECK"),
+                Map.entry("RueckwegBefehle", "1: \"zurueck\""),
+                Map.entry("ShopBefehle",
+                        "8: \"freigaben\", \"freigeben\", \"liste\", \"name\", "
+                                + "\"seite\", \"shop\", \"sperren\""),
+                Map.entry("SpielzeitBefehle", "2: \"spieler\", \"spielzeit\""),
+                Map.entry("StrafBefehle",
+                        "12: \"dauer\", \"grund\", \"nummer\", \"spieler\", "
+                                + "ARGUMENT, ARGUMENT_BANNLISTE, AUFHEBEN, VERLAUF, "
+                                + "art.kuerzel()"),
+                Map.entry("TeamBefehle",
+                        "9: \"rolle\", \"spieler\", ARGUMENT, GIB, NIMM, ROLLEN, "
+                                + "ZEIGEN"),
+                Map.entry("WarpBefehle", "4: \"freistadt\", \"stadt\", \"warp\", \"ziel\""),
+                Map.entry("WerderBefehle", "4: \"liste\", \"nehmen\", ARGUMENT, ARGUMENT_HAFEN"),
+                Map.entry("WettbewerbBefehle", "2: ANMELDEN, ARGUMENT"),
+                Map.entry("WolkeBefehle",
+                        "18: \"abgeben\", \"aufgabe\", \"aufgaben\", "
+                                + "\"bestaetigen\", \"biom\", \"dazu\", \"heim\", \"liste\", "
+                                + "\"mitbauer\", \"nehmen\", \"punkte\", \"rangliste\", "
+                                + "\"spieler\", \"weg\", \"zuruecksetzen\", ARGUMENT"));
+
+    /**
+     * Die Knoten einer Befehlsdatei, in der Reihenfolge des Quelltexts.
+     *
+     * <p>Gelesen wird der ARGUMENTTEXT, nicht der aufgeloeste Name: In
+     * {@code StrafBefehle} heisst ein Zweig {@code art.kuerzel()} und in
+     * {@code ParzellenBefehle} entsteht er aus {@code Richtung.values()}. Ein
+     * Leser, der nur Literale nimmt, saehe die zwei nicht - und das sind die,
+     * die ein Mensch am wenigsten im Kopf hat.
+     */
+    private static List<String> befehlszweige(String text) {
+        var gefunden = new TreeMap<Integer, String>();
+        for (String marke : List.of("Commands.literal(", "Commands.argument(")) {
+            boolean bisKomma = marke.contains("argument");
+            int stelle = 0;
+            while (true) {
+                stelle = text.indexOf(marke, stelle);
+                if (stelle < 0) {
+                    break;
+                }
+                int anfang = stelle + marke.length();
+                int tiefe = 1;
+                int lauf = anfang;
+                while (lauf < text.length()) {
+                    char zeichen = text.charAt(lauf);
+                    if (zeichen == '(') {
+                        tiefe++;
+                    } else if (zeichen == ')') {
+                        tiefe--;
+                        if (tiefe == 0) {
+                            break;
+                        }
+                    } else if (zeichen == ',' && tiefe == 1 && bisKomma) {
+                        break;
+                    }
+                    lauf++;
+                }
+                gefunden.put(stelle, String.join(" ",
+                        text.substring(anfang, lauf).trim().split("\\s+")));
+                stelle = anfang;
+            }
+        }
+        return List.copyOf(gefunden.values());
+    }
+
+    @Test
+    @DisplayName("31eg - jeder Befehlszweig steht in der Tafel")
+    void jederBefehlszweigStehtInDerTafel() {
+        var gefunden = new TreeMap<String, String>();
+        int knoten = 0;
+        for (Path datei : Quellen.alle()) {
+            String name = datei.getFileName().toString().replace(".java", "");
+            if (!name.endsWith("Befehle")) {
+                continue;
+            }
+            List<String> zweige = befehlszweige(Quellen.text(datei));
+            knoten += zweige.size();
+            gefunden.put(name, zweige.size() + ": "
+                    + String.join(", ", new TreeSet<>(zweige)));
+        }
+        // DER BLINDHEITSRIEGEL. Findet der Leser nichts mehr - umbenannte Dateien,
+        // ein anderer Baukasten als Commands.literal -, dann waere diese Tafel
+        // gruen, ohne einen einzigen Zweig geprueft zu haben.
+        assertTrue(knoten >= 200,
+                "nur " + knoten + " Knoten in " + gefunden.size() + " Klassen gefunden"
+                        + " - dann liest diese Tafel die Befehlsbaeume nicht mehr,"
+                        + " und sie ist gruen, ohne etwas geprueft zu haben");
+        assertEquals(new TreeSet<>(ZWEIGE_JE_BEFEHLSKLASSE.keySet()),
+                new TreeSet<>(gefunden.keySet()),
+                "Es gibt eine Befehlsklasse mehr oder weniger als in der Tafel."
+                        + " Eine neue gehoert hier eingetragen - und dann auch in"
+                        + " die plugin.yml und an den Baum von FreimarkenPlugin,"
+                        + " sonst gibt es den Befehl nicht.");
+
+        var anders = new TreeMap<String, String>();
+        for (var eintrag : gefunden.entrySet()) {
+            String erwartet = ZWEIGE_JE_BEFEHLSKLASSE.get(eintrag.getKey());
+            if (!eintrag.getValue().equals(erwartet)) {
+                anders.put(eintrag.getKey(), "erwartet [" + erwartet + "] gefunden ["
+                        + eintrag.getValue() + "]");
+            }
+        }
+        assertEquals(Map.of(), anders,
+                "Die Befehlszweige dieser Klassen sind andere als in der Tafel."
+                        + " Ist ein Zweig WEGGEFALLEN, gibt es den Befehl nicht mehr -"
+                        + " ein Spieler bekommt \"Unknown command\", und ausser dieser"
+                        + " Tafel sagt es keine Probe. Ist einer DAZUGEKOMMEN,"
+                        + " gehoert er hier eingetragen: " + anders);
     }
 }

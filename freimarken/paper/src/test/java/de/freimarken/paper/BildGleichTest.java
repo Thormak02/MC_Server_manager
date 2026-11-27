@@ -1307,6 +1307,13 @@ class BildGleichTest {
                                 .mit("was", "ein Regeltext"),
                         "&#d9564dAnnastadt hat noch kein Ladenrecht\n&#a5b4bfEs fehlt: ein"
                                 + " Regeltext. Bestehende Laeden handeln weiter."),
+                // HIER GEHT GAR KEIN Spielershop [Chat 27.11.2026]. OHNE Platzhalter,
+                // und die Zeile nennt die zwei Orte, an denen es GEHT: Wer "nicht
+                // hier" liest, fragt "wo denn" - die Antwort muss mitkommen.
+                new Zeile(ShopSatz.SHOP_KEIN_HANDELSPLATZ, 1L, Einsatz.keine(),
+                        "&#d9564dHier darf kein Shop stehen\n&#a5b4bfKistenshops gehen"
+                                + " in einer Ladeneinheit der Markthalle und in einer"
+                                + " Freistadt mit Stadtrecht."),
                 // SAGT AUSDRUECKLICH "NOCH EINMAL VERSUCHEN": Eine Absage ohne Ausweg
                 // liest ein Spieler als Verbot, baut sein Schild ab und kommt nicht
                 // wieder. Dieselbe Linie wie wache.schutz.laden-gestoert.
@@ -2113,6 +2120,28 @@ class BildGleichTest {
                 new Zeile(FreistadtSatz.KASSE_NICHT_DEINE, 1L,
                         Einsatz.von("stadt", "Annastadt").mit("besitzer", "Anna"),
                         "&#d9564dDie Kasse von Annastadt gehoert &#edf1f3Anna"),
+                // DAS STADTRECHT [Chat 27.11.2026]. Vier Zeilen, und drei Lagen
+                // fehlen mit Absicht: keine Stadt, fremde Stadt und Stoerung teilen
+                // ihren Satz mit der Kasse - ein zweiter Satz fuer dieselbe Lage
+                // waere ein zweites Wort dafuer.
+                new Zeile(FreistadtSatz.STADTRECHT_GEKAUFT, 1L,
+                        Einsatz.von("preis", "25.000 Mark")
+                                .mit("rest", "5.000 Mark"),
+                        "&#73bf96Stadtrecht gekauft fuer 25.000 Mark.\n&#a5b4bfAb jetzt darf in"
+                                + " dieser Stadt gehandelt werden. In der Kasse bleiben"
+                                + " &#edf1f35.000 Mark&#a5b4bf."),
+                new Zeile(FreistadtSatz.STADTRECHT_SCHON, 1L, Einsatz.keine(),
+                        "&#a5b4bfDiese Stadt hat das Stadtrecht schon - hier darf"
+                                + " gehandelt werden."),
+                new Zeile(FreistadtSatz.STADTRECHT_NICHT_NOETIG, 1L, Einsatz.keine(),
+                        "&#a5b4bfAuf diesem Server kostet das Stadtrecht nichts - in"
+                                + " jeder Stadt darf gehandelt werden."),
+                new Zeile(FreistadtSatz.STADTRECHT_ZU_WENIG, 1L,
+                        Einsatz.von("preis", "25.000 Mark")
+                                .mit("stand", "500 Mark"),
+                        "&#d9564dDas Stadtrecht kostet 25.000 Mark - in der Stadtkasse"
+                                + " sind &#edf1f3500 Mark&#d9564d.\n&#a5b4bfEinzahlen geht mit"
+                                + " /freistadt kasse."),
                 // --- Teil E2: der Regeltext --------------------------------------
                 // Bilder ZEICHENGLEICH aus dem roten Lauf
                 // abgeschrieben.

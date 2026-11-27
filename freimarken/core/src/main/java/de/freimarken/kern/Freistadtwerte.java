@@ -28,7 +28,7 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
                              Set<Tat> buergerrechte, boolean auflageTeleporter,
                              boolean auflageLadenrecht, Verfallswerte verfall,
                              int erstattungProzent, long ladengebuehrAnlage,
-                             long ladengebuehrTag) {
+                             long ladengebuehrTag, long stadtrechtPreis) {
 
     public static final String PFAD_GRUENDUNGSPREIS = "freistaedte.gruendungspreis";
 
@@ -129,6 +129,26 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
     /** Ob die Auflage das Anlegen neuer Kistenshops gattert. */
     public static final String PFAD_AUFLAGE_LADENRECHT =
             "freistaedte.auflage.ladenrecht";
+
+    /** Was das STADTRECHT einer Freistadt einmalig kostet. */
+    public static final String PFAD_STADTRECHT_PREIS =
+            "freistaedte.stadtrecht-preis";
+
+    /**
+     * Das Stadtrecht kostet ab Werk 25.000 Mark - einmal je Stadt.
+     *
+     * <p><b>NULL heisst "kein Stadtrecht noetig"</b>, und das ist mehr als eine
+     * Bequemlichkeit: Gekauft heisst "es gibt eine Buchung des Grundes
+     * {@code STADTRECHT} auf die Stadtkasse". Bei Preis 0 waere die Summe dieser
+     * Buchungen 0, und jede Stadt saehe fuer immer unbezahlt aus - die Regel waere
+     * eine Vollsperre. Bei 0 wird darum gar nicht gefragt.
+     *
+     * <p>Die Zahl ist hoch, und das ist Absicht: Eine Stadt mit Handelsrecht ist
+     * eine zweite Markthalle. Sie soll sich lohnen und nicht nebenbei entstehen -
+     * der Gruendungspreis allein waere sonst der ganze Weg zu einem Handelsplatz.
+     * Wie bei jeder Zahl hier entscheidet der Betreiber; 0 schaltet es aus.
+     */
+    public static final long VORGABE_STADTRECHT_PREIS = 25_000L;
 
     /**
      * DIE AUFLAGE GILT ab Werk - beide Male.
@@ -247,7 +267,8 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
             VORGABE_GRUENDUNGSPREIS, VORGABE_HOECHSTZAHL, VORGABE_HOECHSTZELLEN,
             VORGABE_VERKAUFSGEBUEHR, VORGABE_BUERGERRECHTE, VORGABE_AUFLAGE,
             VORGABE_AUFLAGE, Verfallswerte.VORGABE, VORGABE_ERSTATTUNG,
-            VORGABE_LADENGEBUEHR_ANLAGE, VORGABE_LADENGEBUEHR_TAG);
+            VORGABE_LADENGEBUEHR_ANLAGE, VORGABE_LADENGEBUEHR_TAG,
+            VORGABE_STADTRECHT_PREIS);
 
     public Freistadtwerte {
         if (gruendungspreis < 0L || gruendungspreis > HOECHSTER_BETRAG) {
@@ -316,7 +337,7 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
         return new Freistadtwerte(anderer, hoechstzahl, hoechstzellen,
                 verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
                 auflageLadenrecht, verfall, erstattungProzent,
-                ladengebuehrAnlage, ladengebuehrTag);
+                ladengebuehrAnlage, ladengebuehrTag, stadtrechtPreis);
     }
 
     /** Dieselben Werte mit anderer Hoechstzahl. */
@@ -324,7 +345,7 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
         return new Freistadtwerte(gruendungspreis, andere, hoechstzellen,
                 verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
                 auflageLadenrecht, verfall, erstattungProzent,
-                ladengebuehrAnlage, ladengebuehrTag);
+                ladengebuehrAnlage, ladengebuehrTag, stadtrechtPreis);
     }
 
     /** Dieselben Werte mit anderer Zellengrenze. */
@@ -332,14 +353,14 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
         return new Freistadtwerte(gruendungspreis, hoechstzahl, andere,
                 verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
                 auflageLadenrecht, verfall, erstattungProzent,
-                ladengebuehrAnlage, ladengebuehrTag);
+                ladengebuehrAnlage, ladengebuehrTag, stadtrechtPreis);
     }
 
     /** Dieselben Werte mit anderer Verkaufsgebuehr. */
     public Freistadtwerte mitVerkaufsgebuehr(int andere) {
         return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen, andere,
                 buergerrechte, auflageTeleporter, auflageLadenrecht, verfall, erstattungProzent,
-                ladengebuehrAnlage, ladengebuehrTag);
+                ladengebuehrAnlage, ladengebuehrTag, stadtrechtPreis);
     }
 
     /** Dieselben Werte mit anderen Vorgabe-Buergerrechten. */
@@ -347,7 +368,7 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
         return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
                 verkaufsgebuehrProzent, andere, auflageTeleporter, auflageLadenrecht,
                 verfall, erstattungProzent,
-                ladengebuehrAnlage, ladengebuehrTag);
+                ladengebuehrAnlage, ladengebuehrTag, stadtrechtPreis);
     }
 
     /** Dieselben Werte mit anderem Teleporter-Gatter. */
@@ -355,7 +376,7 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
         return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
                 verkaufsgebuehrProzent, buergerrechte, andere, auflageLadenrecht,
                 verfall, erstattungProzent,
-                ladengebuehrAnlage, ladengebuehrTag);
+                ladengebuehrAnlage, ladengebuehrTag, stadtrechtPreis);
     }
 
     /** Dieselben Werte mit anderem Erstattungsanteil. */
@@ -363,14 +384,14 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
         return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
                 verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
                 auflageLadenrecht, verfall, andere, ladengebuehrAnlage,
-                ladengebuehrTag);
+                ladengebuehrTag, stadtrechtPreis);
     }
 
     /** Dieselben Werte mit anderen Ladengebuehren - beide zusammen, weil sie es sind. */
     public Freistadtwerte mitLadengebuehren(long anlage, long tag) {
         return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
                 verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
-                auflageLadenrecht, verfall, erstattungProzent, anlage, tag);
+                auflageLadenrecht, verfall, erstattungProzent, anlage, tag, stadtrechtPreis);
     }
 
     /** Dieselben Werte mit anderen Verfallsfristen. */
@@ -378,7 +399,7 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
         return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
                 verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
                 auflageLadenrecht, andere, erstattungProzent,
-                ladengebuehrAnlage, ladengebuehrTag);
+                ladengebuehrAnlage, ladengebuehrTag, stadtrechtPreis);
     }
 
     /** Dieselben Werte mit anderem Ladenrecht-Gatter. */
@@ -386,6 +407,19 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
         return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
                 verkaufsgebuehrProzent, buergerrechte, auflageTeleporter, andere,
                 verfall, erstattungProzent,
-                ladengebuehrAnlage, ladengebuehrTag);
+                ladengebuehrAnlage, ladengebuehrTag, stadtrechtPreis);
+    }
+
+    /**
+     * Dieselben Werte mit einem anderen Preis fuer das Stadtrecht.
+     *
+     * <p>Gebraucht vom Leser, der die Zeile aus der {@code config.yml} nachtraegt -
+     * dieselbe Bauart wie die Wither darueber.
+     */
+    public Freistadtwerte mitStadtrechtPreis(long andere) {
+        return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
+                verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
+                auflageLadenrecht, verfall, erstattungProzent, ladengebuehrAnlage,
+                ladengebuehrTag, andere);
     }
 }

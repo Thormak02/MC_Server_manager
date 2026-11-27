@@ -1085,9 +1085,26 @@ class FreistadtbuchTest {
                 plan.ersteZelle(stadt.x()), plan.ersteZelle(stadt.z())), bert, 5_000L);
         Parzelle fertig = lager.finde(WELT, stadt.x(), stadt.z()).orElseThrow();
 
+        // DIE AUFLAGE ALLEIN GENUEGT NICHT MEHR [Chat 27.11.2026]: "Stadt kauft
+        // einmal, Auflage bleibt dazu". Erst die Substanz - und sie wird hier
+        // ausdruecklich als ERFUELLT festgehalten -, dann das Geld.
+        assertEquals(Freistadtbuch.Auflage.OHNE_STADTRECHT, buch.darfLaden(fertig),
+                "Regeltext und Grundstueck sind da; es fehlt nur noch das gekaufte"
+                        + " Stadtrecht - und die Absage muss GENAU das sagen, sonst"
+                        + " schreibt der Stadtbesitzer Regeln, die er schon hat");
+        assertTrue(buch.auflage(fertig).erfuellt(),
+                "die Substanz selbst ist erfuellt - sonst prueft der Satz darueber"
+                        + " etwas anderes als das Geld");
+
+        // Gekauft wird ueber die Stadtkasse, mit dem Grund, der der Nachweis IST.
+        stadtkasse.einzahlen(fertig, 50_000L, Buchungsgrund.STADTKASSE_ZURUECK);
+        assertTrue(stadtkasse.abbuchen(fertig,
+                        Freistadtwerte.VORGABE_STADTRECHT_PREIS,
+                        Buchungsgrund.STADTRECHT),
+                "die Stadt kann zahlen");
+
         assertTrue(buch.darfLaden(fertig).erfuellt(),
-                "Regeltext und ein vergebenes Grundstueck - mehr verlangt die Auflage"
-                        + " nicht");
+                "mit Substanz UND Stadtrecht darf die Stadt Laeden");
     }
 
     @Test
@@ -1105,8 +1122,12 @@ class FreistadtbuchTest {
         assertEquals(Freistadtbuch.Auflage.OHNE_BEIDES, ohneTeleporter.darfLaden(eine),
                 "das Ladenrecht aber NICHT - es haengt an seinem eigenen Schalter");
 
+        // mitStadtrechtPreis(0) nimmt das Stadtrecht aus dem Weg: Diese Probe haelt
+        // die zwei SCHALTER auseinander, nicht das Geld. Mit Preis bekaeme sie
+        // OHNE_STADTRECHT und sagte nichts mehr ueber die Trennung.
         Freistadtbuch ohneLadenrecht = mitAuflage(
-                Freistadtwerte.VORGABE.mitAuflageLadenrecht(false));
+                Freistadtwerte.VORGABE.mitAuflageLadenrecht(false)
+                        .mitStadtrechtPreis(0L));
         Parzelle andere = gruendeIn(ohneLadenrecht, "ladenstadt");
         assertTrue(ohneLadenrecht.darfLaden(andere).erfuellt(),
                 "hier darf die Stadt Laeden, obwohl die Auflage offen ist");
@@ -1720,5 +1741,153 @@ class FreistadtbuchTest {
         assertTrue(buch.zustaendigeEinheit(WELT, leereX,
                         plan.feldAnfang(stadt.z()) + 3).isEmpty(),
                 "in der Leere gehoert niemandem etwas");
+    }
+
+    // ------------------------------------- Das Stadtrecht kaufen [27.11.2026]
+
+    /**
+     * Legt so viel in die Stadtkasse, dass der Kauf moeglich ist.
+     *
+     * <p>Ueber einen eigenen Grund und nicht ueber STADTRECHT: Der Nachweis IST die
+     * Buchung dieses Grundes. Wer mit ihm einzahlt, hat das Recht schon, bevor er
+     * es kauft - und jede Probe darunter waere gruen, ohne den Kauf zu beruehren.
+     */
+    private void fuelleKasse(Parzelle stadt, long betrag) {
+        stadtkasse.einzahlen(stadt, betrag, Buchungsgrund.STADTKASSE_ZURUECK);
+    }
+
+    @Test
+    @DisplayName("Die Stadt kauft das Stadtrecht - und das Geld ist wirklich weg")
+    void dasStadtrechtWirdGekauft() {
+        Parzelle stadt = gegruendet();
+        fuelleKasse(stadt, 50_000L);
+        assertFalse(buch.hatStadtrecht(stadt), "vorher hat sie es nicht");
+
+        Freistadtbuch.Stadtrechtentscheid entscheid = buch.kaufeStadtrecht(WELT,
+                anna, mitteX(stadt), mitteZ(stadt));
+
+        assertEquals(Freistadtbuch.Stadtrechtbescheid.GEKAUFT, entscheid.bescheid());
+        assertEquals(Freistadtwerte.VORGABE_STADTRECHT_PREIS, entscheid.preis());
+        // DER STAND IM BESCHEID IST DER ECHTE, und das ist der Grund, warum er
+        // mitkommt: Ein zweiter Blick des Aufrufers koennte etwas anderes sehen.
+        assertEquals(50_000L - Freistadtwerte.VORGABE_STADTRECHT_PREIS,
+                entscheid.stand(),
+                "der Bescheid nennt den Stand NACH dem Kauf");
+        assertEquals(50_000L - Freistadtwerte.VORGABE_STADTRECHT_PREIS,
+                stadtkasse.stand(stadt),
+                "und so viel liegt wirklich in der Kasse - ein Bescheid allein"
+                        + " waere eine Behauptung");
+        assertTrue(buch.hatStadtrecht(stadt), "jetzt hat sie es");
+    }
+
+    @Test
+    @DisplayName("Ein zweites Mal zahlt niemand - die Kasse bleibt unberuehrt")
+    void einZweitesMalZahltNiemand() {
+        Parzelle stadt = gegruendet();
+        fuelleKasse(stadt, 100_000L);
+        buch.kaufeStadtrecht(WELT, anna, mitteX(stadt), mitteZ(stadt));
+        long nachDemKauf = stadtkasse.stand(stadt);
+
+        Freistadtbuch.Stadtrechtentscheid zweiter = buch.kaufeStadtrecht(WELT, anna,
+                mitteX(stadt), mitteZ(stadt));
+
+        assertEquals(Freistadtbuch.Stadtrechtbescheid.SCHON_GEKAUFT,
+                zweiter.bescheid());
+        // DIE TRAGENDE ZEILE: Ohne sie waere die Probe auch gruen, wenn der zweite
+        // Kauf stillschweigend ein zweites Mal abbuchte.
+        assertEquals(nachDemKauf, stadtkasse.stand(stadt),
+                "die Kasse ist unberuehrt");
+    }
+
+    @Test
+    @DisplayName("SCHON_GEKAUFT sticht ZU_WENIG - sonst zahlt sie fuer ihren Besitz")
+    void schonGekauftStichtZuWenig() {
+        // DIE REIHENFOLGE DER ZWEI RIEGEL, und darum eine eigene Probe: Eine Stadt,
+        // die das Recht hat und gerade kein Geld, soll nicht "zu wenig" lesen.
+        // Sonst zahlt der Besitzer ein, um zu kaufen, was er besitzt.
+        Parzelle stadt = gegruendet();
+        fuelleKasse(stadt, Freistadtwerte.VORGABE_STADTRECHT_PREIS);
+        buch.kaufeStadtrecht(WELT, anna, mitteX(stadt), mitteZ(stadt));
+        assertEquals(0L, stadtkasse.stand(stadt), "die Kasse ist jetzt leer");
+
+        Freistadtbuch.Stadtrechtentscheid leer = buch.kaufeStadtrecht(WELT, anna,
+                mitteX(stadt), mitteZ(stadt));
+
+        assertEquals(Freistadtbuch.Stadtrechtbescheid.SCHON_GEKAUFT, leer.bescheid(),
+                "leere Kasse UND gekauftes Recht - der Besitz ist die Antwort");
+    }
+
+    @Test
+    @DisplayName("Zu wenig in der Kasse - die Antwort nennt beide Zahlen")
+    void ohneGeldKeinStadtrecht() {
+        Parzelle stadt = gegruendet();
+        fuelleKasse(stadt, 1_000L);
+
+        Freistadtbuch.Stadtrechtentscheid entscheid = buch.kaufeStadtrecht(WELT,
+                anna, mitteX(stadt), mitteZ(stadt));
+
+        assertEquals(Freistadtbuch.Stadtrechtbescheid.ZU_WENIG, entscheid.bescheid());
+        // BEIDE ZAHLEN, damit der Besitzer ausrechnen kann, was fehlt.
+        assertEquals(Freistadtwerte.VORGABE_STADTRECHT_PREIS, entscheid.preis());
+        assertEquals(1_000L, entscheid.stand());
+        assertEquals(1_000L, stadtkasse.stand(stadt), "und nichts ist abgebucht");
+        assertFalse(buch.hatStadtrecht(stadt));
+    }
+
+    @Test
+    @DisplayName("Ein Fremder erfaehrt den Stand der Kasse NICHT")
+    void fremdeStadtErfaehrtDenStandNicht() {
+        Parzelle stadt = gegruendet();
+        fuelleKasse(stadt, 99_000L);
+
+        Freistadtbuch.Stadtrechtentscheid entscheid = buch.kaufeStadtrecht(WELT,
+                bert, mitteX(stadt), mitteZ(stadt));
+
+        assertEquals(Freistadtbuch.Stadtrechtbescheid.FREMDE_STADT,
+                entscheid.bescheid());
+        // DIE NULL IST ABSICHT, und diese Zeile ist der Grund, warum sie nicht
+        // versehentlich zum echten Stand wird: Der Satz an einen Fremden nennt nie
+        // das Guthaben einer Stadt, die ihm nicht gehoert - dieselbe Reihenfolge
+        // wie bei hebeAb.
+        assertEquals(0L, entscheid.stand(),
+                "die 99.000 der Stadt stehen nicht im Bescheid");
+        assertEquals(99_000L, stadtkasse.stand(stadt), "und nichts ist abgebucht");
+        assertFalse(buch.hatStadtrecht(stadt));
+    }
+
+    @Test
+    @DisplayName("Wo keine Stadt ist, ist nichts zu kaufen")
+    void ohneStadtKeinKauf() {
+        Freistadtbuch.Stadtrechtentscheid entscheid = buch.kaufeStadtrecht(WELT,
+                anna, 9_000_001, 9_000_001);
+
+        assertEquals(Freistadtbuch.Stadtrechtbescheid.KEINE_STADT,
+                entscheid.bescheid());
+        assertTrue(entscheid.stadt().isEmpty(),
+                "und keine Stadt im Bescheid - sonst wirft der Satz darueber beim"
+                        + " orElseThrow");
+    }
+
+    @Test
+    @DisplayName("Bei Preis 0 ist nichts zu kaufen - und die Stadt darf trotzdem")
+    void beiPreisNullIstNichtsZuKaufen() {
+        // DER SCHALTER DES BETREIBERS: 0 heisst "kein Stadtrecht noetig". Ohne
+        // diesen Zweig griffe die Stadt in ihre Kasse fuer nichts - und
+        // hatStadtrecht gaebe ohnehin true, weil die Summe einer Buchung ueber
+        // 0 Mark 0 ist.
+        Freistadtbuch ohnePreis = mitAuflage(
+                Freistadtwerte.VORGABE.mitStadtrechtPreis(0L));
+        Parzelle stadt = gruendeIn(ohnePreis, "freistadt");
+        fuelleKasse(stadt, 50_000L);
+
+        Freistadtbuch.Stadtrechtentscheid entscheid = ohnePreis.kaufeStadtrecht(WELT,
+                anna, mitteX(stadt), mitteZ(stadt));
+
+        assertEquals(Freistadtbuch.Stadtrechtbescheid.NICHT_NOETIG,
+                entscheid.bescheid());
+        assertEquals(50_000L, stadtkasse.stand(stadt), "und nichts ist abgebucht");
+        assertTrue(ohnePreis.hatStadtrecht(stadt),
+                "sie darf trotzdem handeln - sonst waere der Schalter eine"
+                        + " Vollsperre");
     }
 }

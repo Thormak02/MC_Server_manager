@@ -653,7 +653,25 @@ public enum Buchungsgrund {
      * Gewinn, den er nie hatte - und im Wirtschaftsbericht waere die Differenz zwischen
      * Startgeldern und Preisen nicht mehr der Zuschuss des Betreibers.
      */
-    WETTBEWERB_ERSTATTET("wettbewerb_erstattet", Richtung.EINNAHME);
+    WETTBEWERB_ERSTATTET("wettbewerb_erstattet", Richtung.EINNAHME),
+
+    /**
+     * Das STADTRECHT einer Freistadt - einmal gekauft, danach darf dort gehandelt
+     * werden [Chat 27.11.2026: "nur in der mall oder in der eigenen stadt mit
+     * freihandels lizens / stadtrecht erlaubt (kostet geld)"].
+     *
+     * <p><b>Der Grund IST der Nachweis</b>, und darum steht das Stadtrecht nicht als
+     * Spalte an der Parzelle: Gekauft heisst "es gibt eine Buchung dieses Grundes auf
+     * die Stadtkasse", gefragt mit {@code Kasse.summeSeit(kasse, Instant.EPOCH,
+     * STADTRECHT)}. Eine eigene Spalte waere ein zweiter Ort fuer dieselbe Tatsache -
+     * und sie waere beim Blick ins Buch nicht zu erklaeren, denn dort stuende das Geld
+     * ohne Grund.
+     *
+     * <p>AUSGABE: Die Stadt zahlt. Gebucht wird auf die Stadtkasse und nicht auf den
+     * Besitzer - die Stadt kauft das Recht, nicht er. Verkauft er die Stadt, geht es
+     * mit; das ist gewollt und der Grund, warum die Buchung an der Kasse haengt.
+     */
+    STADTRECHT("stadtrecht", Richtung.AUSGABE);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {
@@ -743,7 +761,7 @@ public enum Buchungsgrund {
                      WECHSEL_MARK_ZURUECK, BETREIBER_GUTSCHRIFT, BETREIBER_ABZUG,
                      LOS_GEZOGEN, LOS_ERSTATTET, LOTTERIE_GEWINN,
                      WETTBEWERB_START, WETTBEWERB_PREIS,
-                     WETTBEWERB_ERSTATTET -> Buch.MARK;
+                     WETTBEWERB_ERSTATTET, STADTRECHT -> Buch.MARK;
         };
     }
 

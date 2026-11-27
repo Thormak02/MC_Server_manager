@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.freimarken.kern.Feldgrenze;
+import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Freistadtbuch;
+import de.freimarken.kern.Freistadtwerte;
 import de.freimarken.kern.Kistenshop;
 import de.freimarken.kern.Lagerattrappe;
 import de.freimarken.kern.Parzelle;
@@ -127,13 +129,15 @@ class ShopbuchTest {
         stadtlager = new StolperndesLager();
         grundstuecke = new SpeicherGrundstuecke();
         geld = new SpeicherKasse(REICH);
+        stadtkasse = new Stadtkasse(new SpeicherKasse(0L));
         freistaedte = new Freistadtbuch(Feldgrenze.freistaedte(), stadtlager,
-                geld, new Stadtkasse(new SpeicherKasse(0L)),
+                geld, stadtkasse,
                 Warpverzeichnis.ausWelten(List.of("altfurt", "freistaedte")),
                 wirtschaft);
         freistaedte.gibGrundstuecke(grundstuecke);
         buch = new Shopbuch(ablage, leser, wachmann, wirtschaft,
-                freistaedte, protokoll);
+                freistaedte, 
+                IN_DER_MALL, KEIN_BAULAND, protokoll);
     }
 
     // --- Das Anlegen gelingt --------------------------------------------------
@@ -223,7 +227,8 @@ class ShopbuchTest {
         // Die harte Form der Reihenfolgezusage: Die Ablage wirft bei JEDER Frage. Kommt
         // SCHILD_FEHLERHAFT heraus, wurde sie nicht gefragt - sonst stuende GESTOERT da.
         buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
-                freistaedte, protokoll);
+                freistaedte, 
+                IN_DER_MALL, KEIN_BAULAND, protokoll);
 
         Shopbuch.Anlage anlage = anlege(ANNA, "", "keine zahl", "B 100", "STONE");
 
@@ -248,7 +253,8 @@ class ShopbuchTest {
     @DisplayName("Ohne Bundrecht kein Bundshop - und auch das kostet keine Abfrage")
     void ohneBundrechtKeinBundshop() {
         buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
-                freistaedte, protokoll);
+                freistaedte, 
+                IN_DER_MALL, KEIN_BAULAND, protokoll);
 
         Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "16", "B 100", "STONE",
                 false);
@@ -324,7 +330,8 @@ class ShopbuchTest {
     @DisplayName("Eine stumme Ablage gibt GESTOERT und keinen halben Shop")
     void stummeAblageGibtGestoert() {
         buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
-                freistaedte, protokoll);
+                freistaedte, 
+                IN_DER_MALL, KEIN_BAULAND, protokoll);
 
         Shopbuch.Anlage anlage = anlege(ANNA, "", "16", "B 100", "STONE");
 
@@ -364,7 +371,8 @@ class ShopbuchTest {
     @DisplayName("Eine stumme Ablage macht aus dem Abbauen GESTOERT")
     void abbauenGestoert() {
         buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
-                freistaedte, protokoll);
+                freistaedte, 
+                IN_DER_MALL, KEIN_BAULAND, protokoll);
 
         assertEquals(Shopbuch.Bescheid.GESTOERT, buch.baueAb(WELT, 10, 64, 10));
     }
@@ -375,7 +383,8 @@ class ShopbuchTest {
     @DisplayName("anDemSchild gibt bei einer Stoerung NULL - der Klick bewirkt nichts")
     void anDemSchildGibtNullBeiStoerung() {
         buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
-                freistaedte, protokoll);
+                freistaedte, 
+                IN_DER_MALL, KEIN_BAULAND, protokoll);
 
         assertNull(buch.anDemSchild(WELT, 10, 64, 10));
     }
@@ -391,7 +400,8 @@ class ShopbuchTest {
         // Die zwei Proben zusammen sind der Punkt: Waeren beide gleich, waere eine von
         // ihnen falsch.
         buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
-                freistaedte, protokoll);
+                freistaedte, 
+                IN_DER_MALL, KEIN_BAULAND, protokoll);
 
         assertTrue(buch.istShopkiste(WELT, 11, 64, 10));
         assertTrue(buch.anDerKiste(WELT, 11, 64, 10).isEmpty(),
@@ -599,7 +609,8 @@ class ShopbuchTest {
         // gefragt - sonst stuende dort GESTOERT.
         Parzelle stadt = gegruendet();
         buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
-                freistaedte, protokoll);
+                freistaedte, 
+                IN_DER_MALL, KEIN_BAULAND, protokoll);
 
         assertEquals(Shopbuch.Bescheid.KEIN_LADENRECHT,
                 anlegeInStadt(stadt, ANNA, "", false).bescheid());
@@ -639,8 +650,8 @@ class ShopbuchTest {
         // Fehlt die Freistaedtewelt in der config.yml, entsteht gar kein Buch. Ein
         // Wurf hier machte aus einer fehlenden Welt einen Server ohne Kistenshops.
         Parzelle stadt = gegruendet();
-        buch = new Shopbuch(ablage, leser, wachmann, wirtschaft, null,
-                protokoll);
+        buch = new Shopbuch(ablage, leser, wachmann, wirtschaft, null, 
+                IN_DER_MALL, KEIN_BAULAND, protokoll);
 
         assertEquals(Shopbuch.Bescheid.ANGELEGT,
                 anlegeInStadt(stadt, ANNA, "", false).bescheid());
@@ -784,8 +795,24 @@ class ShopbuchTest {
      * weil das Buch damals jeden Ankaufstand gegen sie prueefte. Die Tafel ist gefallen -
      * der Preis steht auf dem Schild.
      */
+    /**
+     * Die Werte dieser Proben - MIT Stadtrechtpreis 0.
+     *
+     * <p>Seit dem 27.11.2026 braucht eine Freistadt zusaetzlich zur Auflage ein
+     * gekauftes Stadtrecht ("Stadt kauft einmal, Auflage bleibt dazu"). Diese Datei
+     * prueft die AUFLAGE und die Ladengebuehr; mit Preis bekaeme jede ihrer Proben
+     * OHNE_STADTRECHT und sagte nichts mehr ueber das, wofuer sie gebaut ist.
+     *
+     * <p>Dass das Stadtrecht WIRKT, haelt stadtrechtFehltOhneKauf in dieser Datei -
+     * und FreistadtbuchTest fuer die Rechnung dahinter. Ohne diese zwei waere die
+     * Null hier eine stille Ausnahme.
+     */
+    /** Die Stadtkasse der Proben - ein Feld, weil das Stadtrecht darauf gebucht wird. */
+    private Stadtkasse stadtkasse;
+
     private Wirtschaftsstand wirtschaft = new Wirtschaftsstand(
-            Wirtschaftswerte.VORGABE.mitHandel(Shopwerte.VORGABE.mitWort(BUNDWORT)));
+            Wirtschaftswerte.VORGABE.mitHandel(Shopwerte.VORGABE.mitWort(BUNDWORT))
+                    .mitFreistaedten(Freistadtwerte.VORGABE.mitStadtrechtPreis(0L)));
 
     private Shopbuch.Anlage anlege(UUID wer, String erste, String menge, String preise,
             String ware) {
@@ -996,5 +1023,184 @@ class ShopbuchTest {
         public boolean loesche(String welt, int x, int y, int z) {
             throw stumm();
         }
+    }
+
+    /**
+     * Diese Proben stehen IN DER MALL - sie pruefen den Shop und nicht den Ort.
+     *
+     * <p>Seit dem 27.11.2026 darf ein Kistenshop nur in einer Ladeneinheit oder in
+     * einer Freistadt mit Stadtrecht stehen ("in der parzelle sind shops verboten").
+     * Diese Proben pruefen, was ein Shop TUT - Ware, Preise, Zugriff, Gebuehr. Waere
+     * die Naht hier "nirgends erlaubt", sagte jede von ihnen nur noch
+     * KEIN_HANDELSPLATZ.
+     *
+     * <p>WO er stehen darf, pruefen die Proben im Abschnitt "Die Ortsregel" weiter
+     * unten - die bauen sich ihr Buch mit eigenen Naehten.
+     */
+    private static final Shopbuch.Ladenfrage IN_DER_MALL =
+            (welt, x, y, z) -> true;
+
+    /** Kein privates Bauland - die Begruendung steht an {@link #IN_DER_MALL}. */
+    private static final Shopbuch.Baulandfrage KEIN_BAULAND =
+            (welt, x, z) -> false;
+
+    // --- Das Stadtrecht [Chat 27.11.2026] -------------------------------------
+
+    @Test
+    @DisplayName("Ohne gekauftes Stadtrecht entsteht kein Shop - trotz Auflage")
+    void stadtrechtFehltOhneKauf() {
+        // DIE PROBE, DIE DIE NULL OBEN RECHTFERTIGT. Diese Datei faehrt mit
+        // Stadtrechtpreis 0, damit ihre Proben ueber die AUFLAGE sprechen koennen.
+        // Ohne diesen Satz waere das eine stille Ausnahme: Der Preis koennte im
+        // Programm verschwinden, und keine Probe dieser Datei wuerde rot.
+        Shopbuch mitPreis = mitStadtrechtpreis(25_000L);
+        Parzelle stadt = gegruendet();
+        erfuelleAuflage(stadt);
+
+        Shopbuch.Anlage ohneKauf = anlegeInStadt(mitPreis, stadt, ANNA, "", false);
+
+        assertEquals(Shopbuch.Bescheid.KEIN_LADENRECHT, ohneKauf.bescheid(),
+                "die Auflage ist erfuellt, aber das Stadtrecht fehlt");
+        assertEquals(Freistadtbuch.Auflage.OHNE_STADTRECHT, ohneKauf.auflage(),
+                "und der GRUND muss das Geld nennen und nicht die Substanz - sonst"
+                        + " schreibt die Stadtbesitzerin Regeln, die sie schon hat");
+
+        // GEKAUFT: die Buchung auf die Stadtkasse IST der Nachweis.
+        stadtkasse.einzahlen(stadt, 50_000L, Buchungsgrund.STADTKASSE_ZURUECK);
+        assertTrue(stadtkasse.abbuchen(stadt, 25_000L, Buchungsgrund.STADTRECHT),
+                "die Stadt kann zahlen");
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT,
+                anlegeInStadt(mitPreis, stadt, ANNA, "zwei", false).bescheid(),
+                "mit Auflage UND Stadtrecht entsteht er");
+    }
+
+    /**
+     * Ein zweites Shopbuch mit einem anderen Preis fuer das Stadtrecht.
+     *
+     * <p>Diese Datei faehrt mit 0, damit ihre Proben ueber die AUFLAGE sprechen - die
+     * Begruendung steht am Feld {@code wirtschaft}. Fuer die eine Probe, die das
+     * Stadtrecht selbst haelt, braucht es einen Preis.
+     */
+    private Shopbuch mitStadtrechtpreis(long preis) {
+        Wirtschaftsstand eigener = new Wirtschaftsstand(
+                wirtschaft.werte().mitFreistaedten(
+                        wirtschaft.werte().freistaedte()
+                                .mitStadtrechtPreis(preis)));
+        Freistadtbuch eigenes = new Freistadtbuch(Feldgrenze.freistaedte(), stadtlager,
+                geld, stadtkasse,
+                Warpverzeichnis.ausWelten(List.of("altfurt", "freistaedte")),
+                eigener);
+        eigenes.gibGrundstuecke(grundstuecke);
+        return new Shopbuch(ablage, leser, wachmann, eigener, eigenes,
+                IN_DER_MALL, KEIN_BAULAND, protokoll);
+    }
+
+    /** Dieselbe Anlage, aber mit einem anderen Buch - siehe {@link #mitStadtrechtpreis}. */
+    private Shopbuch.Anlage anlegeInStadt(Shopbuch welches, Parzelle stadt, UUID wer,
+            String erste, boolean darfBund) {
+        int x = stelleX(stadt);
+        int z = stelleZ(stadt);
+        return welches.anlege(wer, STADTWELT, x - 1, 64, z, x, 64, z,
+                zeilen(erste, "16", "B 100", "STONE"), darfBund, false);
+    }
+
+    // --- Die Ortsregel [Chat 27.11.2026] --------------------------------------
+
+    /**
+     * Ein Shopbuch mit GESTELLTEN Naehten - fuer die Proben ueber den Ort.
+     *
+     * <p>Die zwei Fragen sind Naehte, weil beide Bukkit brauchen: eine Ladeneinheit
+     * ist ein Quader in der Ladenwelt, und "gehoert dieser Block jemandem" kommt aus
+     * den Buechern des Servers. Die RECHNUNG dahinter steht im Shopbuch und ist
+     * damit ohne Server pruefbar - genau wie bei der Weltwache.
+     */
+    private Shopbuch buchMitOrt(boolean inEinerEinheit, boolean privatesBauland) {
+        return new Shopbuch(ablage, leser, wachmann, wirtschaft, freistaedte,
+                (welt, x, y, z) -> inEinerEinheit,
+                (welt, x, z) -> privatesBauland, protokoll);
+    }
+
+    /**
+     * Ein Schild an einer Stelle, an der KEINE Stadt liegt.
+     *
+     * <p>Die erste Zeile ist ein Parameter wie bei {@link #anlegeInStadt}: Ein
+     * Bundshop ist einer, auf dessen SCHILD das Bundwort steht - das Recht allein
+     * macht keinen. Die Probe darueber waere sonst gruen, ohne den Zweig zu
+     * beruehren.
+     */
+    private Shopbuch.Anlage anlegeDraussen(Shopbuch welches, UUID wer,
+            String erste, boolean darfBund) {
+        return welches.anlege(wer, STADTWELT, 9_001, 64, 9_001, 9_002, 64, 9_001,
+                zeilen(erste, "16", "B 100", "STONE"), darfBund, false);
+    }
+
+    @Test
+    @DisplayName("Auf einer PARZELLE entsteht kein Shop - sie ist kein Handelsplatz")
+    void aufDerParzelleEntstehtKeinShop() {
+        // DER FALL, UM DEN ES GEHT [Chat 27.11.2026]: "in der parzelle sind shops
+        // verboten, nur in der mall oder in der eigenen stadt mit freihandels lizens
+        // / stadtrecht erlaubt (kostet geld)".
+        //
+        // Bis dahin gab die Ortspruefung hier null zurueck, also "erlaubt" - und
+        // genau dadurch konnte ein Shop auf einer Parzelle stehen. Beim
+        // Besitzerwechsel lag er danach auf fremdem Grund und war fuer BEIDE
+        // verschlossen: die Schutzwache wies den Alten ab, die Shopwache den Neuen.
+        Shopbuch.Anlage auf = anlegeDraussen(buchMitOrt(false, true), ANNA, "", false);
+
+        assertEquals(Shopbuch.Bescheid.KEIN_HANDELSPLATZ, auf.bescheid());
+        assertNull(ablage.anDemSchild(STADTWELT, 9_001, 64, 9_001),
+                "und es steht wirklich keiner da - eine Absage, die trotzdem"
+                        + " schreibt, waere die schlimmere Form");
+    }
+
+    @Test
+    @DisplayName("In einer LADENEINHEIT entsteht er - das ist die Mall")
+    void inDerLadeneinheitEntstehtEr() {
+        // DIE GEGENRICHTUNG, und ohne sie waere die Probe darueber auch gruen, wenn
+        // NIRGENDS mehr ein Shop entstuende.
+        //
+        // Wer in einer Einheit bauen darf, ist ihr Mieter - das haelt der
+        // Ladenschutz. Darum fragt dieser Zweig nicht noch einmal nach dem Mieter.
+        Shopbuch.Anlage in = anlegeDraussen(buchMitOrt(true, false), ANNA, "", false);
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT, in.bescheid());
+        assertNotNull(ablage.anDemSchild(STADTWELT, 9_001, 64, 9_001));
+    }
+
+    @Test
+    @DisplayName("Die Einheit sticht das Bauland - eine Einheit AUF Bauland geht")
+    void dieEinheitStichtDasBauland() {
+        // Eine Ladeneinheit kann auf einer Parzelle liegen: Die Markthalle steht in
+        // der Marktstadt. Waere das Bauland der staerkere Riegel, gaebe es in der
+        // Halle keinen einzigen Shop - und die Regel schnitte genau den Ort weg, fuer
+        // den sie gemacht ist.
+        Shopbuch.Anlage beides = anlegeDraussen(buchMitOrt(true, true), ANNA, "", false);
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT, beides.bescheid());
+    }
+
+    @Test
+    @DisplayName("Auch in der WILDNIS entsteht keiner - 'nur' heisst nur zwei Orte")
+    void inDerWildnisEntstehtKeiner() {
+        // Kein Bauland, keine Einheit, keine Stadt. Der Betreiber sagt "nur in der
+        // mall oder in der eigenen stadt" - eine Farmwelt ist keines von beiden, und
+        // ein Shop waere dort ohnehin ungeschuetzt.
+        Shopbuch.Anlage nirgends = anlegeDraussen(buchMitOrt(false, false), ANNA,
+                "", false);
+
+        assertEquals(Shopbuch.Bescheid.KEIN_HANDELSPLATZ, nirgends.bescheid());
+    }
+
+    @Test
+    @DisplayName("Ein BUNDSHOP entsteht ueberall - er ist kein Spielerhandel")
+    void bundshopEntstehtUeberall() {
+        // Der Betreiber, und die Markthalle besteht aus seinen Shops. Ohne diesen
+        // Zweig koennte er die Halle nicht einrichten - die Regel verboete genau dem,
+        // der sie aufstellt.
+        Shopbuch.Anlage bund = anlegeDraussen(buchMitOrt(false, true), ANNA, BUNDWORT, true);
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT, bund.bescheid(),
+                "auf privatem Bauland, aber als Bundshop");
     }
 }

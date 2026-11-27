@@ -334,6 +334,31 @@ enum FreistadtSatz implements Satz {
      */
     KASSE_ZU_WENIG("freistadt.kasse.zu-wenig", Art.SATZ, "stand"),
 
+    /**
+     * Das STADTRECHT ist gekauft - ab jetzt darf hier gehandelt werden.
+     *
+     * <p>NENNT DEN REST, nicht nur den Preis: Der Besitzer hat gerade aus der
+     * Stadtkasse gezahlt, und die naechste Ladengebuehr kommt daraus auch. Eine
+     * Antwort ohne den Stand liesse ihn nachsehen gehen.
+     */
+    STADTRECHT_GEKAUFT("freistadt.stadtrecht.gekauft", Art.SATZ, "preis", "rest"),
+
+    /** Die Stadt hat das Recht schon - ein zweites Mal zahlt niemand. */
+    STADTRECHT_SCHON("freistadt.stadtrecht.schon", Art.SATZ),
+
+    /**
+     * Der Betreiber hat den Preis auf 0 gestellt - es ist nicht noetig.
+     *
+     * <p>Ein eigener Satz und nicht {@link #STADTRECHT_SCHON}: Jener sagt "du hast
+     * bezahlt", dieser "hier zahlt niemand". Wer das zweite liest und das erste
+     * erwartet, sucht eine Buchung, die es nie gab.
+     */
+    STADTRECHT_NICHT_NOETIG("freistadt.stadtrecht.nicht-noetig", Art.SATZ),
+
+    /** So viel liegt nicht in der Stadtkasse - mit beiden Zahlen. */
+    STADTRECHT_ZU_WENIG("freistadt.stadtrecht.zu-wenig", Art.SATZ, "preis",
+            "stand"),
+
     /** Die Kasse einer fremden Stadt - {@code stadt}, {@code besitzer}. */
     KASSE_NICHT_DEINE("freistadt.kasse.nicht-deine", Art.SATZ, "stadt", "besitzer"),
 
@@ -514,7 +539,17 @@ enum FreistadtSatz implements Satz {
      */
     AUFLAGE_OHNE_REGELN("freistadt.auflage.ohne-regeln", Art.WORT),
     AUFLAGE_OHNE_BUERGER("freistadt.auflage.ohne-buerger", Art.WORT),
-    AUFLAGE_OHNE_BEIDES("freistadt.auflage.ohne-beides", Art.WORT);
+    AUFLAGE_OHNE_BEIDES("freistadt.auflage.ohne-beides", Art.WORT),
+
+    /**
+     * Die Substanz ist da, aber das STADTRECHT ist nicht gekauft.
+     *
+     * <p>Ein eigenes Wort und nicht eines der drei darueber: Jene nennen fehlende
+     * SUBSTANZ (Regeltext, Buerger) - hier fehlt Geld, und das ist eine andere Absage
+     * mit einem anderen naechsten Schritt. Wer liest "es fehlt ein Buerger", schreibt
+     * keine Regeln; wer liest "das Stadtrecht fehlt", kauft es.
+     */
+    AUFLAGE_OHNE_STADTRECHT("freistadt.auflage.ohne-stadtrecht", Art.WORT);
 
     /**
      * Das Wort zu einem Buergerrecht.

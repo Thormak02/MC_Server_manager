@@ -941,7 +941,8 @@ class ShophandelTest {
         // das Ladenrecht sitzt allein im Anlegeweg. Mit einem Buch braeuchte jede
         // Handelsprobe eine Stadt, die mit dem Handel nichts zu tun hat.
         return new Shopbuch(ablage, new Leser(), (wer, welt, x, y, z) -> true,
-                wirtschaft, null, Logger.getAnonymousLogger());
+                wirtschaft, null, 
+                IN_DER_MALL, KEIN_BAULAND, Logger.getAnonymousLogger());
     }
 
     /** Ein Halter mit diesen Handelszahlen und dem Tagesdeckel ab Werk. */
@@ -1051,8 +1052,8 @@ class ShophandelTest {
         Wirtschaftsstand eigenerStand = stand(OHNE_GEBUEHR);
         var handel = new Shophandel(
                 new Shopbuch(eigeneAblage, new Leser(),
-                        (wer, welt, x, y, z) -> true, eigenerStand, null,
-                        Logger.getAnonymousLogger()),
+                        (wer, welt, x, y, z) -> true, eigenerStand, null, 
+                IN_DER_MALL, KEIN_BAULAND, Logger.getAnonymousLogger()),
                 eigeneHand, eigeneKasse, eigenerStand,
                 angenommen(eigenerStand), UHR,
                 Logger.getAnonymousLogger());
@@ -1232,4 +1233,20 @@ class ShophandelTest {
             throw new AssertionError("der Handel fragt den Warenleser nicht");
         }
     }
+
+    /**
+     * Diese Proben stehen IN DER MALL - sie pruefen den Shop und nicht den Ort.
+     *
+     * <p>Seit dem 27.11.2026 darf ein Kistenshop nur in einer Ladeneinheit oder in
+     * einer Freistadt mit Stadtrecht stehen ("in der parzelle sind shops verboten").
+     * Diese Datei prueft, was ein Shop TUT - Ware, Preise, Zugriff, Gebuehr. Wo er
+     * stehen darf, prueft ShopOrtTest; waere die Naht hier "nirgends erlaubt", sagte
+     * jede Probe dieser Datei nur noch KEIN_HANDELSPLATZ.
+     */
+    private static final Shopbuch.Ladenfrage IN_DER_MALL =
+            (welt, x, y, z) -> true;
+
+    /** Kein privates Bauland - die Begruendung steht an {@link #IN_DER_MALL}. */
+    private static final Shopbuch.Baulandfrage KEIN_BAULAND =
+            (welt, x, z) -> false;
 }

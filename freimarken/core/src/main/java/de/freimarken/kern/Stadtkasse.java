@@ -131,6 +131,26 @@ public final class Stadtkasse {
     }
 
     /**
+     * Was diese Stadt seit {@code ab} aus diesem Grund bewegt hat.
+     *
+     * <p>Gebraucht fuer eine Frage, die kein Betrag beantwortet: HAT diese Stadt
+     * etwas einmal getan? Beim Stadtrecht ist die Buchung der Nachweis - gekauft
+     * heisst "es gibt eine Zeile dieses Grundes". Siehe
+     * {@code Freistadtbuch.hatStadtrecht}.
+     *
+     * <p>Hier und nicht am {@code Kasse}-Zugang des Aufrufers: Wer Stadtgeld fragt,
+     * fragt die Stadtkasse - sonst braeuchte jeder Aufrufer das Konto selbst, und
+     * {@link #konto} waere nicht mehr die eine Stelle, die es bildet.
+     *
+     * <p>ACHTUNG beim Lesen des Ergebnisses: Eine Ausgabe steht NEGATIV im Buch. Wer
+     * wissen will, ob es die Zeile gibt, fragt {@code != 0} und nicht {@code > 0}.
+     */
+    public long summeSeit(Parzelle stadt, java.time.Instant ab,
+                          Buchungsgrund grund) {
+        return kasse.summeSeit(konto(stadt), ab, grund);
+    }
+
+    /**
      * Das Konto der Stadt anlegen, falls es das noch nicht gibt.
      *
      * <p>Gerufen beim Gruenden. Notwendig ist es nicht - die erste Buchung legt das

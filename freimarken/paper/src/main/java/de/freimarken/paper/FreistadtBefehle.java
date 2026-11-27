@@ -355,6 +355,16 @@ final class FreistadtBefehle {
                 // DIE REGELN [Teil E2]. Der nackte Zweig ZEIGT sie - das ist ihr
                 // Zweck, und es darf jeder, der in der Stadt steht. Setzen darf nur
                 // der Besitzer, und das prueft die Regel im Buch.
+                // DAS STADTRECHT [Chat 27.11.2026]: "nur in der mall oder in der
+                // eigenen stadt mit freihandels lizens / stadtrecht erlaubt
+                // (kostet geld)". Gezahlt wird aus der STADTKASSE, einmal.
+                //
+                // Kein eigenes Recht am Zweig: Der Riegel ist der BESITZ der Stadt,
+                // und den fragt kaufeStadtrecht selbst. Ein Recht hier waere ein
+                // zweiter Ort fuer dieselbe Frage - und die Antwort "nicht deine
+                // Stadt" ist die sprechendere.
+                .then(Commands.literal("stadtrecht")
+                        .executes(this::kaufeStadtrecht))
                 .then(Commands.literal("regeln")
                         .executes(this::zeigeRegeln)
                         .then(Commands.literal("loeschen")
@@ -1099,4 +1109,30 @@ final class FreistadtBefehle {
         return Command.SINGLE_SUCCESS;
     }
 
+
+    /**
+     * {@code /freistadt stadtrecht} - das Handelsrecht fuer die Stadt hier kaufen.
+     *
+     * <p>Ohne Argument und ohne Bestaetigung: Der Preis steht in der Datei, der
+     * Besitzer steht in seiner Stadt, und gezahlt wird aus der Stadtkasse. Eine
+     * Bestaetigungsstufe waere hier anders als beim Rueckweg kein Schutz - gekauft
+     * ist gekauft, und es gibt nichts zurueckzurollen.
+     */
+    private int kaufeStadtrecht(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        Freistadtbuch.Stadtrechtentscheid entscheid = buch.kaufeStadtrecht(
+                weltschluessel, spieler.getUniqueId(),
+                spieler.getLocation().getBlockX(),
+                spieler.getLocation().getBlockZ());
+        sende(spieler, Freistadttext.stadtrechtZeilen(sprache, entscheid,
+                Spielername::von));
+        return Command.SINGLE_SUCCESS;
+    }
 }

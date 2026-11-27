@@ -242,6 +242,7 @@ mark:
       wettbewerb-start: "Startgeld fuer den Angelwettbewerb"
       wettbewerb-preis: "Preis aus dem Angelwettbewerb"
       wettbewerb-erstattet: "Anmeldung gescheitert - erstattet"
+      stadtrecht: "Stadtrecht"
 
   # /MARK TAUSCHEN - die Wechselstube. Plan 2.1 nennt fuer das Muenzhaus "Kontostand,
   # Verlauf, Wechsel Mark - Goldmark, Wechseldeckel sichtbar"; das Haus selbst kommt
@@ -1979,6 +1980,31 @@ freistadt:
     zu-wenig: "<warnung>So viel liegt nicht in der Kasse - darin sind <betont>{stand}</betont></warnung>"
     # {stadt} {besitzer} - eine fremde Kasse. Lesen darf jeder, nehmen nur der Besitzer.
     nicht-deine: "<warnung>Die Kasse von {stadt} gehoert <betont>{besitzer}</betont></warnung>"
+
+  # DAS STADTRECHT [Chat 27.11.2026]: "in der parzelle sind shops verboten, nur in
+  #   der mall oder in der eigenen stadt mit freihandels lizens / stadtrecht erlaubt
+  #   (kostet geld)". Gekauft mit /freistadt stadtrecht, einmal je Stadt, AUS DER
+  #   STADTKASSE - die Stadt kauft das Recht, nicht ihr Besitzer. Verkauft er sie,
+  #   geht es mit.
+  #
+  #   DREI LAGEN HABEN HIER KEINE ZEILE, weil sie ihre mit der Kasse teilen: keine
+  #   Stadt (freistadt.keine-stadt), eine fremde Stadt (kasse.nicht-deine) und eine
+  #   Stoerung. Ein zweiter Satz fuer dieselbe Lage waere ein zweites Wort dafuer.
+  stadtrecht:
+    # {preis} {rest} - gekauft. Der REST kommt mit: Der Besitzer hat gerade aus der
+    #   Stadtkasse gezahlt, und die naechste Ladengebuehr kommt daraus auch.
+    gekauft: "<bestaetigung>Stadtrecht gekauft fuer {preis}.</bestaetigung>\n<fliesstext>Ab jetzt darf in dieser Stadt gehandelt werden. In der Kasse bleiben <betont>{rest}</betont>.</fliesstext>"
+    # Schon gekauft. KEIN Fehler, darum kein warnung: Der Besitzer hat nachgefragt
+    #   und bekommt eine Auskunft.
+    schon: "<fliesstext>Diese Stadt hat das Stadtrecht schon - hier darf gehandelt werden.</fliesstext>"
+    # Der Betreiber hat freistaedte.stadtrecht-preis auf 0 gestellt. Ein eigener Satz
+    #   und nicht schon: Wer "du hast bezahlt" liest, sucht eine Buchung, die es nie
+    #   gab.
+    nicht-noetig: "<fliesstext>Auf diesem Server kostet das Stadtrecht nichts - in jeder Stadt darf gehandelt werden.</fliesstext>"
+    # {preis} {stand} - zu wenig in der Kasse. BEIDE Zahlen, damit der Besitzer
+    #   ausrechnen kann, was fehlt - wie bei kasse.zu-wenig.
+    zu-wenig: "<warnung>Das Stadtrecht kostet {preis} - in der Stadtkasse sind <betont>{stand}</betont>.</warnung>\n<fliesstext>Einzahlen geht mit /freistadt kasse.</fliesstext>"
+
   # DIE REGELN EINER STADT [Teil E]. Was Besucher dort beachten sollen, vom Besitzer
   #   gesetzt. Zusammen mit einem vergebenen Grundstueck ist das die Auflage fuer den
   #   Teleporter und das Ladenrecht - eine Stadt ohne Regeln und ohne Buerger ist eine
@@ -2078,6 +2104,9 @@ freistadt:
     ohne-regeln: "ein Regeltext"
     ohne-buerger: "ein vergebenes Grundstueck"
     ohne-beides: "ein Regeltext und ein vergebenes Grundstueck"
+    # Substanz da, Geld fehlt. Ein eigenes Wort, weil der naechste
+    #   Schritt ein anderer ist: nicht schreiben, sondern kaufen.
+    ohne-stadtrecht: "das Stadtrecht ist nicht gekauft"
 
 laden:
   # Die Ueberschrift ueber der Liste - die EINZIGE Zeile dieses Befehls in kopf.
@@ -2387,6 +2416,11 @@ shop:
     #   freistadt.auflage. Ohne die Angabe weiss selbst der Besitzer nur, DASS etwas
     #   fehlt, und nicht, was er tun soll.
     kein-ladenrecht: "<warnung>{stadt} hat noch kein Ladenrecht</warnung>\n<fliesstext>Es fehlt: {was}. Bestehende Laeden handeln weiter.</fliesstext>"
+    # HIER GEHT GAR KEIN Spielershop - nicht auf einer Parzelle, einem
+    #   Werder, einer Wolkeninsel oder in einer Farmwelt. Die Zeile nennt
+    #   die zwei Orte, an denen es GEHT: sonst liest der Spieler "nicht
+    #   hier" und fragt "wo denn".
+    kein-handelsplatz: "<warnung>Hier darf kein Shop stehen</warnung>\n<fliesstext>Kistenshops gehen in einer Ladeneinheit der Markthalle und in einer Freistadt mit Stadtrecht.</fliesstext>"
     # {gebuehr} - die Stadt nimmt eine Ladengebuehr, und sein Geld reicht nicht
     #   [Teil E6]. EIN ANDERER SATZ als kein-ladenrecht: Dort darf NIEMAND einen Laden
     #   anlegen, hier darf er nur gerade nicht. Wer "kein Ladenrecht" laese, wartete

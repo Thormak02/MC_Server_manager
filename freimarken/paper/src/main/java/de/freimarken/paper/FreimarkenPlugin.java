@@ -456,6 +456,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
      */
     private Ladenverzeichnis ladenverzeichnis = Ladenverzeichnis.ohneEinheiten();
 
+    /**
+     * Je Bauwelt die Zustaendigkeit - EINMAL gebaut, zweimal gebraucht.
+     *
+     * <p>Die Weltwache braucht sie fuer die Grenzregeln, das Shopbuch fuer die Frage
+     * "ist das privates Bauland". Zweimal zu bauen hiesse zwei Karten, die eines
+     * Tages auseinanderlaufen - und die zweite entstuende in einer Methode, in der
+     * liste gar nicht mehr in Reichweite ist.
+     */
+    private Map<String, Zustaendigkeit> bauwelten = Map.of();
+
     /** In welcher Welt die Markthalle steht - ohne Namensraum, wie in der config.yml. */
     private String ladenwelt = Ladenliste.VORGABE_WELT;
 
@@ -1481,6 +1491,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 spieler -> einsichtsstand.schaut(spieler.getUniqueId(),
                         uhr.instant()));
         getServer().getPluginManager().registerEvents(schutzwache, this);
+        // DIE KARTE DER BAUWELTEN entsteht HIER, einmal: Sie braucht liste, und die
+        // gibt es nur in diesem Lauf. Das Shopbuch liest sie spaeter aus dem Feld.
+        bauwelten = bauwelten(liste.welten());
         // DIE WELTREGELN [Schritt 16d] - direkt neben der Schutzwache, und das ist
         // Absicht: Sie beantwortet eine ANDERE Frage (ohne Spieler), holt sie aber
         // aus DERSELBEN Quelle. Wer die eine findet, findet die andere.
@@ -1492,7 +1505,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Blockwache, die beim Start einmal entschieden wird.
         getServer().getPluginManager().registerEvents(
                 new Weltwache(() -> wirtschaft.werte().weltregeln(),
-                        bauwelten(liste.welten()), getLogger()), this);
+                        bauwelten, getLogger()), this);
         getLogger().info("Ladenschutz aktiv: " + ladenverzeichnis.anzahl()
                 + " Einheiten in " + ladenwelt + " - darin baut, bearbeitet und oeffnet"
                 + " Kisten nur der Mieter. Ein freier Stand ist fuer JEDEN gesperrt."
@@ -2073,7 +2086,23 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 // Zweig. Es DARF null sein - dann gibt es in diesem Lauf keine
                 // Freistaedte, und der Riegel laesst jeden Shop durch; gesagt hat das
                 // der Start schon mit zwei eigenen Zeilen.
-                freistadtbuch, getLogger());
+                freistadtbuch,
+                // DIE MALL [Chat 27.11.2026]: "nur in der mall oder in der eigenen
+                // stadt". Gefragt wird DASSELBE Verzeichnis, das der Ladenschutz
+                // fragt - ein zweites hier liefe von jenem weg. Mit der Hoehe, denn
+                // eine Einheit ist ein Quader und eine Halle hat Stockwerke.
+                (welt, x, y, z) -> weltschluessel(ladenwelt).equals(welt)
+                        && ladenverzeichnis.anDerStelle(x, y, z) != null,
+                // PRIVATES BAULAND: dieselbe Quelle, die die Weltregeln fragen.
+                // bauwelten() kennt je Bauwelt die Zustaendigkeit; eine ganz gebaute
+                // Welt (Altfurt) zaehlt mit - dort gehoert alles dem Betreiber, und
+                // ein Spielershop hat dort nichts zu suchen.
+                (welt, x, z) -> {
+                    var wer = bauwelten.get(welt);
+                    return wer != null
+                            && (wer.ganzGebaut() || wer.fuer(welt, x, z).isPresent());
+                },
+                getLogger());
         Shopwache shopwache = new Shopwache(shopbuch, shopware, sprache,
                 tat -> getServer().getScheduler().runTask(this, tat), getLogger(),
                 // Auch die SHOPKISTE oeffnet die Einsicht: Dort steht Ware, und Ware

@@ -192,6 +192,8 @@ class ShoptextTest {
                 "&#d9564dBundshops darfst du nicht anlegen.");
         erwartet.put(Shopbuch.Bescheid.KEIN_LADENRECHT,
                 "&#d9564dAnnastadt hat noch kein Ladenrecht");
+        erwartet.put(Shopbuch.Bescheid.KEIN_HANDELSPLATZ,
+                "&#d9564dHier darf kein Shop stehen");
         erwartet.put(Shopbuch.Bescheid.LADENGEBUEHR_ZU_TEUER,
                 "&#d9564dEin Laden in dieser Stadt kostet 0 Mark - das hast du nicht.");
         erwartet.put(Shopbuch.Bescheid.GESTOERT,

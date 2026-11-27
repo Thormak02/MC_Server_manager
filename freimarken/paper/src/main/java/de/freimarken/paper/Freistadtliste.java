@@ -93,7 +93,9 @@ final class Freistadtliste {
                 betrag(wurzel, Freistadtwerte.PFAD_LADENGEBUEHR_ANLAGE,
                         Freistadtwerte.VORGABE_LADENGEBUEHR_ANLAGE, klagen, bericht),
                 betrag(wurzel, Freistadtwerte.PFAD_LADENGEBUEHR_TAG,
-                        Freistadtwerte.VORGABE_LADENGEBUEHR_TAG, klagen, bericht));
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_TAG, klagen, bericht),
+                betrag(wurzel, Freistadtwerte.PFAD_STADTRECHT_PREIS,
+                        Freistadtwerte.VORGABE_STADTRECHT_PREIS, klagen, bericht));
         bericht.add(rechenprobe(werte) + " Welt: " + welt + ".");
         return new Ergebnis(welt, werte, klagen, bericht);
     }
@@ -143,6 +145,23 @@ final class Freistadtliste {
                 .append(staedte(werte.hoechstzahl())).append(" je Spieler.");
         if (werte.gruendungspreis() == 0L) {
             satz.append(" GRATIS - wer das Recht hat, gruendet umsonst.");
+        }
+        // DAS STADTRECHT GEHOERT IN DIESELBE ZEILE [Fund des Startlaufs
+        // 27.11.2026]: Es stand in keiner einzigen Startzeile, und es
+        // entscheidet, ob in einer Stadt ueberhaupt gehandelt werden darf. Der
+        // Grund steht ueber dieser Methode: Wer 2.500 statt 25.000 liest, sieht
+        // den fehlenden Nullenblock - keine Zahlengrenze sieht ihn.
+        //
+        // HINTER dem Rueckweg bei hoechstzahl 0, und das ist richtig: Wo nicht
+        // gegruendet wird, gibt es keine Stadt, die ein Recht kaufen koennte.
+        if (werte.stadtrechtPreis() <= 0L) {
+            satz.append(" Stadtrecht: AUS - in jeder Stadt darf gehandelt"
+                    + " werden, ohne zu zahlen.");
+        } else {
+            satz.append(" Stadtrecht einmalig ")
+                    .append(werte.stadtrechtPreis())
+                    .append(" Mark aus der Stadtkasse - ohne das handelt in der"
+                            + " Stadt niemand.");
         }
         return satz.toString();
     }

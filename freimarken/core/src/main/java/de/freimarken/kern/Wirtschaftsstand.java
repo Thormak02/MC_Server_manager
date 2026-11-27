@@ -550,6 +550,9 @@ public final class Wirtschaftsstand {
         nenneZahl(geaendert, Freistadtwerte.PFAD_LADENGEBUEHR_TAG,
                 alt.freistaedte().ladengebuehrTag(),
                 neu.freistaedte().ladengebuehrTag());
+        nenneZahl(geaendert, Freistadtwerte.PFAD_STADTRECHT_PREIS,
+                alt.freistaedte().stadtrechtPreis(),
+                neu.freistaedte().stadtrechtPreis());
         nenneJaNein(geaendert, Verfallswerte.PFAD_AN,
                 alt.freistaedte().verfall().an(), neu.freistaedte().verfall().an());
         nenneZahl(geaendert, Verfallswerte.PFAD_UNBESUCHT_TAGE,
