@@ -5882,10 +5882,163 @@ class GrenzeTest {
                         + " gehoert dieser Weg hier hinein: " + ohneAnmeldung);
     }
 
-    // --- 31eg: die Befehlsbaeume [Fund 27.11.2026] ----------------------------
+    // --- Die Rechtekette: 31eg bis 31ek [27.11.2026] ---------------------------
 
     /**
-     * Je Befehlsklasse: wie viele Knoten sie baut und welche - aus dem Quelltext.
+     * Der Argumenttext ab der oeffnenden Klammer, bis zur passenden.
+     *
+     * <p>EINE Stelle fuer alle Tafeln dieser Kette, und das ist nicht
+     * Sparsamkeit: Zwei Kopien derselben Lesung koennen auseinanderlaufen, und
+     * dann benennen zwei Tafeln denselben Zweig verschieden - ein Mensch, der die
+     * eine liest, findet den Eintrag in der anderen nicht.
+     *
+     * <p>{@code bisKomma} fuer {@code Commands.argument(name, typ)}: Dort ist nur
+     * der erste Teil der Name.
+     *
+     * <p>Leerraum wird vereinheitlicht und die Spur eines Zeilenumbruchs getilgt
+     * ({@code ) .hasPermission} wird {@code ).hasPermission}). Sonst macht schon
+     * ein anderer Umbruch im Quelltext eine Tafel rot, und eine Tafel, die bei
+     * jeder Formatierung rot wird, wird ausgenommen.
+     */
+    private static String argumenttext(String text, int anfang, boolean bisKomma) {
+        int tiefe = 1;
+        int lauf = anfang;
+        while (lauf < text.length()) {
+            char zeichen = text.charAt(lauf);
+            if (zeichen == '(') {
+                tiefe++;
+            } else if (zeichen == ')') {
+                tiefe--;
+                if (tiefe == 0) {
+                    break;
+                }
+            } else if (zeichen == ',' && tiefe == 1 && bisKomma) {
+                break;
+            }
+            lauf++;
+        }
+        return String.join(" ", text.substring(anfang, lauf).trim().split("\\s+"))
+                .replace(" .", ".").replace(" )", ")").replace("( ", "(");
+    }
+
+    /**
+     * Der Name einer Deklaration auf Klassenebene, oder {@code null}.
+     *
+     * <p>Gebraucht fuer den PFAD eines Knotens: Eine Hilfsmethode, die einen
+     * Knoten baut und zurueckgibt ({@code anwesendeNamen()},
+     * {@code zusammenlegenZweig()}), hat im Text keinen Vater. Ohne den
+     * Methodennamen trugen zwei solche Knoten denselben Pfad - gemessen am
+     * 27.11.2026 in drei Klassen -, und zwei gleiche Pfade machen die Tafel
+     * unpruefbar.
+     */
+    private static String istDeklaration(String zeile) {
+        String gestrafft = zeile.strip();
+        if (!zeile.startsWith("    ") || zeile.startsWith("     ")) {
+            return null;
+        }
+        if (!gestrafft.endsWith("{") || !gestrafft.contains("(")) {
+            return null;
+        }
+        for (String anfang : List.of("}", "//", "*", "@")) {
+            if (gestrafft.startsWith(anfang)) {
+                return null;
+            }
+        }
+        String vorn = gestrafft.substring(0, gestrafft.indexOf('(')).strip();
+        if (vorn.isEmpty()) {
+            return null;
+        }
+        String[] teile = vorn.split("\\s+");
+        return teile[teile.length - 1];
+    }
+
+    /**
+     * Jeder Knoten einer Befehlsdatei mit seinem WEG und seinem Riegel.
+     *
+     * <p><b>Der Weg und nicht das Wort</b>, und das ist der Fund vom 27.11.2026:
+     * Eine Tafel, die nur Knotenwoerter haelt, sieht nicht, wenn ein Unterbaum
+     * UMGEHAENGT wird. Haengt jemand das Namensargument samt
+     * {@code bestaetigen} von {@code raeumen} an einen offenen Geschwisterzweig,
+     * bleibt die Woerterliste dieselbe - und der Weg zur Tat fuehrt ohne Riegel.
+     * Ein Pfad aendert sich beim Umhaengen und bleibt beim Umordnen.
+     *
+     * <p>Der VATER eines Knotens in Klammertiefe D ist der zuletzt geoeffnete
+     * Knoten einer KLEINEREN Tiefe - so ist eine Baukette gebaut
+     * ({@code .then(Commands.literal(x).then(Commands.literal(y)))}). Hat er
+     * keinen, ist er die Wurzel eines Baums, und dann tritt die Methode an seine
+     * Stelle.
+     *
+     * <p>Der RIEGEL in Tiefe D gehoert dem Knoten derselben Tiefe: In der Kette
+     * steht {@code .requires(} hinter dem {@code Commands.literal(} desselben
+     * Gliedes. Findet sich dort keiner, wird daraus ein Eintrag
+     * {@code (KEIN KNOTEN)} - die Tafel wird ROT und nicht stumm falsch.
+     *
+     * @return je Knoten {@code {Pfad, Riegel}}, Riegel {@code null} wenn keiner
+     */
+    private static List<String[]> befehlsernte(String text) {
+        var knotenJeTiefe = new TreeMap<Integer, String>();
+        var nummerJeTiefe = new TreeMap<Integer, Integer>();
+        var aus = new ArrayList<String[]>();
+        String methode = "?";
+        int tiefe = 0;
+        boolean zeilenanfang = true;
+        for (int stelle = 0; stelle < text.length(); stelle++) {
+            if (zeilenanfang) {
+                int ende = text.indexOf('\n', stelle);
+                String zeile = text.substring(stelle,
+                        ende < 0 ? text.length() : ende);
+                String name = istDeklaration(zeile);
+                if (name != null) {
+                    methode = name;
+                }
+                zeilenanfang = false;
+            }
+            String marke = null;
+            boolean bisKomma = false;
+            boolean istKnoten = true;
+            if (text.startsWith("Commands.literal(", stelle)) {
+                marke = "Commands.literal(";
+            } else if (text.startsWith("Commands.argument(", stelle)) {
+                marke = "Commands.argument(";
+                bisKomma = true;
+            } else if (text.startsWith(".requires(", stelle)) {
+                marke = ".requires(";
+                istKnoten = false;
+            }
+            if (marke != null) {
+                String wort = argumenttext(text, stelle + marke.length(),
+                        bisKomma);
+                if (istKnoten) {
+                    var eltern = knotenJeTiefe.headMap(tiefe);
+                    String vater = eltern.isEmpty()
+                            ? methode + "()"
+                            : eltern.get(eltern.lastKey());
+                    String pfad = vater + ">" + wort;
+                    knotenJeTiefe.tailMap(tiefe).clear();
+                    nummerJeTiefe.tailMap(tiefe).clear();
+                    knotenJeTiefe.put(tiefe, pfad);
+                    nummerJeTiefe.put(tiefe, aus.size());
+                    aus.add(new String[] {pfad, null});
+                } else if (nummerJeTiefe.containsKey(tiefe)) {
+                    aus.get(nummerJeTiefe.get(tiefe))[1] = wort;
+                } else {
+                    aus.add(new String[] {"(KEIN KNOTEN)", wort});
+                }
+            }
+            char zeichen = text.charAt(stelle);
+            if (zeichen == '(') {
+                tiefe++;
+            } else if (zeichen == ')') {
+                tiefe--;
+            } else if (zeichen == '\n') {
+                zeilenanfang = true;
+            }
+        }
+        return List.copyOf(aus);
+    }
+
+    /**
+     * Je Befehlsklasse jeder Weg, den ein Spieler tippen kann.
      *
      * <p><b>Der Fund, der diese Tafel noetig macht:</b> Nimmt man aus
      * {@code FreistadtBefehle} den Block
@@ -5902,137 +6055,295 @@ class GrenzeTest {
      * 27-mal nachbauen: Die meisten Befehlsklassen brauchen zum Bauen einen
      * Server. Der Quelltext liegt fuer jede gleich da.
      *
-     * <p><b>Gehalten wird der TEXT und die ZAHL:</b> die verschiedenen
-     * Knotenwoerter so, wie sie im Quelltext stehen (ein Literal mit
-     * Anfuehrungszeichen, eine Konstante ohne), und davor die Anzahl ALLER
-     * Knoten. Die Zahl allein waere schwach, die Liste allein saehe nicht, dass
-     * von zwei {@code \"bestaetigen\"} eines verschwindet.
+     * <p><b>PFADE und nicht Woerter</b> - die Begruendung steht an
+     * {@link #befehlsernte}. Sortiert, damit eine Umordnung gruen bleibt und ein
+     * Umhaengen nicht.
      *
-     * <p>Eine Umordnung im Baum laesst sie gruen - das ist gewollt. Ein neuer
-     * Zweig macht sie ROT: Wer einen Befehl dazubaut, traegt ihn hier ein und
-     * hat damit entschieden, dass es ihn geben soll.
+     * <p>Ein neuer Zweig macht diese Tafel ROT: Wer einen Befehl dazubaut, traegt
+     * ihn hier ein und hat damit entschieden, dass es ihn geben soll.
      *
      * <p>GEERNTET aus dem gruenen Stand vom 27.11.2026, nicht abgeschrieben -
      * von Hand fehlte genau der Zweig, den man gerade nicht sieht.
      */
-    private static final Map<String, String> ZWEIGE_JE_BEFEHLSKLASSE =
+    private static final Map<String, String> PFADE_JE_BEFEHLSKLASSE =
             Map.ofEntries(
-                Map.entry("AnfragenBefehle", "4: \"spieler\", \"tpaccept\", \"tpdeny\", befehlsname"),
+                Map.entry("AnfragenBefehle",
+                        "tpaccept()>\"tpaccept\"; "
+                                + "tpahere()>befehlsname; "
+                                + "tpahere()>befehlsname>\"spieler\"; "
+                                + "tpdeny()>\"tpdeny\""),
                 Map.entry("BerufeBefehle",
-                        "7: \"liste\", \"stand\", \"verlassen\", \"waehlen\", "
-                                + "ARGUMENT, BESTAETIGEN"),
-                Map.entry("BlockBefehle", "3: \"blockbuch\", \"name\", \"spieler\""),
+                        "beruf()>ARGUMENT; beruf()>ARGUMENT>\"liste\"; "
+                                + "beruf()>ARGUMENT>\"stand\"; "
+                                + "beruf()>ARGUMENT>\"verlassen\"; "
+                                + "beruf()>ARGUMENT>\"verlassen\">BESTAETIGEN; "
+                                + "beruf()>ARGUMENT>\"waehlen\"; "
+                                + "berufsargument()>ARGUMENT"),
+                Map.entry("BlockBefehle",
+                        "blockbuch()>\"blockbuch\"; "
+                                + "blockbuch()>\"blockbuch\">\"spieler\"; "
+                                + "blockbuch()>\"blockbuch\">\"spieler\">\"name\""),
                 Map.entry("BundBefehle",
-                        "26: \"altfurt\", \"bau\", \"besessen\", \"besitz\", "
-                                + "\"bestaetigen\", \"betrag\", \"freigeben\", "
-                                + "\"freimarken\", \"messstelle\", \"neuladen\", "
-                                + "\"parzelle\", \"preis\", \"sichern\", \"spieler\", "
-                                + "\"uebertragen\", \"vorgenerieren\", \"welt\", \"x\", "
-                                + "\"z\", waehrung.befehlswort()"),
-                Map.entry("EinsichtBefehle", "3: AN, ARGUMENT, AUS"),
+                        "freimarken()>\"freimarken\"; "
+                                + "freimarken()>\"freimarken\">\"altfurt\"; "
+                                + "freimarken()>\"freimarken\">\"altfurt\">\"sichern"
+                                + "\"; "
+                                + "freimarken()>\"freimarken\">\"altfurt\">\"sichern"
+                                + "\">\"bau\"; "
+                                + "freimarken()>\"freimarken\">\"altfurt\">\"sichern"
+                                + "\">\"bau\">\"bestaetigen\"; "
+                                + "freimarken()>\"freimarken\">\"besitz\"; "
+                                + "freimarken()>\"freimarken\">\"besitz\">\"freigebe"
+                                + "n\"; "
+                                + "freimarken()>\"freimarken\">\"besitz\">\"freigebe"
+                                + "n\">\"x\"; "
+                                + "freimarken()>\"freimarken\">\"besitz\">\"freigebe"
+                                + "n\">\"x\">\"z\"; "
+                                + "freimarken()>\"freimarken\">\"besitz\">\"freigebe"
+                                + "n\">\"x\">\"z\">\"bestaetigen\"; "
+                                + "freimarken()>\"freimarken\">\"besitz\">\"uebertra"
+                                + "gen\"; "
+                                + "freimarken()>\"freimarken\">\"besitz\">\"uebertra"
+                                + "gen\">\"x\"; "
+                                + "freimarken()>\"freimarken\">\"besitz\">\"uebertra"
+                                + "gen\">\"x\">\"z\"; "
+                                + "freimarken()>\"freimarken\">\"besitz\">\"uebertra"
+                                + "gen\">\"x\">\"z\">\"spieler\"; "
+                                + "freimarken()>\"freimarken\">\"messstelle\"; "
+                                + "freimarken()>\"freimarken\">\"neuladen\"; "
+                                + "freimarken()>\"freimarken\">\"parzelle\"; "
+                                + "freimarken()>\"freimarken\">\"parzelle\">\"x\"; "
+                                + "freimarken()>\"freimarken\">\"parzelle\">\"x\">\"z\""
+                                + "; freimarken()>\"freimarken\">\"preis\"; "
+                                + "freimarken()>\"freimarken\">\"preis\">\"besessen\""
+                                + "; "
+                                + "freimarken()>\"freimarken\">\"vorgenerieren\"; "
+                                + "freimarken()>\"freimarken\">\"welt\"; "
+                                + "freimarken()>waehrung.befehlswort(); "
+                                + "freimarken()>waehrung.befehlswort()>\"spieler"
+                                + "\"; "
+                                + "freimarken()>waehrung.befehlswort()>\"spieler"
+                                + "\">\"betrag\""),
+                Map.entry("EinsichtBefehle",
+                        "einsehen()>ARGUMENT; "
+                                + "einsehen()>ARGUMENT>AN; "
+                                + "einsehen()>ARGUMENT>AUS"),
                 Map.entry("FreistadtBefehle",
-                        "32: \"abheben\", \"an\", \"anbieten\", \"angebote\", "
-                                + "\"anlegen\", \"aufgeben\", \"aufloesen\", \"aus\", "
-                                + "\"bestaetigen\", \"ecke\", \"gruenden\", \"grundstueck\", "
-                                + "\"kasse\", \"kaufen\", \"liste\", \"loeschen\", "
-                                + "\"raeumen\", \"rechte\", \"regeln\", \"stadtbuerger\", "
-                                + "\"stadtrecht\", \"zurueckziehen\", ARGUMENT, "
-                                + "ARGUMENT_BETRAG, ARGUMENT_NAME, ARGUMENT_PREIS, "
-                                + "ARGUMENT_RECHT, ARGUMENT_TEXT"),
-                Map.entry("HilfeBefehle", "1: ARGUMENT"),
+                        "freistadt()>ARGUMENT; "
+                                + "freistadt()>ARGUMENT>\"angebote\"; "
+                                + "freistadt()>ARGUMENT>\"aufgeben\"; "
+                                + "freistadt()>ARGUMENT>\"aufgeben\">\"bestaetigen"
+                                + "\"; freistadt()>ARGUMENT>\"gruenden\"; "
+                                + "freistadt()>ARGUMENT>\"gruenden\">ARGUMENT_NAM"
+                                + "E; "
+                                + "freistadt()>ARGUMENT>\"gruenden\">ARGUMENT_NAM"
+                                + "E>\"bestaetigen\"; "
+                                + "freistadt()>ARGUMENT>\"grundstueck\"; "
+                                + "freistadt()>ARGUMENT>\"grundstueck\">\"anbieten"
+                                + "\"; "
+                                + "freistadt()>ARGUMENT>\"grundstueck\">\"anbieten"
+                                + "\">ARGUMENT_PREIS; "
+                                + "freistadt()>ARGUMENT>\"grundstueck\">\"anlegen\""
+                                + "; "
+                                + "freistadt()>ARGUMENT>\"grundstueck\">\"aufloese"
+                                + "n\"; "
+                                + "freistadt()>ARGUMENT>\"grundstueck\">\"ecke\"; "
+                                + "freistadt()>ARGUMENT>\"grundstueck\">\"kaufen\";"
+                                + " f"
+                                + "reistadt()>ARGUMENT>\"grundstueck\">\"zurueckzi"
+                                + "ehen\"; freistadt()>ARGUMENT>\"kasse\"; "
+                                + "freistadt()>ARGUMENT>\"kasse\">\"abheben\"; "
+                                + "freistadt()>ARGUMENT>\"kasse\">\"abheben\">ARGUM"
+                                + "ENT_BETRAG; freistadt()>ARGUMENT>\"liste\"; "
+                                + "freistadt()>ARGUMENT>\"raeumen\"; "
+                                + "freistadt()>ARGUMENT>\"raeumen\">ARGUMENT_NAME"
+                                + "; "
+                                + "freistadt()>ARGUMENT>\"raeumen\">ARGUMENT_NAME"
+                                + ">\"bestaetigen\"; "
+                                + "freistadt()>ARGUMENT>\"rechte\"; "
+                                + "freistadt()>ARGUMENT>\"rechte\">\"an\"; "
+                                + "freistadt()>ARGUMENT>\"rechte\">\"an\">ARGUMENT_"
+                                + "RECHT; freistadt()>ARGUMENT>\"rechte\">\"aus\"; "
+                                + "freistadt()>ARGUMENT>\"rechte\">\"aus\">ARGUMENT"
+                                + "_RECHT; freistadt()>ARGUMENT>\"regeln\"; "
+                                + "freistadt()>ARGUMENT>\"regeln\">\"loeschen\"; "
+                                + "freistadt()>ARGUMENT>\"regeln\">ARGUMENT_TEXT;"
+                                + " freistadt()>ARGUMENT>\"stadtbuerger\"; "
+                                + "freistadt()>ARGUMENT>\"stadtrecht\""),
+                Map.entry("HilfeBefehle", "hilfe()>ARGUMENT"),
                 Map.entry("LadenBefehle",
-                        "7: \"abholfach\", \"kuendigen\", \"liste\", \"mieten\", "
-                                + "\"verlaengern\", ARGUMENT, ARGUMENT_NAME"),
-                Map.entry("LotterieBefehle", "2: ARGUMENT, ZIEHEN"),
-                Map.entry("MarktBefehle", "3: \"liste\", \"seite\", ARGUMENT"),
-                Map.entry("MeldeBefehle", "3: \"grund\", \"spieler\", ARGUMENT"),
+                        "laden()>ARGUMENT; "
+                                + "laden()>ARGUMENT>\"abholfach\"; "
+                                + "laden()>ARGUMENT>\"kuendigen\"; "
+                                + "laden()>ARGUMENT>\"liste\"; "
+                                + "laden()>ARGUMENT>\"mieten\"; "
+                                + "laden()>ARGUMENT>\"mieten\">ARGUMENT_NAME; "
+                                + "laden()>ARGUMENT>\"verlaengern\""),
+                Map.entry("LotterieBefehle",
+                        "lotterie()>ARGUMENT; "
+                                + "lotterie()>ARGUMENT>ZIEHEN"),
+                Map.entry("MarktBefehle",
+                        "markt()>ARGUMENT; markt()>ARGUMENT>\"liste\"; "
+                                + "markt()>ARGUMENT>\"liste\">\"seite\""),
+                Map.entry("MeldeBefehle",
+                        "melden()>ARGUMENT; "
+                                + "melden()>ARGUMENT>\"spieler\"; "
+                                + "melden()>ARGUMENT>\"spieler\">\"grund\""),
                 Map.entry("MeldungBefehle",
-                        "8: \"nummer\", \"vermerk\", ABSCHLIESSEN, ABWEISEN, "
-                                + "ANNEHMEN, ARGUMENT, HIN"),
-                Map.entry("MenueBefehle", "1: ARGUMENT"),
+                        "meldung()>\"nummer\"; meldung()>ARGUMENT; "
+                                + "meldung()>ARGUMENT>ABSCHLIESSEN; "
+                                + "meldung()>ARGUMENT>ABSCHLIESSEN>\"vermerk\"; "
+                                + "meldung()>ARGUMENT>ABWEISEN; "
+                                + "meldung()>ARGUMENT>ABWEISEN>\"vermerk\"; "
+                                + "meldung()>ARGUMENT>ANNEHMEN; "
+                                + "meldung()>ARGUMENT>HIN"),
+                Map.entry("MenueBefehle", "menu()>ARGUMENT"),
                 Map.entry("ParzellenBefehle",
-                        "37: \"alles\", \"anzahl\", \"aufgeben\", \"auftrennen\", "
-                                + "\"bestaetigen\", \"hinzu\", \"info\", \"kaufen\", "
-                                + "\"liste\", \"mark\", \"mitbauer\", \"muenzhaus\", "
-                                + "\"nehmen\", \"parzelle\", \"posten\", \"spieler\", "
-                                + "\"tauschen\", \"verkaufen\", \"verlauf\", \"weg\", \"x\", "
-                                + "\"z\", \"zusammenlegen\", richtung.wort()"),
+                        "anwesendeNamen()>\"spieler\"; "
+                                + "anzahlGoldmark()>\"anzahl\"; mark()>\"mark\"; "
+                                + "mark()>\"mark\">\"verlauf\"; "
+                                + "mitbauerNamen()>\"spieler\"; "
+                                + "muenzhausZweig()>\"muenzhaus\"; "
+                                + "muenzhausZweig()>\"muenzhaus\">\"kaufen\"; "
+                                + "muenzhausZweig()>\"muenzhaus\">\"kaufen\">\"besta"
+                                + "etigen\"; "
+                                + "muenzhausZweig()>\"muenzhaus\">\"verlauf\"; "
+                                + "parzelle()>\"parzelle\"; "
+                                + "parzelle()>\"parzelle\">\"aufgeben\"; "
+                                + "parzelle()>\"parzelle\">\"aufgeben\">\"bestaetige"
+                                + "n\"; "
+                                + "parzelle()>\"parzelle\">\"aufgeben\">\"bestaetige"
+                                + "n\">\"x\"; "
+                                + "parzelle()>\"parzelle\">\"aufgeben\">\"bestaetige"
+                                + "n\">\"x\">\"z\"; "
+                                + "parzelle()>\"parzelle\">\"auftrennen\"; "
+                                + "parzelle()>\"parzelle\">\"auftrennen\">\"alles\"; "
+                                + "parzelle()>\"parzelle\">\"auftrennen\">\"alles\">\""
+                                + "bestaetigen\"; "
+                                + "parzelle()>\"parzelle\">\"auftrennen\">\"alles\">\""
+                                + "bestaetigen\">\"x\"; "
+                                + "parzelle()>\"parzelle\">\"auftrennen\">\"alles\">\""
+                                + "bestaetigen\">\"x\">\"z\"; "
+                                + "parzelle()>\"parzelle\">\"auftrennen\">\"bestaeti"
+                                + "gen\"; "
+                                + "parzelle()>\"parzelle\">\"auftrennen\">\"bestaeti"
+                                + "gen\">\"x\"; "
+                                + "parzelle()>\"parzelle\">\"auftrennen\">\"bestaeti"
+                                + "gen\">\"x\">\"z\"; parzelle()>\"parzelle\">\"info\"; "
+                                + "parzelle()>\"parzelle\">\"liste\"; "
+                                + "parzelle()>\"parzelle\">\"mitbauer\"; "
+                                + "parzelle()>\"parzelle\">\"mitbauer\">\"hinzu\"; "
+                                + "parzelle()>\"parzelle\">\"mitbauer\">\"weg\"; "
+                                + "parzelle()>\"parzelle\">\"nehmen\"; "
+                                + "postenName()>\"posten\"; "
+                                + "tauschZweig()>\"tauschen\"; "
+                                + "tauschZweig()>\"tauschen\">\"kaufen\"; "
+                                + "tauschZweig()>\"tauschen\">\"verkaufen\"; "
+                                + "zusammenlegenZweig()>\"zusammenlegen\"; "
+                                + "zusammenlegenZweig()>\"zusammenlegen\">richtun"
+                                + "g.wort(); "
+                                + "zusammenlegenZweig()>\"zusammenlegen\">richtun"
+                                + "g.wort()>\"bestaetigen\"; "
+                                + "zusammenlegenZweig()>\"zusammenlegen\">richtun"
+                                + "g.wort()>\"bestaetigen\">\"x\"; "
+                                + "zusammenlegenZweig()>\"zusammenlegen\">richtun"
+                                + "g.wort()>\"bestaetigen\">\"x\">\"z\""),
                 Map.entry("PortalBefehle",
-                        "8: ARGUMENT, ECKE, ENTFERNEN, LISTE, NEULADEN, SETZEN, "
-                                + "WELT"),
-                Map.entry("RangBefehle", "2: \"leiter\", ARGUMENT"),
-                Map.entry("RegelnBefehle", "3: ANNEHMEN, ARGUMENT, IM_CHAT"),
+                        "portal()>ARGUMENT; portal()>ARGUMENT>ECKE; "
+                                + "portal()>ARGUMENT>ENTFERNEN; "
+                                + "portal()>ARGUMENT>ENTFERNEN>WELT; "
+                                + "portal()>ARGUMENT>LISTE; "
+                                + "portal()>ARGUMENT>NEULADEN; "
+                                + "portal()>ARGUMENT>SETZEN; "
+                                + "portal()>ARGUMENT>SETZEN>WELT"),
+                Map.entry("RangBefehle", "rang()>ARGUMENT; rang()>ARGUMENT>\"leiter\""),
+                Map.entry("RegelnBefehle",
+                        "regeln()>ARGUMENT; "
+                                + "regeln()>ARGUMENT>ANNEHMEN; "
+                                + "regeln()>ARGUMENT>IM_CHAT"),
                 Map.entry("RueckrollBefehle",
-                        "8: \"minuten\", \"radius\", \"welt\", \"x\", \"y\", "
-                                + "\"z\", BEI, ZURUECK"),
-                Map.entry("RueckwegBefehle", "1: \"zurueck\""),
+                        "zurueck()>ZURUECK; "
+                                + "zurueck()>ZURUECK>\"radius\"; "
+                                + "zurueck()>ZURUECK>\"radius\">\"minuten\"; "
+                                + "zurueck()>ZURUECK>\"radius\">\"minuten\">BEI; "
+                                + "zurueck()>ZURUECK>\"radius\">\"minuten\">BEI>\"we"
+                                + "lt\"; "
+                                + "zurueck()>ZURUECK>\"radius\">\"minuten\">BEI>\"we"
+                                + "lt\">\"x\"; "
+                                + "zurueck()>ZURUECK>\"radius\">\"minuten\">BEI>\"we"
+                                + "lt\">\"x\">\"y\"; "
+                                + "zurueck()>ZURUECK>\"radius\">\"minuten\">BEI>\"we"
+                                + "lt\">\"x\">\"y\">\"z\""),
+                Map.entry("RueckwegBefehle", "zurueck()>\"zurueck\""),
                 Map.entry("ShopBefehle",
-                        "8: \"freigaben\", \"freigeben\", \"liste\", \"name\", "
-                                + "\"seite\", \"shop\", \"sperren\""),
-                Map.entry("SpielzeitBefehle", "2: \"spieler\", \"spielzeit\""),
+                        "shop()>\"shop\"; shop()>\"shop\">\"freigaben\"; "
+                                + "shop()>\"shop\">\"freigeben\"; "
+                                + "shop()>\"shop\">\"freigeben\">\"name\"; "
+                                + "shop()>\"shop\">\"liste\"; "
+                                + "shop()>\"shop\">\"liste\">\"seite\"; "
+                                + "shop()>\"shop\">\"sperren\"; "
+                                + "shop()>\"shop\">\"sperren\">\"name\""),
+                Map.entry("SpielzeitBefehle",
+                        "spielzeit()>\"spielzeit\"; "
+                                + "spielzeit()>\"spielzeit\">\"spieler\""),
                 Map.entry("StrafBefehle",
-                        "12: \"dauer\", \"grund\", \"nummer\", \"spieler\", "
-                                + "ARGUMENT, ARGUMENT_BANNLISTE, AUFHEBEN, VERLAUF, "
-                                + "art.kuerzel()"),
+                        "bannliste()>ARGUMENT_BANNLISTE; "
+                                + "strafe()>ARGUMENT; "
+                                + "strafe()>ARGUMENT>AUFHEBEN; "
+                                + "strafe()>ARGUMENT>AUFHEBEN>\"nummer\"; "
+                                + "strafe()>ARGUMENT>AUFHEBEN>\"nummer\">\"grund\";"
+                                + " strafe()>ARGUMENT>VERLAUF; "
+                                + "strafe()>ARGUMENT>VERLAUF>\"spieler\"; "
+                                + "zweigFuer()>\"spieler\"; "
+                                + "zweigFuer()>\"spieler\">\"dauer\"; "
+                                + "zweigFuer()>\"spieler\">\"dauer\">\"grund\"; "
+                                + "zweigFuer()>\"spieler\">\"grund\"; "
+                                + "zweigFuer()>art.kuerzel()"),
                 Map.entry("TeamBefehle",
-                        "9: \"rolle\", \"spieler\", ARGUMENT, GIB, NIMM, ROLLEN, "
-                                + "ZEIGEN"),
-                Map.entry("WarpBefehle", "4: \"freistadt\", \"stadt\", \"warp\", \"ziel\""),
-                Map.entry("WerderBefehle", "4: \"liste\", \"nehmen\", ARGUMENT, ARGUMENT_HAFEN"),
-                Map.entry("WettbewerbBefehle", "2: ANMELDEN, ARGUMENT"),
+                        "team()>\"rolle\"; team()>ARGUMENT; "
+                                + "team()>ARGUMENT>GIB; "
+                                + "team()>ARGUMENT>GIB>\"spieler\"; "
+                                + "team()>ARGUMENT>NIMM; "
+                                + "team()>ARGUMENT>NIMM>\"spieler\"; "
+                                + "team()>ARGUMENT>ROLLEN; "
+                                + "team()>ARGUMENT>ZEIGEN; "
+                                + "team()>ARGUMENT>ZEIGEN>\"spieler\""),
+                Map.entry("WarpBefehle",
+                        "warp()>\"warp\"; warp()>\"warp\">\"freistadt\"; "
+                                + "warp()>\"warp\">\"freistadt\">\"stadt\"; "
+                                + "warp()>\"warp\">\"ziel\""),
+                Map.entry("WerderBefehle",
+                        "werder()>ARGUMENT; "
+                                + "werder()>ARGUMENT>\"liste\"; "
+                                + "werder()>ARGUMENT>ARGUMENT_HAFEN; "
+                                + "werder()>ARGUMENT>ARGUMENT_HAFEN>\"nehmen\""),
+                Map.entry("WettbewerbBefehle",
+                        "wettbewerb()>ARGUMENT; "
+                                + "wettbewerb()>ARGUMENT>ANMELDEN"),
                 Map.entry("WolkeBefehle",
-                        "18: \"abgeben\", \"aufgabe\", \"aufgaben\", "
-                                + "\"bestaetigen\", \"biom\", \"dazu\", \"heim\", \"liste\", "
-                                + "\"mitbauer\", \"nehmen\", \"punkte\", \"rangliste\", "
-                                + "\"spieler\", \"weg\", \"zuruecksetzen\", ARGUMENT"));
-
-    /**
-     * Die Knoten einer Befehlsdatei, in der Reihenfolge des Quelltexts.
-     *
-     * <p>Gelesen wird der ARGUMENTTEXT, nicht der aufgeloeste Name: In
-     * {@code StrafBefehle} heisst ein Zweig {@code art.kuerzel()} und in
-     * {@code ParzellenBefehle} entsteht er aus {@code Richtung.values()}. Ein
-     * Leser, der nur Literale nimmt, saehe die zwei nicht - und das sind die,
-     * die ein Mensch am wenigsten im Kopf hat.
-     */
-    private static List<String> befehlszweige(String text) {
-        var gefunden = new TreeMap<Integer, String>();
-        for (String marke : List.of("Commands.literal(", "Commands.argument(")) {
-            boolean bisKomma = marke.contains("argument");
-            int stelle = 0;
-            while (true) {
-                stelle = text.indexOf(marke, stelle);
-                if (stelle < 0) {
-                    break;
-                }
-                int anfang = stelle + marke.length();
-                int tiefe = 1;
-                int lauf = anfang;
-                while (lauf < text.length()) {
-                    char zeichen = text.charAt(lauf);
-                    if (zeichen == '(') {
-                        tiefe++;
-                    } else if (zeichen == ')') {
-                        tiefe--;
-                        if (tiefe == 0) {
-                            break;
-                        }
-                    } else if (zeichen == ',' && tiefe == 1 && bisKomma) {
-                        break;
-                    }
-                    lauf++;
-                }
-                gefunden.put(stelle, String.join(" ",
-                        text.substring(anfang, lauf).trim().split("\\s+")));
-                stelle = anfang;
-            }
-        }
-        return List.copyOf(gefunden.values());
-    }
+                        "anwesendeNamen()>\"spieler\"; "
+                                + "aufgabenNamen()>\"aufgabe\"; "
+                                + "biomnamen()>\"biom\"; "
+                                + "mitbauerNamen()>\"spieler\"; "
+                                + "wolke()>ARGUMENT; "
+                                + "wolke()>ARGUMENT>\"abgeben\"; "
+                                + "wolke()>ARGUMENT>\"aufgaben\"; "
+                                + "wolke()>ARGUMENT>\"biom\"; "
+                                + "wolke()>ARGUMENT>\"heim\"; "
+                                + "wolke()>ARGUMENT>\"liste\"; "
+                                + "wolke()>ARGUMENT>\"mitbauer\"; "
+                                + "wolke()>ARGUMENT>\"mitbauer\">\"dazu\"; "
+                                + "wolke()>ARGUMENT>\"mitbauer\">\"weg\"; "
+                                + "wolke()>ARGUMENT>\"nehmen\"; "
+                                + "wolke()>ARGUMENT>\"punkte\"; "
+                                + "wolke()>ARGUMENT>\"rangliste\"; "
+                                + "wolke()>ARGUMENT>\"zuruecksetzen\"; "
+                                + "wolke()>ARGUMENT>\"zuruecksetzen\">\"bestaetige"
+                                + "n\""));
 
     @Test
-    @DisplayName("31eg - jeder Befehlszweig steht in der Tafel")
-    void jederBefehlszweigStehtInDerTafel() {
+    @DisplayName("31eg - jeder Befehlsweg steht in der Tafel")
+    void jederBefehlswegStehtInDerTafel() {
         var gefunden = new TreeMap<String, String>();
         int knoten = 0;
         for (Path datei : Quellen.alle()) {
@@ -6040,10 +6351,12 @@ class GrenzeTest {
             if (!name.endsWith("Befehle")) {
                 continue;
             }
-            List<String> zweige = befehlszweige(Quellen.text(datei));
-            knoten += zweige.size();
-            gefunden.put(name, zweige.size() + ": "
-                    + String.join(", ", new TreeSet<>(zweige)));
+            var wege = new TreeSet<String>();
+            for (String[] eintrag : befehlsernte(Quellen.text(datei))) {
+                wege.add(eintrag[0]);
+                knoten++;
+            }
+            gefunden.put(name, String.join("; ", wege));
         }
         // DER BLINDHEITSRIEGEL. Findet der Leser nichts mehr - umbenannte Dateien,
         // ein anderer Baukasten als Commands.literal -, dann waere diese Tafel
@@ -6052,26 +6365,639 @@ class GrenzeTest {
                 "nur " + knoten + " Knoten in " + gefunden.size() + " Klassen gefunden"
                         + " - dann liest diese Tafel die Befehlsbaeume nicht mehr,"
                         + " und sie ist gruen, ohne etwas geprueft zu haben");
-        assertEquals(new TreeSet<>(ZWEIGE_JE_BEFEHLSKLASSE.keySet()),
+        assertEquals(new TreeSet<>(PFADE_JE_BEFEHLSKLASSE.keySet()),
                 new TreeSet<>(gefunden.keySet()),
                 "Es gibt eine Befehlsklasse mehr oder weniger als in der Tafel."
                         + " Eine neue gehoert hier eingetragen - und dann auch in"
                         + " die plugin.yml und an den Baum von FreimarkenPlugin,"
                         + " sonst gibt es den Befehl nicht.");
-
         var anders = new TreeMap<String, String>();
         for (var eintrag : gefunden.entrySet()) {
-            String erwartet = ZWEIGE_JE_BEFEHLSKLASSE.get(eintrag.getKey());
+            String erwartet = PFADE_JE_BEFEHLSKLASSE.get(eintrag.getKey());
             if (!eintrag.getValue().equals(erwartet)) {
                 anders.put(eintrag.getKey(), "erwartet [" + erwartet + "] gefunden ["
                         + eintrag.getValue() + "]");
             }
         }
         assertEquals(Map.of(), anders,
-                "Die Befehlszweige dieser Klassen sind andere als in der Tafel."
-                        + " Ist ein Zweig WEGGEFALLEN, gibt es den Befehl nicht mehr -"
+                "Die Befehlswege dieser Klassen sind andere als in der Tafel."
+                        + " Ist ein Weg WEGGEFALLEN, gibt es den Befehl nicht mehr -"
                         + " ein Spieler bekommt \"Unknown command\", und ausser dieser"
-                        + " Tafel sagt es keine Probe. Ist einer DAZUGEKOMMEN,"
-                        + " gehoert er hier eingetragen: " + anders);
+                        + " Tafel sagt es keine Probe. Hat ein Weg einen anderen"
+                        + " VATER, ist ein Unterbaum umgehaengt - dann fuehrt er"
+                        + " womoeglich ohne den Riegel seines alten Vaters zur"
+                        + " Tat. Ist einer DAZUGEKOMMEN, gehoert er hier"
+                        + " eingetragen: " + anders);
+    }
+
+    /**
+     * Je Befehlsklasse: welcher WEG welchen Rechteriegel traegt.
+     *
+     * <p><b>Der Fund:</b> 58 Riegel stehen in den Befehlsbaeumen, und nur die von
+     * {@code BundBefehle} hielt eine Probe - jene Klasse ist dieselbe, die auch
+     * bei 31eg als einzige ohne Luecke war. Faellt der Riegel an
+     * {@code /freistadt raeumen} weg, loescht jeder Spieler eine fremde Stadt,
+     * und jede andere Probe bleibt gruen.
+     *
+     * <p><b>Gehalten wird die PAARUNG, nicht die Zahl:</b> Eine Tafel, die nur
+     * Riegel zaehlt, laesst ein VERTAUSCHEN durch - und genau so entsteht der
+     * Fehler, durch Abschreiben von einem Zweig zum naechsten. Ein Riegel, der
+     * vom Loeschen einer Stadt an das Ansehen einer Liste rutscht, ist von einer
+     * Zahl nicht zu unterscheiden. Gemessen: Zwei getauschte Riegel lassen
+     * Anzahl UND Textmenge unveraendert.
+     *
+     * <p>Ein Weg OHNE Riegel steht hier nicht - und das ist die Gegenrichtung:
+     * Kommt an einem Zweig ein Riegel dazu, wird diese Tafel rot. Wer ihn
+     * eintraegt, hat damit entschieden, dass dieser Zweig ein eigenes Recht
+     * braucht. Bei {@code /freistadt stadtrecht} ist die Entscheidung umgekehrt
+     * gefallen: Der Riegel dort ist der BESITZ der Stadt, nicht ein Recht.
+     *
+     * <p>Welchen WERT der genannte Name hat, haelt 31ej; mit welchem
+     * {@code default} dieser Wert angemeldet ist, 31ei.
+     */
+    private static final Map<String, String> RIEGEL_JE_BEFEHLSKLASSE =
+            Map.ofEntries(
+                Map.entry("AnfragenBefehle",
+                        "tpaccept()>\"tpaccept\"=diesesIstEinSpieler();"
+                                + " t"
+                                + "pahere()>befehlsname=diesesIstEinSpieler(); "
+                                + "tpdeny()>\"tpdeny\"=diesesIstEinSpieler()"),
+                Map.entry("BerufeBefehle",
+                        "beruf()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("BlockBefehle",
+                        "blockbuch()>\"blockbuch\"=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("BundBefehle",
+                        "freimarken()>\"freimarken\">\"altfurt\"=darfVerw"
+                                + "alten(); "
+                                + "freimarken()>\"freimarken\">\"besitz\"=quelle -"
+                                + "> q"
+                                + "uelle.getSender().hasPermission(RECHT_BESITZ"
+                                + "); "
+                                + "freimarken()>\"freimarken\">\"messstelle\"=darfV"
+                                + "erwalten(); "
+                                + "freimarken()>\"freimarken\">\"neuladen\"=darfVer"
+                                + "walten(); "
+                                + "freimarken()>\"freimarken\">\"parzelle\"=darfVer"
+                                + "walten(); "
+                                + "freimarken()>\"freimarken\">\"vorgenerieren\"=da"
+                                + "rfVerwalten(); "
+                                + "freimarken()>\"freimarken\">\"welt\"=darfVerwalt"
+                                + "en(); "
+                                + "freimarken()>waehrung.befehlswort()=quelle -"
+                                + "> q"
+                                + "uelle.getSender().hasPermission(RECHT_GELD)"),
+                Map.entry("EinsichtBefehle",
+                        "einsehen()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("FreistadtBefehle",
+                        "freistadt()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT); "
+                                + "freistadt()>ARGUMENT>\"aufgeben\"=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_AUFGEB"
+                                + "EN); "
+                                + "freistadt()>ARGUMENT>\"gruenden\"=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_GRUEND"
+                                + "EN); "
+                                + "freistadt()>ARGUMENT>\"grundstueck\"=quelle -"
+                                + "> q"
+                                + "uelle.getSender().hasPermission(RECHT_GRUNDS"
+                                + "TUECK); "
+                                + "freistadt()>ARGUMENT>\"grundstueck\">\"kaufen\"="
+                                + "quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_KAUFEN"
+                                + "); "
+                                + "freistadt()>ARGUMENT>\"kasse\">\"abheben\"=quell"
+                                + "e -> q"
+                                + "uelle.getSender().hasPermission(RECHT_KASSE)"
+                                + "; "
+                                + "freistadt()>ARGUMENT>\"raeumen\"=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_RAEUME"
+                                + "N); "
+                                + "freistadt()>ARGUMENT>\"rechte\">\"an\"=quelle -"
+                                + "> q"
+                                + "uelle.getSender().hasPermission(RECHT_RECHTE"
+                                + "); "
+                                + "freistadt()>ARGUMENT>\"rechte\">\"aus\"=quelle -"
+                                + "> q"
+                                + "uelle.getSender().hasPermission(RECHT_RECHTE"
+                                + "); "
+                                + "freistadt()>ARGUMENT>\"regeln\">\"loeschen\"=que"
+                                + "lle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_REGELN"
+                                + "); "
+                                + "freistadt()>ARGUMENT>\"regeln\">ARGUMENT_TEXT="
+                                + "quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_REGELN"
+                                + ")"),
+                Map.entry("HilfeBefehle",
+                        "hilfe()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("LadenBefehle",
+                        "laden()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT); "
+                                + "laden()>ARGUMENT>\"kuendigen\"=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_MIETEN"
+                                + "); "
+                                + "laden()>ARGUMENT>\"mieten\"=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_MIETEN"
+                                + "); "
+                                + "laden()>ARGUMENT>\"verlaengern\"=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_MIETEN"
+                                + ")"),
+                Map.entry("LotterieBefehle",
+                        "lotterie()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("MarktBefehle",
+                        "markt()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("MeldeBefehle",
+                        "melden()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("MeldungBefehle",
+                        "meldung()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("MenueBefehle",
+                        "menu()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("ParzellenBefehle",
+                        "mark()>\"mark\"=quelle -> q"
+                                + "uelle.getExecutor() instanceof Player; "
+                                + "parzelle()>\"parzelle\"=quelle -> q"
+                                + "uelle.getExecutor() instanceof Player"),
+                Map.entry("PortalBefehle",
+                        "portal()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("RangBefehle",
+                        "rang()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("RegelnBefehle",
+                        "regeln()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("RueckrollBefehle",
+                        "zurueck()>ZURUECK=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("RueckwegBefehle",
+                        "zurueck()>\"zurueck\"=quelle -> q"
+                                + "uelle.getExecutor() instanceof Player && q"
+                                + "uelle.getSender().hasPermission(RECHT_ZURUEC"
+                                + "K)"),
+                Map.entry("ShopBefehle",
+                        "shop()>\"shop\"=quelle -> q"
+                                + "uelle.getExecutor() instanceof Player && q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("SpielzeitBefehle",
+                        "spielzeit()>\"spielzeit\"=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT); "
+                                + "spielzeit()>\"spielzeit\">\"spieler\"=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_ANDERE"
+                                + ")"),
+                Map.entry("StrafBefehle",
+                        "bannliste()>ARGUMENT_BANNLISTE=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_BANNLI"
+                                + "STE); "
+                                + "strafe()>ARGUMENT=quelle -> d"
+                                + "arfUeberhaupt(quelle.getSender()); "
+                                + "strafe()>ARGUMENT>AUFHEBEN=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHTE.aufhe"
+                                + "ben()); "
+                                + "zweigFuer()>art.kuerzel()=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHTE.fuer("
+                                + "art))"),
+                Map.entry("TeamBefehle",
+                        "team()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT); "
+                                + "team()>ARGUMENT>GIB=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_VERGEB"
+                                + "EN); "
+                                + "team()>ARGUMENT>NIMM=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_VERGEB"
+                                + "EN)"),
+                Map.entry("WarpBefehle",
+                        "warp()>\"warp\"=quelle -> q"
+                                + "uelle.getExecutor() instanceof Player && q"
+                                + "uelle.getSender().hasPermission(RECHT_REISEN"
+                                + ")"),
+                Map.entry("WerderBefehle",
+                        "werder()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT); "
+                                + "werder()>ARGUMENT>ARGUMENT_HAFEN>\"nehmen\"=qu"
+                                + "elle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_NEHMEN"
+                                + ")"),
+                Map.entry("WettbewerbBefehle",
+                        "wettbewerb()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT)"),
+                Map.entry("WolkeBefehle",
+                        "wolke()>ARGUMENT=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT); "
+                                + "wolke()>ARGUMENT>\"nehmen\"=quelle -> q"
+                                + "uelle.getSender().hasPermission(RECHT_NEHMEN"
+                                + ")"));
+
+    @Test
+    @DisplayName("31eh - jeder Rechteriegel haengt am Weg, an dem er haengen soll")
+    void jederRechteriegelHaengtAnSeinemWeg() {
+        var gefunden = new TreeMap<String, String>();
+        int riegel = 0;
+        for (Path datei : Quellen.alle()) {
+            String name = datei.getFileName().toString().replace(".java", "");
+            if (!name.endsWith("Befehle")) {
+                continue;
+            }
+            var paare = new TreeSet<String>();
+            for (String[] eintrag : befehlsernte(Quellen.text(datei))) {
+                if (eintrag[1] != null) {
+                    paare.add(eintrag[0] + "=" + eintrag[1]);
+                    riegel++;
+                }
+            }
+            gefunden.put(name, String.join("; ", paare));
+        }
+        // DER BLINDHEITSRIEGEL - siehe 31eg.
+        assertTrue(riegel >= 50,
+                "nur " + riegel + " Rechteriegel in " + gefunden.size()
+                        + " Befehlsklassen gefunden - dann liest diese Tafel die"
+                        + " Baeume nicht mehr, und sie ist gruen, ohne etwas"
+                        + " geprueft zu haben");
+        assertEquals(new TreeSet<>(RIEGEL_JE_BEFEHLSKLASSE.keySet()),
+                new TreeSet<>(gefunden.keySet()),
+                "Es gibt eine Befehlsklasse mehr oder weniger als in dieser"
+                        + " Tafel - siehe 31eg, dort steht dasselbe.");
+        var anders = new TreeMap<String, String>();
+        for (var eintrag : gefunden.entrySet()) {
+            String erwartet = RIEGEL_JE_BEFEHLSKLASSE.get(eintrag.getKey());
+            if (!eintrag.getValue().equals(erwartet)) {
+                anders.put(eintrag.getKey(), "erwartet [" + erwartet + "] gefunden ["
+                        + eintrag.getValue() + "]");
+            }
+        }
+        assertEquals(Map.of(), anders,
+                "Die Rechteriegel dieser Klassen haengen anders als in der Tafel."
+                        + " Ist einer WEGGEFALLEN, darf den Zweig jeder benutzen -"
+                        + " bei /freistadt raeumen heisst das: jeder loescht jede"
+                        + " Stadt. Ist einer VERTAUSCHT, schuetzt er den falschen"
+                        + " Zweig. Ist einer DAZUGEKOMMEN, gehoert er hier"
+                        + " eingetragen: " + anders);
+    }
+
+    /**
+     * Welchen WERT jede Rechtekonstante der Befehlsklassen traegt.
+     *
+     * <p><b>Das fehlende Glied der Kette</b>, gefunden am 27.11.2026, als vier
+     * Leser die drei Tafeln daneben angriffen: 31eh haelt den NAMEN
+     * {@code RECHT_RAEUMEN}, 31ei den WERT
+     * {@code freimarken.freistadt.raeumen=op}, und 31al, dass dieser Wert in der
+     * {@code plugin.yml} steht. Dass der NAME diesen WERT hat, hielt nichts.
+     *
+     * <p>Setzt man {@code RECHT_RAEUMEN} auf {@code \"freimarken.freistadt\"} -
+     * ein Recht, das es gibt und das auf {@code default: true} steht -, dann
+     * bleiben 31eh und 31ei gruen, und jeder Spieler raeumt jede Stadt. Eine
+     * Zeile, ein Wort darin.
+     *
+     * <p><b>GEMESSEN am 27.11.2026, und es berichtigt die erste Einschaetzung:</b>
+     * 31al wird dabei MIT rot - aber nur, weil der alte Wert damit seinen letzten
+     * Leser verliert und als angemeldetes Recht ohne Grund dasteht. Bleibt
+     * irgendwo ein zweiter Leser des alten Wertes, ist 31al gruen. Diese Tafel
+     * haelt die Zuordnung SELBST und haengt nicht daran, ob ein Wert noch
+     * woanders vorkommt.
+     *
+     * <p>Gelesen werden die Deklarationen {@code static final String RECHT...}
+     * der Befehlsklassen. Ein Alias ohne eigene Zeichenkette
+     * ({@code RECHT_REGELN = RECHT_RECHTE}) steht hier nicht - er hat keinen
+     * eigenen Wert, und 31eh haelt den Namen, der im Riegel steht.
+     */
+    private static final List<String> WERT_JE_RECHTEKONSTANTE = List.of(
+            "AnfragenBefehle.RECHT_TPA=freimarken.tpa",
+            "BerufeBefehle.RECHT=freimarken.beruf",
+            "BerufeBefehle.RECHT_SPEZIALISIERUNG=freimarken.beruf.spezialisierung",
+            "BlockBefehle.RECHT=freimarken.blockbuch",
+            "BundBefehle.RECHT_BESITZ=freimarken.besitz",
+            "BundBefehle.RECHT_GELD=freimarken.geld",
+            "BundBefehle.RECHT_VERWALTEN=freimarken.verwalten",
+            "EinsichtBefehle.RECHT=freimarken.einsehen",
+            "FreistadtBefehle.RECHT=freimarken.freistadt",
+            "FreistadtBefehle.RECHT_AUFGEBEN=freimarken.freistadt.aufgeben",
+            "FreistadtBefehle.RECHT_GRUENDEN=freimarken.freistadt.gruenden",
+            "FreistadtBefehle.RECHT_GRUNDSTUECK=freimarken.freistadt.grundstueck",
+            "FreistadtBefehle.RECHT_KASSE=freimarken.freistadt.kasse",
+            "FreistadtBefehle.RECHT_KAUFEN=freimarken.freistadt.kaufen",
+            "FreistadtBefehle.RECHT_RAEUMEN=freimarken.freistadt.raeumen",
+            "FreistadtBefehle.RECHT_RECHTE=freimarken.freistadt.rechte",
+            "HilfeBefehle.RECHT=freimarken.hilfe",
+            "LadenBefehle.RECHT=freimarken.laden",
+            "LadenBefehle.RECHT_MIETEN=freimarken.laden.mieten",
+            "LotterieBefehle.RECHT=freimarken.lotterie",
+            "MarktBefehle.RECHT=freimarken.markt",
+            "MeldeBefehle.RECHT=freimarken.melden",
+            "MeldungBefehle.RECHT=freimarken.meldungen",
+            "MenueBefehle.RECHT=freimarken.menu",
+            "PortalBefehle.RECHT=freimarken.portal",
+            "RangBefehle.RECHT=freimarken.rang",
+            "RegelnBefehle.RECHT=freimarken.regeln",
+            "RueckrollBefehle.RECHT=freimarken.blockbuch.zurueck",
+            "RueckwegBefehle.RECHT_ZURUECK=freimarken.zurueck",
+            "ShopBefehle.RECHT=freimarken.shop",
+            "SpielzeitBefehle.RECHT=freimarken.spielzeit",
+            "SpielzeitBefehle.RECHT_ANDERE=freimarken.spielzeit.andere",
+            "StrafBefehle.RECHT_BANNLISTE=freimarken.bannliste",
+            "TeamBefehle.RECHT=freimarken.team",
+            "TeamBefehle.RECHT_VERGEBEN=freimarken.team.vergeben",
+            "WarpBefehle.RECHT_REISEN=freimarken.reisen",
+            "WerderBefehle.RECHT=freimarken.werder",
+            "WerderBefehle.RECHT_NEHMEN=freimarken.werder.nehmen",
+            "WettbewerbBefehle.RECHT=freimarken.wettbewerb",
+            "WolkeBefehle.RECHT=freimarken.wolke",
+            "WolkeBefehle.RECHT_NEHMEN=freimarken.wolke.nehmen");
+
+    @Test
+    @DisplayName("31ej - jede Rechtekonstante traegt den Wert, der gewollt ist")
+    void jedeRechtekonstanteTraegtIhrenWert() {
+        var gefunden = new ArrayList<String>();
+        for (Path datei : Quellen.alle()) {
+            String name = datei.getFileName().toString().replace(".java", "");
+            if (!name.endsWith("Befehle")) {
+                continue;
+            }
+            for (String zeile : Quellen.text(datei).split("\n", -1)) {
+                String g = zeile.strip();
+                if (g.startsWith("static final String RECHT") && g.contains("= \"")
+                        && g.endsWith("\";")) {
+                    String links = g.split("=")[0].strip();
+                    String[] teile = links.split("\\s+");
+                    String wert = g.substring(g.indexOf("= \"") + 3,
+                            g.length() - 2);
+                    gefunden.add(name + "." + teile[teile.length - 1] + "="
+                            + wert);
+                }
+            }
+        }
+        java.util.Collections.sort(gefunden);
+        // DER BLINDHEITSRIEGEL - siehe 31eg.
+        assertTrue(gefunden.size() >= 35,
+                "nur " + gefunden.size() + " Rechtekonstanten gefunden - dann liest"
+                        + " diese Tafel die Befehlsklassen nicht mehr: " + gefunden);
+        assertEquals(WERT_JE_RECHTEKONSTANTE, gefunden,
+                "Eine Rechtekonstante traegt einen anderen Wert als in dieser"
+                        + " Tafel. Zeigt sie auf ein Recht mit einem schwaecheren"
+                        + " default, ist der Zweig offen - und 31eh und 31ei"
+                        + " bleiben dabei gruen, denn der NAME im Riegel aendert"
+                        + " sich nicht und der default des alten Rechts auch nicht.");
+    }
+
+    /**
+     * Mit welchem {@code default} jedes Recht in der {@code plugin.yml} steht.
+     *
+     * <p><b>Die letzte Schicht der Kette, und die gefaehrlichste.</b> Fuenf
+     * Tafeln halten zusammen, dass ein Recht wirkt:
+     *
+     * <ul>
+     *   <li>31al - jedes Recht aus dem Programm steht in der Datei
+     *   <li>31cy - jedes Recht, das eine Datei nennt, gibt es auch
+     *   <li>31eg - welche WEGE es gibt
+     *   <li>31eh - welcher Weg welchen Riegel traegt
+     *   <li>31ej - welchen WERT der Name im Riegel hat
+     *   <li>31ei - mit welchem DEFAULT dieser Wert angemeldet ist (diese)
+     * </ul>
+     *
+     * <p>Ohne die letzte ist die Kette offen: {@code op} zu {@code true} an
+     * {@code freimarken.freistadt.raeumen} ist EIN WORT in einer YAML-Datei. Der
+     * Riegel bleibt stehen, 31al bleibt gruen, 31eh bleibt gruen - und jeder
+     * Spieler loescht jede Stadt, fuer die ein anderer 400.000 Mark gezahlt hat.
+     *
+     * <p>Dass es kein Spieltest findet, steht schon an 31al: Jeder lief mit einem
+     * Operator, und fuer den verhaelt sich {@code true} genau wie {@code op}.
+     *
+     * <p><b>JEDER Schluessel oberster Ebene</b>, nicht nur die mit
+     * {@code freimarken} davor. 31al liest nur {@code freimarken.}-Zeilen; ein
+     * Sammelrecht mit einem fremden Namen und {@code default: true} waere fuer
+     * sie unsichtbar - und koennte ueber {@code children} jedes andere mitziehen.
+     *
+     * <p>Daneben haelt die Probe, dass es KEINE {@code children}-Zeile gibt. Die
+     * Entscheidung dagegen steht woertlich in der Datei selbst: ein einzelner
+     * waere eine zweite Art, Rechte zu verknuepfen, sichtbar nur dort und
+     * unsichtbar in jeder Rollenliste. Bisher war das eine Zusage im Kommentar.
+     */
+    private static final List<String> DEFAULT_JE_RECHT = List.of(
+            "freimarken.bannliste=true",
+            "freimarken.bauen.ueberall=op",
+            "freimarken.beruf.spezialisierung=op",
+            "freimarken.beruf=true",
+            "freimarken.besitz=op",
+            "freimarken.blockbuch.zurueck=op",
+            "freimarken.blockbuch=op",
+            "freimarken.einsehen=op",
+            "freimarken.freistadt.aufgeben=true",
+            "freimarken.freistadt.gruenden=true",
+            "freimarken.freistadt.grundstueck=true",
+            "freimarken.freistadt.kasse=true",
+            "freimarken.freistadt.kaufen=true",
+            "freimarken.freistadt.raeumen=op",
+            "freimarken.freistadt.rechte=true",
+            "freimarken.freistadt=true",
+            "freimarken.geld=op",
+            "freimarken.hilfe=true",
+            "freimarken.laden.mieten=true",
+            "freimarken.laden=true",
+            "freimarken.lotterie=true",
+            "freimarken.markt=true",
+            "freimarken.melden=true",
+            "freimarken.meldungen=op",
+            "freimarken.menu=true",
+            "freimarken.portal=op",
+            "freimarken.rang=true",
+            "freimarken.regeln=true",
+            "freimarken.reisen=true",
+            "freimarken.shop.bund=op",
+            "freimarken.shop=true",
+            "freimarken.sofort=op",
+            "freimarken.spawnpunkt.setzen=op",
+            "freimarken.spielmodus.frei=op",
+            "freimarken.spielzeit.andere=op",
+            "freimarken.spielzeit=true",
+            "freimarken.strafen.aufheben=op",
+            "freimarken.strafen.bann=op",
+            "freimarken.strafen.dauerhaft=op",
+            "freimarken.strafen.rauswurf=op",
+            "freimarken.strafen.stumm=op",
+            "freimarken.strafen.team=op",
+            "freimarken.team.vergeben=op",
+            "freimarken.team=op",
+            "freimarken.tpa=true",
+            "freimarken.verwalten=op",
+            "freimarken.werder.nehmen=true",
+            "freimarken.werder=true",
+            "freimarken.wettbewerb=true",
+            "freimarken.wolke.nehmen=true",
+            "freimarken.wolke=true",
+            "freimarken.zurueck=true");
+
+    @Test
+    @DisplayName("31ei - jedes Recht steht mit dem default da, der gewollt ist")
+    void jedesRechtStehtMitSeinemDefaultDa() {
+        var gefunden = new ArrayList<String>();
+        int kinder = 0;
+        String jetzt = null;
+        for (String zeile : ausgelieferte("plugin.yml").split("\n", -1)) {
+            String g = zeile.strip();
+            if (g.startsWith("#")) {
+                continue;
+            }
+            if (zeile.startsWith("  ") && !zeile.startsWith("   ")
+                    && g.endsWith(":")) {
+                jetzt = g.substring(0, g.length() - 1);
+                gefunden.add(jetzt + "=OHNE default-Zeile");
+            } else if (jetzt != null && g.startsWith("default:")) {
+                // NUR die erste default-Zeile je Recht.
+                int wo = gefunden.size() - 1;
+                if (gefunden.get(wo).endsWith("=OHNE default-Zeile")) {
+                    gefunden.set(wo, jetzt + "="
+                            + g.substring("default:".length()).strip());
+                }
+            } else if (g.startsWith("children:")) {
+                kinder++;
+            }
+        }
+        java.util.Collections.sort(gefunden);
+        // DER BLINDHEITSRIEGEL - siehe 31eg.
+        assertTrue(gefunden.size() >= 40,
+                "nur " + gefunden.size() + " Rechte in der plugin.yml gelesen -"
+                        + " dann liest diese Tafel die Datei nicht mehr, und sie"
+                        + " ist gruen, ohne etwas geprueft zu haben: " + gefunden);
+        assertEquals(0, kinder,
+                "Die plugin.yml hat einen children-Eintrag. Ein Recht mit"
+                        + " default: true zieht damit jedes Kind mit, auch eines,"
+                        + " das selbst auf op steht - und keine andere Tafel sieht"
+                        + " die eingerueckte Zeile. Die Entscheidung dagegen steht"
+                        + " woertlich in der Datei: ein einzelner waere eine zweite"
+                        + " Art, Rechte zu verknuepfen, unsichtbar in jeder"
+                        + " Rollenliste und in jedem Manager-Formular.");
+        assertEquals(DEFAULT_JE_RECHT, gefunden,
+                "Der default eines Rechts ist ein anderer als in dieser Tafel."
+                        + " Von op auf true heisst: JEDER darf, was bisher nur ein"
+                        + " Operator durfte - bei freimarken.freistadt.raeumen"
+                        + " loescht dann jeder Spieler jede Stadt. Und ein Recht"
+                        + " OHNE default-Zeile ist stumm op, auch wenn die Datei"
+                        + " etwas anderes nahelegt. Gewollt? Dann hier eintragen.");
+    }
+
+    /**
+     * Welche Befehlsbaeume angemeldet werden - und dass es keinen zweiten Weg gibt.
+     *
+     * <p><b>Der Angriff, der diese Tafel noetig macht</b> (27.11.2026): Man
+     * registriert einen neuen Wurzelbefehl, der mit {@code .redirect(} in den
+     * Knoten {@code raeumen} zeigt. Brigadier prueft beim Folgen einer Umleitung
+     * das {@code requires} des Ziels NICHT - der Riegel wird uebersprungen. Und
+     * die Aenderung lebt in {@code FreimarkenPlugin.java}, einer Datei, die 31eg
+     * und 31eh nicht lesen: Sie filtern auf {@code *Befehle}.
+     *
+     * <p>Darum zwei Zusagen an einer Stelle, und sie sind NICHT dasselbe: Die
+     * eine zaehlt Umleitungen in ALLEN Quellen (eine innerhalb einer
+     * Befehlsklasse aenderte die Anmeldeliste nicht), die andere haelt die Liste
+     * der angemeldeten Baeume (eine neue Anmeldung ohne Umleitung aenderte die
+     * Zahl nicht).
+     *
+     * <p>Dazu die Liste der angemeldeten Baeume. <b>GEMESSEN am 27.11.2026, und es
+     * berichtigt die erste Einschaetzung:</b> Faellt eine Anmeldung weg, wird
+     * {@code HilfeplanTest} 4 MIT rot - jene Probe haelt, dass jede Beschreibung
+     * in einem {@code register}-Aufruf benutzt wird, und jeder Baum hier wird mit
+     * einer angemeldet. Was sie NICHT haelt, ist die andere Richtung: eine
+     * Anmeldung, die DAZUkommt. Genau die braucht der Angriff oben, und genau die
+     * haelt diese Liste.
+     */
+    private static final List<String> ANGEMELDETE_BAEUME = List.of(
+            "bannliste()",
+            "beruf()",
+            "einsehen()",
+            "freimarken()",
+            "freistadt()",
+            "hilfe()",
+            "laden()",
+            "lotterie()",
+            "mark()",
+            "markt()",
+            "melden()",
+            "meldung()",
+            "menu()",
+            "parzelle()",
+            "portal()",
+            "rang()",
+            "regeln()",
+            "shop()",
+            "strafe()",
+            "team()",
+            "tpa()",
+            "tpaccept()",
+            "tpahere()",
+            "tpdeny()",
+            "warp()",
+            "werder()",
+            "wettbewerb()",
+            "wolke()",
+            "zurueck()");
+
+    @Test
+    @DisplayName("31ek - jeder Befehlsbaum wird angemeldet, und keiner umgeleitet")
+    void jederBefehlsbaumWirdAngemeldet() {
+        // KEINE UMLEITUNG, in keiner Quelle: Eine Umleitung ist ein zweiter Weg zu
+        // einem Knoten, und Brigadier fragt dabei dessen requires nicht.
+        var mitUmleitung = new TreeSet<String>();
+        for (Path datei : Quellen.alle()) {
+            String text = Quellen.text(datei);
+            if (text.contains(".redirect(") || text.contains(".fork(")) {
+                mitUmleitung.add(datei.getFileName().toString());
+            }
+        }
+        assertEquals(Set.of(), mitUmleitung,
+                "Diese Dateien leiten einen Befehlsknoten um. Brigadier prueft das"
+                        + " requires des ZIELS nicht - eine Umleitung in einen"
+                        + " geschuetzten Zweig oeffnet ihn fuer jeden, und 31eh"
+                        + " bleibt dabei gruen: " + mitUmleitung);
+
+        String plugin = plugintext();
+        var gefunden = new ArrayList<String>();
+        String marke = "verzeichnis.register(";
+        int stelle = 0;
+        while (true) {
+            stelle = plugin.indexOf(marke, stelle);
+            if (stelle < 0) {
+                break;
+            }
+            String roh = argumenttext(plugin, stelle + marke.length(), true);
+            // DER SCHWANZ des Ausdrucks: das zuletzt gerufene .name(). Der ganze
+            // Ausdruck waere bei der Wolkeninsel ein halber Bildschirm voll
+            // Konstruktorargumenten - und die gehoeren nicht in diese Tafel.
+            String schwanz = roh;
+            if (schwanz.endsWith(")")) {
+                int tief = 0;
+                int i = schwanz.length() - 1;
+                while (i >= 0) {
+                    if (schwanz.charAt(i) == ')') {
+                        tief++;
+                    } else if (schwanz.charAt(i) == '(') {
+                        tief--;
+                        if (tief == 0) {
+                            break;
+                        }
+                    }
+                    i--;
+                }
+                int punkt = schwanz.lastIndexOf('.', i);
+                if (punkt >= 0) {
+                    schwanz = schwanz.substring(punkt + 1);
+                }
+            }
+            gefunden.add(schwanz);
+            stelle += marke.length();
+        }
+        java.util.Collections.sort(gefunden);
+        assertEquals(ANGEMELDETE_BAEUME, gefunden,
+                "Es wird ein anderer Satz Befehlsbaeume angemeldet als in dieser"
+                        + " Tafel. Faellt eine Anmeldung weg, gibt es den Befehl"
+                        + " nicht mehr - und auf der Konsole antwortet ein"
+                        + " spielerpflichtiger Befehl wortgleich wie einer, den es"
+                        + " nicht gibt. Kommt eine dazu, ist sie ein zweiter Weg zu"
+                        + " einem Baum, den es schon gibt.");
     }
 }

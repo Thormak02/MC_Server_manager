@@ -2228,6 +2228,69 @@ in der Reihenfolge der Erlaubnis:
 - Proben: 7 fuer `kaufeStadtrecht` (jeder Bescheid), 5 fuer die Ortsregel,
   `stadtrechtFehltOhneKauf`. 5716 -> 5728 Proben, beide Module gruen.
 
+#### 27.11.2026: die Rechtekette - 31eg bis 31ek, und ein Angriff darauf
+
+Nach 31eg die naechste Frage: Ein Zweig ist DA - aber wer darf ihn benutzen?
+58 Rechteriegel stehen in den Befehlsbaeumen, 218 Knoten, 52 Rechte.
+
+| Tafel | haelt |
+| --- | --- |
+| 31al | jedes `"freimarken.…"`-Literal des Programms steht in der `plugin.yml` |
+| 31cy | jedes Recht, das eine ausgelieferte Datei nennt, gibt es auch |
+| 31eg | welche WEGE es gibt (Pfad je Knoten, mit Vater und Methode) |
+| 31eh | welcher Weg welchen Riegel traegt |
+| 31ej | welchen WERT der Name im Riegel hat |
+| 31ei | mit welchem `default` dieser Wert angemeldet ist, und dass es kein `children` gibt |
+| 31ek | welche Baeume angemeldet werden, und dass keiner umgeleitet wird |
+
+**Der erste Zug** (31eh, 31ei) hielt Woerter: welcher Zweig welchen Riegel
+traegt, und welches Recht welchen `default`. Einspritzungen 5/5 und 4/4, jeder
+Fall von der neuen Tafel allein gefangen - darunter zwei VERTAUSCHTE Riegel, bei
+denen Anzahl und Textmenge gleich bleiben.
+
+**Dann griffen vier Leser die Tafeln an**, aus vier Richtungen: Brigadier-
+Semantik, Rechtevererbung, die blinden Stellen der Klammertiefen-Regel, und die
+Laufzeit hinter dem Riegel. **Sieben Wege hielten stand**, keiner widerlegt.
+Keiner ist ein heutiger Fehler - alle sieben sind Aenderungen, die niemand
+bemerkt haette. Drei Praemissen habe ich selbst nachgerechnet: `children` gibt
+es nicht (nur den Kommentar, der es ausschliesst), `.redirect(` nirgends, und
+alle 52 Rechteschluessel beginnen mit `freimarken`.
+
+| Angriffsweg | Folge |
+| --- | --- |
+| Unterbaum an einen offenen Geschwisterzweig haengen | 31eg haelt **Pfade** statt Woerter |
+| Knoten ohne Vater (Hilfsmethode) trug denselben Pfad wie ein anderer | der Pfad traegt die **Methode** davor |
+| `RECHT_RAEUMEN` auf ein schwaecheres Recht zeigen lassen | **31ej** neu |
+| `children:`-Block vererbt ein `op`-Recht an jeden | **31ei** haelt: keine `children`-Zeile |
+| Sammelrecht ohne `freimarken`-Vorsilbe | **31ei** liest jeden Schluessel |
+| `.redirect(` in den geschuetzten Knoten, in `FreimarkenPlugin` | **31ek** neu |
+
+- Der PFAD ist der Kern des Umbaus: `freistadt()>ARGUMENT>"raeumen">ARGUMENT_NAME>"bestaetigen"`. Umhaengen aendert ihn, Umordnen nicht.
+- Beim Ernten fielen drei Klassen mit DOPPELTEN Pfaden auf - Hilfsmethoden, die
+  einen Knoten bauen und zurueckgeben, haben im Text keinen Vater. Zwei gleiche
+  Pfade machen die Tafel unpruefbar; seit die Methode davorsteht, sind es 0.
+- Die Argumentlesung ist EINE Methode fuer alle Tafeln der Kette - zwei Kopien
+  benennen denselben Zweig irgendwann verschieden.
+- Einspritzungen der achten Runde: **6/6**. Der wichtigste Fall ist GA, der
+  umgehaengte Unterbaum: dieselben Woerter, dieselbe Zahl, dieselbe Paarung -
+  und `/freistadt <name> bestaetigen` fuehrt ohne Riegel zur Tat. Nur 31eg
+  (Pfade) sah ihn; die alte Fassung waere gruen geblieben.
+- ZWEI EIGENE BEHAUPTUNGEN WIDERLEGT, und die Javadocs sind berichtigt:
+  - Bei GB wird **31al mit rot** - aber nur, weil der alte Wert seinen letzten
+    Leser verliert. Bleibt irgendwo ein zweiter Leser, ist 31al gruen; 31ej
+    haelt die Zuordnung selbst.
+  - Bei GE wird **HilfeplanTest 4 mit rot** - jene Probe haelt, dass jede
+    Beschreibung in einem `register`-Aufruf benutzt wird. Was sie nicht haelt,
+    ist eine Anmeldung, die DAZUkommt; genau die braucht der Angriff.
+- Mein eigener Umbruchcode teilte beim Erzeugen die MASKIERTE Zeichenkette und
+  riss `\"` entzwei - 60 Compilerfehler aus einer Zeile. Jetzt wird der rohe
+  Text geteilt und jedes Stueck einzeln maskiert.
+- OFFEN: Ein Dispatch je Zweig (`CommandDispatcher.execute`) pruefte Dasein,
+  Erreichbarkeit UND Riegel in einem. Dazu der vierte Angriffswinkel, der nicht
+  in eine Tafel gewandert ist: ein zweiter Weg zur TAT ohne Befehl (Menue,
+  Klick, Formular) - der Handler hinter einem Riegel fragt das Recht nicht
+  erneut.
+
 #### FUND DES STARTLAUFS 27.11.2026: das Stadtrecht stand in keiner Startzeile
 
 Im ganzen Startprotokoll kam das Wort *Stadtrecht* nicht ein einziges Mal vor -
